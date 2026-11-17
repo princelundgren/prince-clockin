@@ -1,5 +1,6 @@
 ---
-status: approved
+status: building
+governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
 ---
 
 # PrinceClockIn: design
@@ -221,7 +222,7 @@ clicks "Check now".
   repository's jobs never run on self-hosted machines.
 - Signing, notarization and upload secrets live in a protected GitHub environment, used only by
   the release job, and only on a version tag.
-- A workflow on every push and pull request builds the app and runs the tests.
+- A workflow on every pull request and every push to `main` builds the app and runs the tests.
 - The appcast and DMGs are served from `https://updates.princelundgren.com/princeclockin/`, the
   maintainer's update host, whose address belongs to no website, so it stays stable whatever the
   website becomes (owner, 2026-11-17). Feed URL:

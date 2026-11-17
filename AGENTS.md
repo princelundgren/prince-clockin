@@ -16,3 +16,12 @@ Everything in this repository is public: code, docs, commit messages, issues and
   pull request a person opens.
 - **CI runs on GitHub-hosted runners only**, never self-hosted ones, since this is a public
   repository. Every action is pinned by full commit SHA.
+- **Build and test** from the repository root:
+  - `swift test --package-path PrinceClockInCore`
+  - `scripts/install-xcodegen.sh`, then in `PrinceClockIn/`:
+    `../build/tools/xcodegen/bin/xcodegen generate` and
+    `xcodebuild -scheme PrinceClockIn -configuration Debug -derivedDataPath ../build/DerivedData CODE_SIGNING_ALLOWED=NO build`.
+    The `.xcodeproj` is generated from `PrinceClockIn/project.yml` and not committed.
+- **Dependencies:** Dependabot covers GitHub Actions only. XcodeGen, pinned with its checksum in
+  `scripts/install-xcodegen.sh`, is checked against its latest release, with the release notes
+  read, before each release.
