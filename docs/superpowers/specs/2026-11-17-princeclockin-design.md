@@ -182,8 +182,10 @@ clicks "Check now".
   (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or
   verbose flags.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
-  (Homebrew, mise). The app reads only `PATH` from the shell, once, with a timeout. It never logs
-  or shows the shell's other variables.
+  (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
+  read succeeds. It never logs or shows the shell's other variables.
+- Only zsh and bash are read. Any other login shell gets a standard `PATH` (Homebrew, `/usr/local`
+  and the system directories), as does a failed read, until the next try.
 - Only `refreshToken` and `expiresAt` are decoded from an AWS cache file. The token's value goes
   only into the hash and is discarded. No error or log ever includes a cache file's contents.
 - A login's output from its last run is kept in memory only, never written to disk, and can be
