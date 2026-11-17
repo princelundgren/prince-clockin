@@ -89,7 +89,9 @@ and a timer. The kinds are:
   batch they're a step that waits for Done.
 
 The app discovers AWS sessions and Databricks profiles and offers them. The user picks which to
-track, so nothing is tracked unasked. Custom logins are added by hand.
+track, so nothing is tracked unasked. It reads `~/.aws/config` and `~/.databrickscfg`, or the files
+`AWS_CONFIG_FILE` and `DATABRICKS_CONFIG_FILE` name (a leading `~` expanded). Custom logins are
+added by hand.
 
 A **preset** is a named, ordered set of logins, created and edited in settings.
 
