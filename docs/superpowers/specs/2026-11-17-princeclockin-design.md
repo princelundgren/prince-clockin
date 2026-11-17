@@ -157,7 +157,7 @@ clicks "Check now".
   being open. Progress shows in the menu bar. A custom login waiting for Done also posts a
   notification with a Done action.
 - **Settings window**: the logins (add, remove, rename, session length, a custom command), the
-  presets, the warning time, and launch at login.
+  presets, the warning time, the login timeout, and launch at login.
 
 ### Notifications
 
@@ -173,7 +173,8 @@ clicks "Check now".
 - Every login, whatever started it (a row, a preset, a selection, a notification), goes into one
   queue that runs one login at a time. A login already in the queue isn't added twice.
 - A failed or timed-out login is reported, and the queue goes on to the next.
-- Each login has a timeout (default 5 minutes), since it waits on the user in the browser.
+- Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
+  browser.
 - AWS and Databricks logins run as an executable plus an argument list, never through a shell
   string, so a session or profile name can't inject a command. No debug or verbose flags.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
@@ -196,7 +197,10 @@ clicks "Check now".
 - No Dock icon (`LSUIElement`). Launch at login through `SMAppService`, off by default. The setting
   reads `SMAppService.mainApp.status`, since the user can change it in System Settings.
 - Settings, logins, presets and timers are stored as JSON in
-  `~/Library/Application Support/PrinceClockIn/`, readable and portable. Fingerprints are never
+  `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
+  login time, session length, the time it was last found invalid, the expiry the last warning was
+  for (so a relaunch doesn't warn twice), for Databricks, whether the profile is account-level, and,
+  for AWS, the cache file's last-seen modified and `expiresAt` times. Fingerprints are never
   stored.
 - Bundle ID `com.princelundgren.princeclockin`.
 
