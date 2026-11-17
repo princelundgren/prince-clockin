@@ -10,6 +10,27 @@ public struct ResolvedPath: Equatable, Sendable {
         self.directories = directories
         self.fromShell = fromShell
     }
+
+    /// The first executable file called `name` in `directories`.
+    public func locate(_ name: String) -> URL? {
+        for directory in directories {
+            let candidate = directory.appendingPathComponent(name)
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+                !isDirectory.boolValue, FileManager.default.isExecutableFile(atPath: candidate.path)
+            {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    /// `base` with `PATH` replaced by `directories`.
+    public func childEnvironment(base: [String: String]) -> [String: String] {
+        var child = base
+        child["PATH"] = directories.map(\.path).joined(separator: ":")
+        return child
+    }
 }
 
 /// Reads `PATH` from the user's login shell, since a GUI app doesn't inherit it (Homebrew, mise).
@@ -59,23 +80,12 @@ public actor ShellPathResolver {
 
     /// The first executable file called `name` on the resolved `PATH`.
     public func locate(_ name: String) async -> URL? {
-        for directory in await resolvePath().directories {
-            let candidate = directory.appendingPathComponent(name)
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
-                !isDirectory.boolValue, FileManager.default.isExecutableFile(atPath: candidate.path)
-            {
-                return candidate
-            }
-        }
-        return nil
+        await resolvePath().locate(name)
     }
 
     /// `base` with `PATH` replaced by the resolved one.
     public func childEnvironment(base: [String: String]) async -> [String: String] {
-        var child = base
-        child["PATH"] = await resolvePath().directories.map(\.path).joined(separator: ":")
-        return child
+        await resolvePath().childEnvironment(base: base)
     }
 
     private static func readDirectories(

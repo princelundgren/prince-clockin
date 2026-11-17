@@ -30,6 +30,11 @@ func makeExecutable(named name: String, in directory: URL) throws {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
 }
 
+/// What a login shell prints when asked for `PATH`, with rc-file noise around the markers.
+func pathOutput(_ path: String) -> ProcessOutcome {
+    .exited(code: 0, output: "Welcome!\n__PCI_PATH__\(path)__PCI_END__\nbye")
+}
+
 /// Holds a test's async step until the test opens it.
 actor Gate {
     private var isOpen = false

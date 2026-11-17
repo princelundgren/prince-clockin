@@ -2,10 +2,6 @@ import Foundation
 import Testing
 import PrinceClockInCore
 
-private func pathOutput(_ path: String) -> ProcessOutcome {
-    .exited(code: 0, output: "Welcome!\n__PCI_PATH__\(path)__PCI_END__\nbye")
-}
-
 private let zsh = URL(fileURLWithPath: "/bin/zsh")
 private let fallbackDirectories = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 
