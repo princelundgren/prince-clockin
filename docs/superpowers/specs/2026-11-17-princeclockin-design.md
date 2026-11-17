@@ -86,7 +86,8 @@ and a timer. The kinds are:
   ("I logged in"), with a session length the user sets. It can optionally carry a command, which
   opens in a Terminal window so the user can type passwords, MFA codes or choices; the timer starts
   when the user clicks Done (owner, 2026-11-17). Custom logins never run in the background. In a
-  batch they're a step that waits for Done.
+  batch they're a step that waits for Done, and that wait times out like any other login, so a
+  forgotten Done can't block the queue; a user who finishes later uses "logged in now".
 
 The app discovers AWS sessions and Databricks profiles and offers them. The user picks which to
 track, so nothing is tracked unasked. It reads `~/.aws/config` and `~/.databrickscfg`, or the files
@@ -181,6 +182,9 @@ clicks "Check now".
   string, so a session or profile name can't inject a command. The name is joined to its flag
   (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or
   verbose flags.
+- AWS and Databricks logins need no Terminal: both CLIs, run with no controlling terminal and
+  standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
+  (checked by the owner, 2026-11-17).
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.
