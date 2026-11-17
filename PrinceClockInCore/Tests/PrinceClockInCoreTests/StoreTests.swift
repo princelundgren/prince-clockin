@@ -190,3 +190,31 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
         #expect(login.lastAWSCache == AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     }
 }
+
+// Fixture assumption: both instants carry a fraction, so the unrounded value differs from its
+// stored form. The save and load step is what proves in-memory equals on-disk.
+private func expiryAfterStoreRoundTrip(sessionLength: TimeInterval?) throws -> (before: Date?, after: Date?) {
+    let now = Date(timeIntervalSince1970: 1_800_000_000.7)
+    let expiresAt = Date(timeIntervalSince1970: 1_800_010_000.3)
+    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: sessionLength)
+    try setExpiry(&login, expiresAt: expiresAt, now: now)
+    #expect(login.loginTime == login.loginTime?.wholeSeconds)
+    #expect(login.sessionLength == login.sessionLength?.rounded(.down))
+
+    return try withTemporaryDirectory { directory in
+        let store = StateStore(directory: directory)
+        try store.save(AppState(logins: [login]))
+        guard case .loaded(let loaded) = store.load() else { return (expiry(of: login), nil) }
+        return (expiry(of: login), loaded.logins.first.flatMap(expiry(of:)))
+    }
+}
+
+@Test func setExpiryWithFractionalTimesSurvivesStore() throws {
+    let withoutLength = try expiryAfterStoreRoundTrip(sessionLength: nil)
+    #expect(withoutLength.before != nil)
+    #expect(withoutLength.after == withoutLength.before)
+
+    let withLength = try expiryAfterStoreRoundTrip(sessionLength: 8 * 3600)
+    #expect(withLength.before != nil)
+    #expect(withLength.after == withLength.before)
+}
