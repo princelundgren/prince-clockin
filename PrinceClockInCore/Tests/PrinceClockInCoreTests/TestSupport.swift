@@ -16,3 +16,20 @@ func login(remaining: TimeInterval, now: Date, name: String = "dev") -> Login {
         displayName: name, kind: .awsSSOSession(name: name), sessionLength: length,
         loginTime: now.addingTimeInterval(remaining - length))
 }
+
+/// Holds a test's async step until the test opens it.
+actor Gate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        waiters.forEach { $0.resume() }
+        waiters = []
+    }
+}

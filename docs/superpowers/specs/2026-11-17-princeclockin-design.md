@@ -74,10 +74,10 @@ A **login** is one thing the user signs in to. Each has a display name, a kind, 
 and a timer. The kinds are:
 
 - **AWS SSO session**: an `[sso-session <name>]` block in `~/.aws/config`. Login runs
-  `aws sso login --sso-session <name>`. Default session length 8 hours, the IAM Identity Center
+  `aws sso login --sso-session=<name>`. Default session length 8 hours, the IAM Identity Center
   default.
 - **Databricks profile**: a profile in the Databricks CLI's config whose `auth_type` is
-  `databricks-cli` (OAuth user-to-machine). Login runs `databricks auth login --profile <name>`.
+  `databricks-cli` (OAuth user-to-machine). Login runs `databricks auth login --profile=<name>`.
   No default session length: the limit is a token policy on the Databricks account, often days, so
   the timer stays unknown until the user enters the length once. Profiles using other auth types
   (personal access tokens, `azure-cli`, machine-to-machine) aren't offered; the user can add one
@@ -178,7 +178,9 @@ clicks "Check now".
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser.
 - AWS and Databricks logins run as an executable plus an argument list, never through a shell
-  string, so a session or profile name can't inject a command. No debug or verbose flags.
+  string, so a session or profile name can't inject a command. The name is joined to its flag
+  (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or
+  verbose flags.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, once, with a timeout. It never logs
   or shows the shell's other variables.
