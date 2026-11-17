@@ -95,8 +95,8 @@ A **preset** is a named, ordered set of logins, created and edited in settings.
 
 ### Timers
 
-A login's expiry is its login time plus its session length, stored as an absolute time. The login
-time comes from:
+A login's expiry is derived: its login time, stored as an absolute time, plus its session length.
+The login time comes from:
 
 1. A login run by the app that exits successfully: now.
 2. The user, by hand: "logged in now", or "expires at 16:30". An "expires at" time already past

@@ -8,3 +8,11 @@ func at(_ iso: String) -> Date {
     }
     return date
 }
+
+/// A login whose timer ends `remaining` seconds after `now`, with an 8 hour session.
+func login(remaining: TimeInterval, now: Date, name: String = "dev") -> Login {
+    let length: TimeInterval = 8 * 3600
+    return Login(
+        displayName: name, kind: .awsSSOSession(name: name), sessionLength: length,
+        loginTime: now.addingTimeInterval(remaining - length))
+}
