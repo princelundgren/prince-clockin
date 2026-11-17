@@ -17,6 +17,19 @@ func login(remaining: TimeInterval, now: Date, name: String = "dev") -> Login {
         loginTime: now.addingTimeInterval(remaining - length))
 }
 
+func makeTemporaryDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("pci-test-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+}
+
+func makeExecutable(named name: String, in directory: URL) throws {
+    let file = directory.appendingPathComponent(name)
+    try "#!/bin/sh\n".write(to: file, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+}
+
 /// Holds a test's async step until the test opens it.
 actor Gate {
     private var isOpen = false
@@ -31,5 +44,38 @@ actor Gate {
         isOpen = true
         waiters.forEach { $0.resume() }
         waiters = []
+    }
+}
+
+struct RecordedCall {
+    let executable: URL
+    let arguments: [String]
+    let environment: [String: String]
+    let timeout: Duration
+}
+
+final class FakeRunner: ProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [RecordedCall] = []
+    private let respond: @Sendable (Int) async -> ProcessOutcome
+
+    /// `respond` gets the zero-based index of each call.
+    init(respond: @escaping @Sendable (Int) async -> ProcessOutcome) {
+        self.respond = respond
+    }
+
+    var calls: [RecordedCall] {
+        lock.withLock { recorded }
+    }
+
+    func run(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration
+    ) async -> ProcessOutcome {
+        let index = lock.withLock {
+            recorded.append(RecordedCall(
+                executable: executable, arguments: arguments, environment: environment, timeout: timeout))
+            return recorded.count - 1
+        }
+        return await respond(index)
     }
 }
