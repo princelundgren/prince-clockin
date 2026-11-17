@@ -1,0 +1,32 @@
+name: PrinceClockIn
+options:
+  bundleIdPrefix: com.princelundgren
+  deploymentTarget:
+    macOS: "26.0"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  PrinceClockIn:
+    type: application
+    platform: macOS
+    sources:
+      - path: PrinceClockIn
+    settings:
+      base:
+        INFOPLIST_FILE: PrinceClockIn/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.princelundgren.princeclockin
+        CODE_SIGN_ENTITLEMENTS: PrinceClockIn/PrinceClockIn.entitlements
+    dependencies:
+      - package: PrinceClockInCore
+packages:
+  PrinceClockInCore:
+    path: ../PrinceClockInCore
