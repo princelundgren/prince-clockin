@@ -252,7 +252,7 @@ depends on it being open. From top to bottom:
       in the menu bar, since a popover must not be the only place a warning appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
       expires." With Open System Settings…, which opens System Settings → Notifications. It
-      appears once; closing the panel dismisses it, and after that it lives in Settings →
+      appears once; closing the panel after it has been shown dismisses it, and after that it lives in Settings →
       Warnings.
 2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login that
    becomes due mid-batch joins the queue from its tile's Log In:
@@ -410,7 +410,8 @@ lists.
   action (its Log In, or Try Again when it failed), else the first question's Mark as Logged In
   at <time>. Nothing is prominent when nothing needs the user, and
   Cancel All, Try Again during a batch, and Run It never are.
-- **Return** triggers that default. **Escape** cancels an open Set Timer, else closes the panel.
+- **Return** triggers that default wherever focus is, except in a text field, where it commits
+  the field; **Space** activates the focused control, such as a tile. **Escape** cancels an open Set Timer, else closes the panel.
 - **Tab** moves through every control in visual order; the **arrow keys** move between tiles.
   Opening the panel makes its window key, with focus on the first tile.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
