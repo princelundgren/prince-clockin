@@ -175,7 +175,8 @@ clicks "Check now".
 
 - **Menu bar**: an icon and the time left on the soonest-expiring login (`2h14`). It turns to a
   warning style when any login is expiring, and an expired style when any has expired. While a
-  batch runs, it shows which login is running ("2/3"). Removing the icon from the menu bar quits
+  batch runs, it shows which login is running ("2/3"). A dot after them means an update is
+  waiting (see Release). Removing the icon from the menu bar quits
   the app, which stops timers and notifications. The settings window says so.
 - **Panel** (`MenuBarExtra`, `.window` style):
   - one row per login: a checkbox, the name, the time left or its state, a "Log in" button and a
@@ -185,8 +186,8 @@ clicks "Check now".
   - the presets as buttons
   - "Log in to selected", "Log in to expiring" (every expiring or expired login) and "Check now"
   - a batch's progress, Cancel and a waiting custom login's Done
-  - a footer with "Report an issue", "Website", Settings and Quit, since an `LSUIElement` app
-    shows no menu bar menus
+  - a footer with "Report an issue", "Website", "Check for Updates…", Settings and Quit, since an
+    `LSUIElement` app shows no menu bar menus
 - The panel closes when a browser or Terminal takes focus, so a running batch never depends on it
   being open. Progress shows in the menu bar. A custom login waiting for Done also posts a
   notification with a Done action.
@@ -274,6 +275,13 @@ clicks "Check now".
 
 - Sparkle 2 with EdDSA-signed updates: `SUPublicEDKey` in `Info.plist`, the private key only in
   the release environment. The signature protects users even if the update host is compromised.
+- Sparkle checks daily without asking first (`SUEnableAutomaticChecks`), with system profiling
+  off. A scheduled check that finds an update shows no window: it puts a dot in the menu bar,
+  through Sparkle's gentle-reminder delegate, and "Check for Updates…" shows Sparkle's window.
+  This departs on purpose from Sparkle's example for dockless apps, which brings back the Dock
+  icon: the menu bar is where this app is looked at.
+- Sparkle's license ships in the app as `ThirdPartyNotices.txt`, a copy of the pinned release's
+  `LICENSE`.
 - The release workflow lives in this repository and runs on GitHub-hosted macOS runners. A public
   repository can call only public reusable workflows, and by the maintainer's policy a public
   repository's jobs run on self-hosted machines only in the CI pool below.

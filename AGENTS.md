@@ -27,5 +27,6 @@ Everything in this repository is public: code, docs, commit messages, issues and
     `xcodebuild -scheme PrinceClockIn -configuration Debug -derivedDataPath ../build/DerivedData CODE_SIGNING_ALLOWED=NO build`.
     The `.xcodeproj` is generated from `PrinceClockIn/project.yml` and not committed.
 - **Dependencies:** Dependabot covers GitHub Actions only. XcodeGen, pinned with its checksum in
-  `scripts/install-xcodegen.sh`, is checked against its latest release, with the release notes
-  read, before each release.
+  `scripts/install-xcodegen.sh`, and Sparkle, pinned by commit in `PrinceClockIn/project.yml`, are checked
+  against their latest releases, with the release notes read, before each release. A Sparkle bump
+  also copies its `LICENSE` over `PrinceClockIn/PrinceClockIn/ThirdPartyNotices.txt`.

@@ -24,5 +24,13 @@
     <true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>PrinceClockIn opens your custom login commands in a Terminal window.</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUEnableSystemProfiling</key>
+    <false/>
+    <key>SUFeedURL</key>
+    <string>https://updates.princelundgren.com/princeclockin/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>2KvmzhYpdJqQb2KliZZQGm5291TEwNrFmDo5FSrDCZ8=</string>
 </dict>
 </plist>
