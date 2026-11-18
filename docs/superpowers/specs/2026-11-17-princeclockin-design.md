@@ -105,12 +105,32 @@ The login time comes from:
 2. The user, by hand: "logged in now", or "expires at 16:30". An "expires at" time already past
    is refused.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
-   - **AWS**: the session's file in `~/.aws/sso/cache/` changed while its previous `expiresAt`
-     was more than 15 minutes away. The CLI only renews within 15 minutes of `expiresAt`, so an
-     earlier rewrite is a login. As a second signal, the app may hash the file's `refreshToken`
-     and keep only the hash, in memory (owner, 2026-11-17). A missing file (after
-     `aws sso logout`) means expired.
+   - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
+     The app compares what it last saw of the file with what it reads now, in this order:
+     1. No file, after a file: logged out (`aws sso logout`). A file, after none: a login.
+     2. No newer modification date: nothing happened.
+     3. Both hashes known: the SHA-256 of the file's `refreshToken`, kept only in memory
+        (owner, 2026-11-17). The same hash is a renewal and a different one a login, whatever the
+        times say, since the token is the stronger signal. The file is read once per launch for
+        its hash.
+     4. Otherwise, by time, for a rewrite after a relaunch or a file without a token. A rewrite
+        while the previous `expiresAt` was more than 15 minutes away is a login, since the CLI
+        only renews within 15 minutes of it. A rewrite at or after the timer's expiry is a login,
+        since a renewal can't outlive the session.
+     5. A rewrite while the timer is unknown, or within the warning time, could be either, since
+        the CLI also renews a token that has lapsed. The row asks "Logged in at <time>?", the
+        rewrite's time, with a one-click yes beside "Set timer"; yes sets the login time to that
+        time. Any other rewrite is a renewal.
+     A login done while the app wasn't running is found the same way at launch, against the stored
+     times, which hold no hash.
    - **Databricks**: a tracked profile that goes from invalid to valid.
+
+A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
+without a token. Set too short, a renewal after the timer's expiry is taken for a login, so the
+timer restarts from it. Set too long, it shows ok after the real session has ended, and a re-login
+before the warning time can be taken for a renewal, so it keeps counting from the old login (a
+rewrite more than 15 minutes before the token's `expiresAt` is still caught). Setting the right
+session length fixes both.
 
 Facts the timer design rests on:
 
@@ -142,7 +162,9 @@ clicks "Check now".
 - A profile reported invalid moves its timer to expired, even if time remains.
 - A profile reported valid whose timer says expired shows both facts, and offers to correct its
   session length.
-- A check that fails (offline, VPN down) changes nothing.
+- A check that fails (offline, VPN down) changes nothing. Only the CLI's no-credentials error
+  counts as invalid.
+- Account-level profiles are offered but never checked.
 
 ### Menu bar and panel
 
@@ -254,10 +276,20 @@ clicks "Check now".
 
 ## Left to the builder
 
-- Whether IAM Identity Center rotates the refresh token on renewal; if so, the hash adds nothing
-  beyond the file-time rule.
 - Whether there is a cheap, reliable live check of an AWS SSO session.
-- The Databricks CLI command for checking a single profile.
+- Recorded 2026-11-17, on AWS CLI 2.39.0 and Databricks CLI 1.22.1:
+  - **Refresh token (AWS):** a renewal keeps it and a login changes it, on the same session, so
+    the hash is kept and decides first.
+  - **Databricks check:** `databricks current-user me --profile <name>` exits 0 for a valid
+    profile. For one with no usable login it exits 1 and prints
+    `Error: error getting token: cache: no cached credentials; run `databricks auth login` to sign in`,
+    which is the one failure read as invalid. That line was recorded from a logged-out profile, not
+    one whose refresh token had expired, which the CLI can't produce on demand. The check opened no
+    browser tab or keychain dialog.
+  - **Logins without a terminal:** `aws sso login` and `databricks auth login`, with no tty and
+    stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
+    CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
+    SSH session can't reach.
 - The signal that a panel has opened, if any feature needs one.
 - How Terminal is opened, within the rules above.
 - Panel layout, icon and copy, within the behaviour above.
