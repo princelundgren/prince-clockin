@@ -221,8 +221,11 @@ clicks "Check now".
   viewed from its row to diagnose a failure.
 - A custom command is stored as plaintext in the settings file, so it must not contain secrets; the
   settings window says so. A custom command imported with a settings file is shown to the user
-  before it first runs. How Terminal is opened is left to the builder, as long as the command is
-  never written to a file Terminal executes and a denied permission is shown to the user.
+  before it first runs. Approvals are kept on this Mac, in the app's user defaults and outside the
+  portable settings file: a command typed in settings is approved when saved, and one that arrives
+  in a copied file, or is changed in it, is not. How Terminal is opened is left to the builder, as
+  long as the command is never written to a file Terminal executes and a denied permission is
+  shown to the user.
 
 ### Platform
 

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import PrinceClockInCore
+import UserNotifications
 
 private let lead: TimeInterval = 30 * 60
 
@@ -111,5 +112,18 @@ private let lead: TimeInterval = 30 * 60
         #expect(content.title == "2 logins need logging in")
         #expect(content.body == "dev: expires in 25m\nprod: expired")
         #expect(content.ids == [dev.id, prod.id])
+    }
+
+    @Test func onlyActionButtonsGiveActions() {
+        let dev = UUID()
+        let prod = UUID()
+        let ids = [dev.uuidString, prod.uuidString]
+
+        #expect(notificationAction(actionIdentifier: NotificationActionID.logIn, loginIDs: ids) == .logIn([dev, prod]))
+        #expect(notificationAction(actionIdentifier: NotificationActionID.done, loginIDs: [dev.uuidString])
+            == .customDone(dev))
+        #expect(notificationAction(actionIdentifier: UNNotificationDefaultActionIdentifier, loginIDs: ids) == nil)
+        #expect(notificationAction(actionIdentifier: UNNotificationDismissActionIdentifier, loginIDs: ids) == nil)
+        #expect(notificationAction(actionIdentifier: NotificationActionID.logIn, loginIDs: ["not-a-uuid"]) == nil)
     }
 }

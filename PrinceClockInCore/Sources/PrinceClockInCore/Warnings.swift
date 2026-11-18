@@ -45,3 +45,29 @@ private func describe(_ login: Login, now: Date) -> String {
     case .unknown: "has no known expiry"
     }
 }
+
+/// The identifiers of the notification buttons the app registers.
+public enum NotificationActionID {
+    /// "Log in", on a warning: starts the logins it names.
+    public static let logIn = "logIn"
+    /// "Done", on a custom login waiting for the user.
+    public static let done = "customDone"
+}
+
+/// What the user asked for by pressing a notification's button.
+public enum NotificationAction: Equatable, Sendable {
+    case logIn([UUID])
+    case customDone(UUID)
+}
+
+/// The action for a notification response. Only the "Log in" and "Done" buttons give one: opening
+/// or dismissing the notification gives `nil`, so nothing logs in unasked. Strings that aren't
+/// UUIDs are dropped, and a response left with no login gives `nil`.
+public func notificationAction(actionIdentifier: String, loginIDs: [String]) -> NotificationAction? {
+    let ids = loginIDs.compactMap(UUID.init(uuidString:))
+    switch actionIdentifier {
+    case NotificationActionID.logIn: return ids.isEmpty ? nil : .logIn(ids)
+    case NotificationActionID.done: return ids.first.map(NotificationAction.customDone)
+    default: return nil
+    }
+}
