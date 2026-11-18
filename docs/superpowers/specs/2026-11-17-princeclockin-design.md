@@ -142,7 +142,8 @@ The login time comes from:
         the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with the
         rewrite's time, and offers Mark as Logged In at <time> beside Set Timer…; the first sets
         the login time to the rewrite's time. There is no "No", since a wrong timer is worse than
-        an open question: the question stays until a time is set or the app logs the login in.
+        an open question: the question stays until a time is set or the app logs the login in
+        (owner, 2026-11-19).
         Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
@@ -221,8 +222,8 @@ login the label is about, so the number always belongs to the login the badge is
 |---|---|---|
 | Logging in | `clock.arrow.circlepath` | the batch's progress, "1 of 2" |
 | A failure not yet seen, or a failed save | `exclamationmark.triangle` | none |
-| Any login expired | `clock.badge.xmark` | none |
-| A login expiring | `clock.badge.exclamationmark` | that login's time left, "19m" |
+| Any login expired (a Still valid login doesn't count) | `clock.badge.xmark` | none |
+| A login expiring | `clock.badge.exclamationmark` | the soonest-expiring login's time left, "19m" |
 | Every timer ok | `clock` | the soonest expiry's time left, "5h 13m" |
 | No timer at all | `clock` | none |
 
@@ -345,8 +346,9 @@ with its + menu open.
 
 Its own window hosting SwiftUI: a native sidebar list with a symbol per pane,
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
-Return or when focus leaves the field. Minimum size 620 × 540, ideal 760 × 640, its frame saved
-and its last pane restored. The panes:
+Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
+resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
+Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
 - **Logins:** the tracked logins, each with a `.secondary` kind symbol (`cloud` AWS,
   `square.stack.3d.up` Databricks, `terminal` custom) and a subtitle with its kind, session
@@ -626,8 +628,6 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
-- The Settings window's title, one "PrinceClockIn Settings" or the selected pane's, and whether it
-  zooms: the owner decides on the prototype.
 - Checks to run on a Mac with macOS 26, on the prototype, before the design is final:
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
