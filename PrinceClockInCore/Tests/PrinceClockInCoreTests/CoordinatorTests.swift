@@ -562,6 +562,19 @@ private extension Coordinator {
         ])
     }
 
+    @Test func setCommandEndsPendingApproval() async throws {
+        let vpn = custom(command: "vpn-connect --profile dev")
+        let fixture = try Fixture(logins: [vpn])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([vpn.id])
+
+        coordinator.setCommand(id: vpn.id, to: "vpn-connect --profile prod")
+
+        #expect(coordinator.pendingApprovals.isEmpty)
+        #expect(fixture.terminal.commands.isEmpty)
+    }
+
     @Test func editsAreSaved() async throws {
         let dev = aws("dev")
         let prod = aws("prod")

@@ -274,10 +274,12 @@ public final class Coordinator {
         model.validWhileExpired.remove(id)
     }
 
-    /// Sets a custom login's command and approves it, since the user typed it.
+    /// Sets a custom login's command and approves it, since the user typed it. A login held back
+    /// for approval no longer waits; it runs on the next log-in.
     public func setCommand(id: UUID, to command: String?) {
         guard let login = login(id), case .custom = login.kind else { return }
         if let command { approvals.approve(approvalKey(for: command)) }
+        pendingApprovals.removeAll { $0 == id }
         edit(id) { $0.kind = .custom(command: command) }
     }
 
