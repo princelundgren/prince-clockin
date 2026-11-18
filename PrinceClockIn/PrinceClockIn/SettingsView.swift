@@ -121,7 +121,9 @@ private struct LoginSettingsRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 CommitField("Name", text: login.displayName) { name in
-                    if !name.isEmpty { coordinator.rename(id: login.id, to: name) }
+                    guard !name.isEmpty else { return false }
+                    coordinator.rename(id: login.id, to: name)
+                    return true
                 }
                 Button("Remove", role: .destructive) { coordinator.removeLogin(id: login.id) }
             }
@@ -132,6 +134,7 @@ private struct LoginSettingsRow: View {
             if case .custom(let command) = login.kind {
                 CommitField("Command (optional)", text: command ?? "") { command in
                     coordinator.setCommand(id: login.id, to: command.isEmpty ? nil : command)
+                    return true
                 }
                 .font(.body.monospaced())
             }
@@ -150,15 +153,16 @@ private struct LoginSettingsRow: View {
 }
 
 /// A text field that hands its trimmed text to `commit` when submitted or when it loses focus,
-/// not on every keystroke, so a command is approved and saved only once it is typed out.
+/// not on every keystroke, so a command is approved and saved only once it is typed out. `commit`
+/// returns whether it took the text; if not, the field shows `text` again.
 private struct CommitField: View {
     let title: String
     let text: String
-    let commit: (String) -> Void
+    let commit: (String) -> Bool
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
-    init(_ title: String, text: String, commit: @escaping (String) -> Void) {
+    init(_ title: String, text: String, commit: @escaping (String) -> Bool) {
         self.title = title
         self.text = text
         self.commit = commit
@@ -177,7 +181,7 @@ private struct CommitField: View {
 
     private func save() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed != text { commit(trimmed) }
+        if trimmed != text, !commit(trimmed) { draft = text }
     }
 }
 
@@ -216,7 +220,9 @@ private struct PresetEditor: View {
     var body: some View {
         HStack {
             CommitField("Name", text: preset.name) { name in
-                if !name.isEmpty { save { $0.name = name } }
+                guard !name.isEmpty else { return false }
+                save { $0.name = name }
+                return true
             }
             Button("Remove preset", role: .destructive) { coordinator.removePreset(id: preset.id) }
         }
