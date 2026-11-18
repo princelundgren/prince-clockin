@@ -7,6 +7,7 @@ enum TerminalOpenerError: LocalizedError {
     case notPermitted
     case notStarted
     case permissionCheckFailed(OSStatus)
+    case scriptNotCompiled
     case scriptFailed(Int)
 
     var errorDescription: String? {
@@ -17,6 +18,8 @@ enum TerminalOpenerError: LocalizedError {
             "Terminal couldn't be started"
         case .permissionCheckFailed(let status):
             "Couldn't check the permission to control Terminal (error \(status))"
+        case .scriptNotCompiled:
+            "PrinceClockIn couldn't build its script for Terminal"
         case .scriptFailed(let number):
             "Terminal didn't run the command (error \(number))"
         }
@@ -82,7 +85,7 @@ struct TerminalOpener: TerminalOpening {
     }
 
     @MainActor private static func run(_ command: String) throws {
-        guard let script else { throw TerminalOpenerError.scriptFailed(0) }
+        guard let script else { throw TerminalOpenerError.scriptNotCompiled }
         var errorInfo: NSDictionary?
         _ = script.executeAppleEvent(handlerCallEvent(handler: handlerName, argument: command), error: &errorInfo)
         guard let errorInfo else { return }
