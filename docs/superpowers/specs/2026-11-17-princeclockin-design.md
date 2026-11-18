@@ -1,7 +1,7 @@
 ---
 status: building
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
-verified: 2026-11-18
+verified: 2026-11-19
 ---
 
 # PrinceClockIn: design
@@ -141,8 +141,9 @@ The login time comes from:
      5. A rewrite while the timer is unknown, or within the warning time, could be either, since
         the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with the
         rewrite's time, and offers Mark as Logged In at <time> beside Set Timer…; the first sets
-        the login time to the rewrite's time. There is no "No": the question stays until a time
-        is set. Any other rewrite is a renewal.
+        the login time to the rewrite's time. There is no "No", since a wrong timer is worse than
+        an open question: the question stays until a time is set or the app logs the login in.
+        Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -211,8 +212,9 @@ clicks Check Databricks Now in Settings → Logins.
 
 #### Menu bar label
 
-A template SF Symbol and, beside it, the time left on one login, in a fixed width with monospaced
-digits. Urgency shows in the symbol's shape, never in colour. The core publishes the id of the
+A template SF Symbol and, beside it, the time left on one login, in monospaced digits. The text's
+width is set by its state's widest form in the user's locale, so it doesn't jitter as the time
+counts down; it changes only with the state. Urgency shows in the symbol's shape, never in colour. The core publishes the id of the
 login the label is about, so the number always belongs to the login the badge is about.
 
 | State | Symbol | Text |
@@ -231,7 +233,8 @@ login the label is about, so the number always belongs to the login the badge is
 - VoiceOver reads one label, such as "PrinceClockIn, prod expiring in 19 minutes".
 - A left click opens the panel and a right click opens the right-click menu.
 - Removing the icon from the menu bar quits the app, which stops timers and notifications;
-  Settings → General says so. Opening the app again from Applications brings it back.
+  Settings → General says so. Opening the app again from Applications brings it back: at launch
+  the app makes its status item visible.
 
 #### Panel
 
@@ -251,7 +254,8 @@ depends on it being open. From top to bottom:
       expires." With Open System Settings…, which opens System Settings → Notifications. It
       appears once; closing the panel dismisses it, and after that it lives in Settings →
       Warnings.
-2. **The batch card**, while a batch runs, in place of Log In to N Due:
+2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login that
+   becomes due mid-batch joins the queue from its tile's Log In:
    - "Logging in to prod", its progress "1 of 2", "Finish in your browser. Next: staging", and
      Cancel All, which cancels the whole batch. With failures, the progress reads "2 of 2 · 1
      failed".
@@ -286,16 +290,19 @@ with its + menu open.
   - A tile that isn't due: the kind as its subtitle ("AWS SSO session") and the time left
     ("5h 13m") or its state word trailing.
   - A due tile drops the kind: "Expiring · 19m left" or "Expired 40m ago" as its subtitle, and a
-    visible Log In trailing.
+    visible Log In trailing, unless it has a pending item (see below).
   - State and time are never cut off at 320 pt; a subtitle that doesn't fit drops the kind first.
 - **Symbols:** expired `xmark.circle`; expiring `clock`; ok `checkmark.circle`; no timer `timer`;
   a question `questionmark.circle`; running or queued a small `ProgressView`; failed
-  `exclamationmark.triangle` in Expired; still valid `clock.badge.checkmark` in Expiring; not
+  `exclamationmark.triangle` in Expired; still valid `clock.badge.checkmark` in Logged in; not
   yet approved `terminal`.
 - **The tile is two controls**, since SwiftUI can't open a `Menu` programmatically:
   - a tile that isn't due is a `Menu` whose label is the whole tile, so a click opens its actions;
   - a due tile is a `Button`, which logs in, plus the "…" `Menu`;
-  - a tile with a pending question, failure or approval opens that instead of logging in;
+  - a tile with a pending question, failure or approval is a `Menu` like a tile that isn't due,
+    even when due: its trailing side shows the state word (Failed, Not yet approved) instead of
+    Log In, and the item's own buttons below it (Try Again, Run It, Mark as Logged In at <time>)
+    are how it is answered;
   - a running or queued tile opens its actions, which include Cancel All;
   - the click action never changes while the pointer is on the tile.
 - **The "…" menu**, also the tile's context menu and its accessibility actions: Log In, Set
@@ -378,13 +385,14 @@ and its last pane restored. The panes:
 #### Colours
 
 House colour tokens from the asset catalog, each with light, dark and Increase Contrast variants,
-as the maintainer's other menu bar apps define theirs. One token means one thing.
+as the maintainer's other menu bar apps define theirs. A token has only the meanings its row
+lists.
 
-| Token | Means only | Light | Dark | Increase Contrast light | Increase Contrast dark |
+| Token | Means | Light | Dark | Increase Contrast light | Increase Contrast dark |
 |---|---|---|---|---|---|
-| Expired | a login past its time; a failure | `#B3261E` | `#FF6961` | `#8C1D18` | `#FF9A94` |
+| Expired | a login past its time, or a login that failed | `#B3261E` | `#FF6961` | `#8C1D18` | `#FF9A94` |
 | Expiring | inside the warning time | `#8A5A00` | `#E0B359` | `#6E4700` | `#F0CC85` |
-| Logged in | a login with time left | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
+| Logged in | a login with time left, or still valid | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
 | Running | a login in progress or queued | `#5B45B5` | `#B8A8F0` | `#47358F` | `#D2C8F8` |
 | Accent | the one prominent button's fill, under white text | `#3A78AC` | `#3A78AC` | `#2F6797` | `#2F6797` |
 | Link | About's inline links only | `#2F6797` | `#8FC3EA` | `#24557F` | `#B5D8F3` |
@@ -398,9 +406,9 @@ as the maintainer's other menu bar apps define theirs. One token means one thing
 
 - Panel buttons are `.bordered` at `controlSize(.regular)` (28 pt); Settings rows may use
   `.small`. One `.borderedProminent` per view: the state's single default, in this order: Set in an
-  open Set Timer, Done while a custom login waits, Log In to N Due, a single due tile's Log In,
-  else the action under the first tile with a failure or question (Try Again, Mark as Logged In
-  at <time>). Nothing is prominent when nothing needs the user, and
+  open Set Timer, Done while a custom login waits, Log In to N Due, the first due tile's own
+  action (its Log In, or Try Again when it failed), else the first question's Mark as Logged In
+  at <time>. Nothing is prominent when nothing needs the user, and
   Cancel All, Try Again during a batch, and Run It never are.
 - **Return** triggers that default. **Escape** cancels an open Set Timer, else closes the panel.
 - **Tab** moves through every control in visual order; the **arrow keys** move between tiles.
@@ -425,7 +433,7 @@ title case for buttons and menu items.
 | Expired · Expiring · Logged out · No timer · Queued · Logging in · Failed · Still valid · Not yet approved | Unknown · Timer ended · No known expiry |
 | AWS SSO session · Databricks profile · Databricks account profile · Custom login | AWS SSO · Custom · Custom command |
 | Set Timer… · Show Output… · Report an Issue… (an ellipsis on every item that opens a window, a form or a browser page) | Set Time… · Report an issue |
-| Login timeout · Cancel All · Check Databricks Now | Give up on a login after · Cancel · Check now |
+| Login timeout · Cancel All (stops a batch) · Check Databricks Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now |
 | Notification actions: Log In · Done | Log in |
 
 The copy is in English. Durations and times follow the user's locale and 12- or 24-hour setting,
@@ -621,7 +629,8 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   zooms: the owner decides on the prototype.
 - Checks to run on a Mac with macOS 26, on the prototype, before the design is final:
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
-    as removal and quits the app.
+    as removal and quits the app, and after removing it, quitting and reopening the app, the icon
+    is back.
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
     `clock.badge.exclamationmark`, `clock.badge.xmark`, `clock.arrow.circlepath` and
     `exclamationmark.triangle`, and the tiles' and Settings' `timer`, `xmark.circle`,
