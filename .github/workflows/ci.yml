@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: macos-26
+    # The maintainer's pool refuses a fork's job, so a fork's pull request runs on GitHub's runner.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'macos-26' || 'prince-clockin-macos' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

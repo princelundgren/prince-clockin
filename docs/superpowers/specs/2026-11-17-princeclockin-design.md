@@ -255,10 +255,13 @@ clicks "Check now".
   the release environment. The signature protects users even if the update host is compromised.
 - The release workflow lives in this repository and runs on GitHub-hosted macOS runners. A public
   repository can call only public reusable workflows, and by the maintainer's policy a public
-  repository's jobs never run on self-hosted machines.
+  repository's jobs run on self-hosted machines only in the CI pool below.
 - Signing, notarization and upload secrets live in a protected GitHub environment, used only by
   the release job, and only on a version tag.
-- A workflow on every pull request and every push to `main` builds the app and runs the tests.
+- A workflow on every pull request and every push to `main` builds the app and runs the tests,
+  on the maintainer's self-hosted pool `prince-clockin-macos`: a fresh macOS VM per job with Xcode
+  26.6, no secrets and no local network. A fork's pull request runs on GitHub's `macos-26`, since
+  the pool refuses a fork's job.
 - The appcast and DMGs are served from `https://updates.princelundgren.com/princeclockin/`, the
   maintainer's update host, whose address belongs to no website, so it stays stable whatever the
   website becomes (owner, 2026-11-17). Feed URL:
