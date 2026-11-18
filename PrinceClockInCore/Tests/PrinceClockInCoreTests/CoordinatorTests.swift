@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 import PrinceClockInCore
 
@@ -484,6 +485,49 @@ private extension Coordinator {
         coordinator.cancelBatch()
 
         #expect(await eventually { coordinator.batch == nil && coordinator.waitingCustomID == nil })
+    }
+
+    @Test func failureIsKeptUntilTheNextRunOfThatLogin() async throws {
+        let dev = aws("dev")
+        let attempts = OSAllocatedUnfairLock(initialState: 0)
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in
+            attempts.withLock { $0 += 1; return $0 } == 1 ? .exited(code: 1, output: "denied") : .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.lastFailures[dev.id] == .exitCode(1) && coordinator.batch == nil })
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.lastFailures[dev.id] == nil && coordinator.login(dev.id)?.loginTime != nil })
+    }
+
+    @Test func removingALoginForgetsItsFailure() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in .exited(code: 1, output: "") })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.lastFailures[dev.id] != nil })
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.lastFailures[dev.id] == nil)
+    }
+
+    @Test func cancellingALoginIsNotAFailure() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.batch != nil })
+
+        coordinator.cancelBatch()
+
+        #expect(await eventually { coordinator.batch == nil })
+        #expect(coordinator.lastFailures[dev.id] == nil)
     }
 
     @Test func logInHoldsBackUnapprovedImportedCommand() async throws {

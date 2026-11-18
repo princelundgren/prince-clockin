@@ -23,6 +23,19 @@ public enum LoginFailure: Equatable, Sendable {
     case terminalFailed(String)
 }
 
+extension LoginFailure {
+    /// What the login's row says went wrong.
+    public var message: String {
+        switch self {
+        case .cliNotFound(let executable): "\(executable) not found on your login shell's PATH"
+        case .exitCode(let code): "The login exited with status \(code)"
+        case .timedOut: "The login timed out"
+        case .cancelled: "Cancelled"
+        case .launchFailed(let reason), .terminalFailed(let reason): reason
+        }
+    }
+}
+
 /// What the queue reports, in order. A run is the logins started from an idle queue until it is
 /// empty again or cancelled; it ends with `.finished`.
 public enum QueueEvent: Equatable, Sendable {

@@ -175,3 +175,10 @@ private let lead: TimeInterval = 30 * 60
     #expect(rowStateText(.expired) == "Expired")
     #expect(rowStateText(.unknown) == "No known expiry")
 }
+
+@Test func menuBarTextShowsBatchPositionWhileOneRuns() {
+    let status = MenuBarStatus(text: "2h14", severity: .expiring)
+
+    #expect(menuBarText(status, batch: nil) == "2h14")
+    #expect(menuBarText(status, batch: BatchProgress(position: 2, total: 3)) == "2/3")
+}

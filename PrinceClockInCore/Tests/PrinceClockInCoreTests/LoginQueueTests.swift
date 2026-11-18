@@ -607,3 +607,12 @@ private final class StepLog: @unchecked Sendable {
         ])
     }
 }
+
+@Test func failureMessagesSayWhatWentWrong() {
+    #expect(LoginFailure.cliNotFound("aws").message == "aws not found on your login shell's PATH")
+    #expect(LoginFailure.exitCode(2).message == "The login exited with status 2")
+    #expect(LoginFailure.timedOut.message == "The login timed out")
+    #expect(LoginFailure.cancelled.message == "Cancelled")
+    #expect(LoginFailure.launchFailed("aws: permission denied").message == "aws: permission denied")
+    #expect(LoginFailure.terminalFailed("Terminal couldn't be started").message == "Terminal couldn't be started")
+}

@@ -179,15 +179,21 @@ clicks "Check now".
   the app, which stops timers and notifications. The settings window says so.
 - **Panel** (`MenuBarExtra`, `.window` style):
   - one row per login: a checkbox, the name, the time left or its state, a "Log in" button and a
-    "Set timer" action
+    "Set timer" action, which opens inline in the row, not as a sheet, since a sheet loses focus
+    with the panel; below it, a question or fact the row needs ("Logged in at <time>?", a
+    Databricks mismatch) and the last failure with its output
   - the presets as buttons
-  - "Log in to selected" and "Log in to expiring" (every expiring or expired login)
+  - "Log in to selected", "Log in to expiring" (every expiring or expired login) and "Check now"
   - a batch's progress, Cancel and a waiting custom login's Done
+  - a footer with "Report an issue", "Website", Settings and Quit, since an `LSUIElement` app
+    shows no menu bar menus
 - The panel closes when a browser or Terminal takes focus, so a running batch never depends on it
   being open. Progress shows in the menu bar. A custom login waiting for Done also posts a
   notification with a Done action.
 - **Settings window**: the logins (add, remove, rename, session length, a custom command), the
-  presets, the warning time, the login timeout, and launch at login.
+  presets, the warning time, the login timeout, and launch at login. Adding a discovered AWS
+  session or Databricks profile offers its Set timer controls at once, skippable, so a login the
+  user has already done gets a known timer instead of the "Logged in at?" question later.
 
 ### Notifications
 
@@ -257,7 +263,7 @@ clicks "Check now".
   third-party SDK that collects any of them.
 - The only network traffic the app itself makes is the Sparkle update check, with Sparkle's system
   profiling off. The CLIs it runs make their own traffic.
-- The app's menu offers "Report an issue", which opens the repository's new-issue page, and
+- The panel offers "Report an issue", which opens the repository's new-issue page, and
   "Website". Bug reports come from the user, never collected.
 - Until the maintainer's shared products website exists (a separate project), "Website" opens the
   GitHub repository, and its README is the landing page: what the app does, how to install it,

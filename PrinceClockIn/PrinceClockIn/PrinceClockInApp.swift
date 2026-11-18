@@ -11,9 +11,15 @@ struct PrinceClockInApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("PrinceClockIn", systemImage: "clock") {
-            PanelView(coordinator: appModel.coordinator)
+        MenuBarExtra {
+            PanelView(appModel: appModel)
+        } label: {
+            MenuBarLabel(coordinator: appModel.coordinator)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView(appModel: appModel)
+        }
     }
 }
