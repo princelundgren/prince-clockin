@@ -168,3 +168,10 @@ private let lead: TimeInterval = 30 * 60
     #expect(menuBarStatus([ok, expired], now: now, leadTime: lead).severity == .expired)
     #expect(menuBarStatus([expiring, expired], now: now, leadTime: lead).severity == .expired)
 }
+
+@Test func rowTextNamesEachState() {
+    #expect(rowStateText(.ok(remaining: 2 * 3600 + 14 * 60 + 30)) == "2h14 left")
+    #expect(rowStateText(.expiring(remaining: 25 * 60)) == "Expiring, 25m left")
+    #expect(rowStateText(.expired) == "Expired")
+    #expect(rowStateText(.unknown) == "No known expiry")
+}

@@ -228,9 +228,13 @@ clicks "Check now".
   settings window says so. A custom command imported with a settings file is shown to the user
   before it first runs. Approvals are kept on this Mac, in the app's user defaults and outside the
   portable settings file: a command typed in settings is approved when saved, and one that arrives
-  in a copied file, or is changed in it, is not. How Terminal is opened is left to the builder, as
-  long as the command is never written to a file Terminal executes and a denied permission is
-  shown to the user.
+  in a copied file, or is changed in it, is not.
+- A custom command opens in Terminal through a `do script` Apple event, never a file Terminal
+  executes. The command is passed as the parameter of a handler in a constant, compiled script, so
+  it is never quoted into script source. The app launches Terminal first, then asks for the
+  Automation permission off the main thread; a denied permission fails the login with a message
+  that says where to allow it. This was chosen over quoting the command into script source, and
+  over `osascript`, whose permission would be asked for on behalf of a different process.
 
 ### Platform
 
@@ -305,5 +309,4 @@ clicks "Check now".
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
 - The signal that a panel has opened, if any feature needs one.
-- How Terminal is opened, within the rules above.
 - Panel layout, icon and copy, within the behaviour above.
