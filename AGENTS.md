@@ -14,8 +14,10 @@ Everything in this repository is public: code, docs, commit messages, issues and
   argument list, so a session or profile name can't inject a command.
 - **Changes land through a pull request**, with signed commits. The Claude review comments on each
   pull request a person opens.
-- **CI runs on GitHub-hosted runners only**, never self-hosted ones, since this is a public
-  repository. Every action is pinned by full commit SHA.
+- **CI runs on the maintainer's self-hosted pool `prince-clockin-macos`**, a fresh macOS VM per
+  job with Xcode 26.6, no secrets and no local network. A fork's pull request runs on GitHub's
+  `macos-26` instead, and a release job runs on GitHub-hosted runners. Every action is pinned by
+  full commit SHA.
 - **Build and test** from the repository root:
   - `swift test --package-path PrinceClockInCore`
   - `scripts/install-xcodegen.sh`, then in `PrinceClockIn/`:
