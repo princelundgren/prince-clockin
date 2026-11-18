@@ -1,6 +1,7 @@
 ---
 status: building
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
+verified: 2026-11-18
 ---
 
 # PrinceClockIn: design
