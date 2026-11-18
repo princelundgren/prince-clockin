@@ -1,18 +1,22 @@
 import AppKit
+import Observation
 import PrinceClockInCore
 import UserNotifications
 
 /// Builds the coordinator with the real system services and drives it: the 30-second tick, wake,
 /// clock and time-zone changes, and notification buttons. It makes no decisions of its own.
 @MainActor
+@Observable
 final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private static let tickInterval: TimeInterval = 30
     private static let tickTolerance: TimeInterval = 5
 
     let coordinator: Coordinator
+    /// Whether the user has denied notifications, so the panel and settings can say so.
+    private(set) var notificationsAreOff = false
 
     /// Held for the app's life, so App Nap doesn't coalesce the tick timer of a windowless app.
-    private let activity: NSObjectProtocol
+    @ObservationIgnored private let activity: NSObjectProtocol
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
@@ -40,11 +44,18 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         observeSystemChanges()
         Task {
             await SystemNotifier.requestAuthorization()
+            await refreshNotificationPermission()
         }
         Task {
             await coordinator.start()
-            await coordinator.tick()
+            await tick()
         }
+    }
+
+    /// Reads the notification permission again, since the user can change it in System Settings.
+    func refreshNotificationPermission() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationsAreOff = settings.authorizationStatus == .denied
     }
 
     // MARK: UNUserNotificationCenterDelegate
@@ -79,9 +90,14 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    private func tick() async {
+        await coordinator.tick()
+        await refreshNotificationPermission()
+    }
+
     private func startTicking() {
         let timer = Timer(timeInterval: Self.tickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.coordinator.tick() }
+            Task { @MainActor in await self?.tick() }
         }
         timer.tolerance = Self.tickTolerance
         RunLoop.main.add(timer, forMode: .common)
@@ -95,7 +111,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         ]
         for (center, name) in changes {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.coordinator.tick() }
+                Task { @MainActor in await self?.tick() }
             }
         }
     }

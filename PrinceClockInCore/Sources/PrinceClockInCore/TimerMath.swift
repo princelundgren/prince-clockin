@@ -89,6 +89,11 @@ public func menuBarStatus(_ logins: [Login], now: Date, leadTime: TimeInterval) 
     return MenuBarStatus(text: soonest.map(remainingText) ?? "—", severity: severity)
 }
 
+/// The menu bar's text: which login is running ("2/3") while a batch runs, else `status`'s text.
+public func menuBarText(_ status: MenuBarStatus, batch: BatchProgress?) -> String {
+    batch.map { "\($0.position)/\($0.total)" } ?? status.text
+}
+
 /// A login row's description of `state`: "2h14 left", "Expiring, 25m left", "Expired" or
 /// "No known expiry", with the time left formatted as in the menu bar.
 public func rowStateText(_ state: TimerState) -> String {
