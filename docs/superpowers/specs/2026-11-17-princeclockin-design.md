@@ -187,9 +187,12 @@ clicks "Check now".
 ### Notifications
 
 - One notification when a login enters its warning time. Logins that do so close together, or
-  while the Mac slept or the app wasn't running, are grouped into one notification.
+  while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
+  warning time passed while the app wasn't running is announced once at the next launch, as
+  expired if it has.
 - Its "Log in" action starts those logins. That is the user starting them, not the app.
-- No notification at expiry, and nothing repeats: the menu bar shows expired.
+- No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
+  bar shows expired.
 - If notification permission is denied, the menu bar styles carry the warning alone, and the panel
   and settings say notifications are off.
 

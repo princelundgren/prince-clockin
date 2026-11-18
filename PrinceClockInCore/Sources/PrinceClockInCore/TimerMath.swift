@@ -19,12 +19,16 @@ public func expiry(of login: Login) -> Date? {
     return loginTime.addingTimeInterval(sessionLength)
 }
 
+/// Whether the login was found invalid at or after its last login time.
+func isInvalidated(_ login: Login) -> Bool {
+    guard let invalidatedAt = login.invalidatedAt else { return false }
+    return (login.loginTime ?? .distantPast) <= invalidatedAt
+}
+
 /// Computed from absolute times only, so it is right after sleep or a clock change.
 /// An invalidated login is `.expired` until a login newer than `invalidatedAt` is recorded.
 public func timerState(for login: Login, now: Date, leadTime: TimeInterval) -> TimerState {
-    if let invalidatedAt = login.invalidatedAt, (login.loginTime ?? .distantPast) <= invalidatedAt {
-        return .expired
-    }
+    if isInvalidated(login) { return .expired }
     guard let expiry = expiry(of: login) else { return .unknown }
     let remaining = expiry.timeIntervalSince(now)
     if remaining <= 0 { return .expired }
@@ -85,7 +89,7 @@ public func menuBarStatus(_ logins: [Login], now: Date, leadTime: TimeInterval) 
     return MenuBarStatus(text: soonest.map(remainingText) ?? "—", severity: severity)
 }
 
-private func remainingText(_ remaining: TimeInterval) -> String {
+func remainingText(_ remaining: TimeInterval) -> String {
     let minutes = Int(remaining / 60)
     if minutes >= 24 * 60 {
         return "\(minutes / (24 * 60))d\(twoDigits(minutes % (24 * 60) / 60))h"
