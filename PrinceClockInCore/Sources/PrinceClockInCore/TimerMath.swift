@@ -89,6 +89,17 @@ public func menuBarStatus(_ logins: [Login], now: Date, leadTime: TimeInterval) 
     return MenuBarStatus(text: soonest.map(remainingText) ?? "—", severity: severity)
 }
 
+/// A login row's description of `state`: "2h14 left", "Expiring, 25m left", "Expired" or
+/// "No known expiry", with the time left formatted as in the menu bar.
+public func rowStateText(_ state: TimerState) -> String {
+    switch state {
+    case .ok(let remaining): "\(remainingText(remaining)) left"
+    case .expiring(let remaining): "Expiring, \(remainingText(remaining)) left"
+    case .expired: "Expired"
+    case .unknown: "No known expiry"
+    }
+}
+
 func remainingText(_ remaining: TimeInterval) -> String {
     let minutes = Int(remaining / 60)
     if minutes >= 24 * 60 {
