@@ -66,7 +66,8 @@ public final class Coordinator {
     public private(set) var waitingCustomID: UUID?
     /// Custom logins held back because their command isn't approved on this Mac, in request order.
     public private(set) var pendingApprovals: [UUID] = []
-    /// Why each login's last run failed, until it runs again. In memory only.
+    /// Why each login's last run failed, until it runs again; a run the user cancelled isn't one.
+    /// In memory only.
     public private(set) var lastFailures: [UUID: LoginFailure] = [:]
     /// Why the last save failed; `nil` once a save succeeds.
     public private(set) var saveFailure: String?
@@ -316,7 +317,7 @@ public final class Coordinator {
             lastFailures[id] = nil
             if let login = login(id), case .databricksProfile = login.kind { runningDatabricksID = id }
         case .succeeded(let id, _), .failed(let id, _):
-            if case .failed(_, let reason) = event { lastFailures[id] = reason }
+            if case .failed(_, let reason) = event, reason != .cancelled { lastFailures[id] = reason }
             if waitingCustomID == id { waitingCustomID = nil }
             if runningDatabricksID == id { runningDatabricksID = nil }
         case .waitingForDone(let id):

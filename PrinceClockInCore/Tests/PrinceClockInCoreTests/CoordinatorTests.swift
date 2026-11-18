@@ -516,6 +516,20 @@ private extension Coordinator {
         #expect(coordinator.lastFailures[dev.id] == nil)
     }
 
+    @Test func cancellingALoginIsNotAFailure() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.batch != nil })
+
+        coordinator.cancelBatch()
+
+        #expect(await eventually { coordinator.batch == nil })
+        #expect(coordinator.lastFailures[dev.id] == nil)
+    }
+
     @Test func logInHoldsBackUnapprovedImportedCommand() async throws {
         let vpn = custom(command: "vpn-connect --profile dev")
         let dev = aws("dev")
