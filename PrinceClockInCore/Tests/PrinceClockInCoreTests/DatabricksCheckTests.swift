@@ -93,6 +93,23 @@ private func makeChecker(
         #expect(runner.calls[0].arguments.contains("token") == false)
     }
 
+    @Test func concurrentChecksOfOneProfileRunOnce() async throws {
+        let gate = Gate()
+        let (checker, runner) = try makeChecker { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        }
+        async let first = checker.check(profile: "dev", accountLevel: false, loginRunning: false)
+        async let second = checker.check(profile: "dev", accountLevel: false, loginRunning: false)
+        // Timing assumption: both calls reach the checker before the run is released. If one
+        // arrived after the first finished it would be skipped by the interval anyway.
+        try await Task.sleep(for: .milliseconds(100))
+        await gate.open()
+        let results = await [first, second]
+        #expect(results.contains(.valid) && results.contains(nil))
+        #expect(runner.calls.count == 1)
+    }
+
     @Test func databricksNotOnPathIsNil() async {
         let shellRunner = FakeRunner { _ in pathOutput("/nonexistent-dir") }
         let resolver = ShellPathResolver(runner: shellRunner, shell: URL(fileURLWithPath: "/bin/zsh"), environment: [:])

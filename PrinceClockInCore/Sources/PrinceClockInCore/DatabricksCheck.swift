@@ -37,9 +37,14 @@ public actor DatabricksChecker {
         guard !accountLevel, !loginRunning else { return nil }
         let now = clock()
         if let last = lastCheck[profile], now.timeIntervalSince(last) < minInterval { return nil }
-        guard let executable = await pathResolver.locate("databricks") else { return nil }
-        // Set before the run so a second call arriving while it runs is skipped too.
+        // Reserved before the first await: the actor is reentrant, so a second call arriving while
+        // this one waits would otherwise pass the interval check too.
+        let previousCheck = lastCheck[profile]
         lastCheck[profile] = now
+        guard let executable = await pathResolver.locate("databricks") else {
+            lastCheck[profile] = previousCheck
+            return nil
+        }
         let environment = await pathResolver.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.run(
             executable: executable, arguments: ["current-user", "me", "--profile", profile],
