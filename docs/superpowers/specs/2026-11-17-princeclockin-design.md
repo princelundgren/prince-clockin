@@ -122,7 +122,8 @@ The login time comes from:
         rewrite's time, with a one-click yes beside "Set timer"; yes sets the login time to that
         time. Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
-     times, which hold no hash.
+     times, which hold no hash. A session last seen logged out has no stored times; at launch its
+     file counts as a login.
    - **Databricks**: a tracked profile that goes from invalid to valid.
 
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
@@ -147,10 +148,13 @@ Each timer has a state: **ok**, **expiring** (within the warning time), **expire
 **unknown** (no login time or no session length).
 
 When the app starts, it reads every tracked login's state as a baseline and keeps the stored
-timers. A login done while the app wasn't running is found only by the AWS file-time rule above,
-or set by hand.
+timers. A missing AWS cache file means logged out, and so expired, only for a session the app has
+seen logged in, one whose file times it has stored; a session it has never seen keeps the timer it
+has, unknown until a login is recorded. A login done while the app wasn't running is found only by
+the AWS file-time rule above, or set by hand.
 
-Times are recomputed on wake from sleep, on a clock change and on a time-zone change.
+Times are recomputed every 30 seconds, on wake from sleep, on a clock change and on a time-zone
+change. Each recomputation also reads the AWS cache files and sends any warning now due.
 
 #### The Databricks live check
 
