@@ -123,7 +123,8 @@ The login time comes from:
         rewrite's time, with a one-click yes beside "Set timer"; yes sets the login time to that
         time. Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
-     times, which hold no hash.
+     times, which hold no hash. A session last seen logged out has no stored times; at launch its
+     file counts as a login.
    - **Databricks**: a tracked profile that goes from invalid to valid.
 
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
@@ -148,10 +149,13 @@ Each timer has a state: **ok**, **expiring** (within the warning time), **expire
 **unknown** (no login time or no session length).
 
 When the app starts, it reads every tracked login's state as a baseline and keeps the stored
-timers. A login done while the app wasn't running is found only by the AWS file-time rule above,
-or set by hand.
+timers. A missing AWS cache file means logged out, and so expired, only for a session the app has
+seen logged in, one whose file times it has stored; a session it has never seen keeps the timer it
+has, unknown until a login is recorded. A login done while the app wasn't running is found only by
+the AWS file-time rule above, or set by hand.
 
-Times are recomputed on wake from sleep, on a clock change and on a time-zone change.
+Times are recomputed every 30 seconds, on wake from sleep, on a clock change and on a time-zone
+change. Each recomputation also reads the AWS cache files and sends any warning now due.
 
 #### The Databricks live check
 
@@ -188,9 +192,12 @@ clicks "Check now".
 ### Notifications
 
 - One notification when a login enters its warning time. Logins that do so close together, or
-  while the Mac slept or the app wasn't running, are grouped into one notification.
+  while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
+  warning time passed while the app wasn't running is announced once at the next launch, as
+  expired if it has.
 - Its "Log in" action starts those logins. That is the user starting them, not the app.
-- No notification at expiry, and nothing repeats: the menu bar shows expired.
+- No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
+  bar shows expired.
 - If notification permission is denied, the menu bar styles carry the warning alone, and the panel
   and settings say notifications are off.
 
@@ -219,8 +226,11 @@ clicks "Check now".
   viewed from its row to diagnose a failure.
 - A custom command is stored as plaintext in the settings file, so it must not contain secrets; the
   settings window says so. A custom command imported with a settings file is shown to the user
-  before it first runs. How Terminal is opened is left to the builder, as long as the command is
-  never written to a file Terminal executes and a denied permission is shown to the user.
+  before it first runs. Approvals are kept on this Mac, in the app's user defaults and outside the
+  portable settings file: a command typed in settings is approved when saved, and one that arrives
+  in a copied file, or is changed in it, is not. How Terminal is opened is left to the builder, as
+  long as the command is never written to a file Terminal executes and a denied permission is
+  shown to the user.
 
 ### Platform
 
