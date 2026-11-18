@@ -5,6 +5,7 @@ import SwiftUI
 /// login, the log-in actions and the footer.
 struct PanelView: View {
     let appModel: AppModel
+    let updater: Updater
     @State private var selection: Set<UUID> = []
     @Environment(\.openSettings) private var openSettings
 
@@ -77,16 +78,22 @@ struct PanelView: View {
         }
     }
 
+    /// Two rows, since one doesn't fit the panel's width.
     private var footer: some View {
-        HStack {
-            Link("Report an issue", destination: URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!)
-            Link("Website", destination: URL(string: "https://github.com/princelundgren/prince-clockin")!)
-            Spacer()
-            Button("Settings…") {
-                NSApplication.shared.activate()
-                openSettings()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Link("Report an issue", destination: URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!)
+                Link("Website", destination: URL(string: "https://github.com/princelundgren/prince-clockin")!)
             }
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            HStack {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                Spacer()
+                Button("Settings…") {
+                    NSApplication.shared.activate()
+                    openSettings()
+                }
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+            }
         }
         .font(.callout)
     }

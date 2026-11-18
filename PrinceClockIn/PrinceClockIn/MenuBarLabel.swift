@@ -2,9 +2,11 @@ import PrinceClockInCore
 import SwiftUI
 
 /// The menu bar item: a clock whose badge shows the worst state, and the time left on the
-/// soonest-expiring login, or which login is running during a batch.
+/// soonest-expiring login, or which login is running during a batch. A dot after them says an
+/// update is waiting.
 struct MenuBarLabel: View {
     let coordinator: Coordinator
+    let updater: Updater
 
     var body: some View {
         let status = menuBarStatus(
@@ -14,6 +16,11 @@ struct MenuBarLabel: View {
             Image(systemName: Self.symbolName(for: status.severity))
             Text(menuBarText(status, batch: coordinator.batch))
                 .monospacedDigit()
+            if updater.updateAvailable {
+                Image(systemName: "circle.fill")
+                    .imageScale(.small)
+                    .accessibilityLabel("Update available")
+            }
         }
     }
 
