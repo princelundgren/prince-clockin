@@ -16,10 +16,12 @@ public struct WarningContent: Equatable, Sendable {
 
 /// The logins, in the order given, that have reached their warning time and haven't been warned
 /// for their current expiry. That includes ones that expired while the Mac slept or the app wasn't
-/// running. An unknown timer, or a login invalidated since its last login time, never warns.
+/// running. An unknown timer, a login invalidated since its last login time, or a Still valid
+/// login never warns.
 public func warningsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) -> [UUID] {
     logins.filter { login in
-        guard let expiry = expiry(of: login), !isInvalidated(login) else { return false }
+        guard let expiry = expiry(of: login), !isInvalidated(login), !isStillValid(login, now: now)
+        else { return false }
         return now >= expiry.addingTimeInterval(-leadTime) && login.warnedForExpiry != expiry
     }
     .map(\.id)

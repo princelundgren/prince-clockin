@@ -74,6 +74,23 @@ public func timerState(for login: Login, now: Date, leadTime: TimeInterval) -> T
     return remaining <= leadTime ? .expiring(remaining: remaining) : .ok(remaining: remaining)
 }
 
+/// Whether the login is due: expiring or expired, and not still valid. An unknown timer isn't due.
+func isDue(_ login: Login, now: Date, leadTime: TimeInterval) -> Bool {
+    switch timerState(for: login, now: now, leadTime: leadTime) {
+    case .expiring: true
+    case .expired: !isStillValid(login, now: now)
+    case .ok, .unknown: false
+    }
+}
+
+/// When an expired login stopped working: its expiry, or when it was invalidated if that came
+/// first. `nil` for a login that has neither.
+func expiredAt(_ login: Login) -> Date? {
+    let timerExpiry = expiry(of: login)
+    guard isInvalidated(login), let invalidatedAt = login.invalidatedAt else { return timerExpiry }
+    return min(timerExpiry ?? invalidatedAt, invalidatedAt)
+}
+
 public enum Severity: Equatable, Sendable { case normal, expiring, expired }
 
 public struct MenuBarStatus: Equatable, Sendable {

@@ -66,9 +66,9 @@ struct PanelView: View {
                 }
                 .disabled(selection.isEmpty)
                 Button("Log in to expiring") {
-                    coordinator.logIn(coordinator.model.expiringOrExpired(now: coordinator.now).map(\.id))
+                    coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
                 }
-                .disabled(coordinator.model.expiringOrExpired(now: coordinator.now).isEmpty)
+                .disabled(coordinator.model.dueLogins(now: coordinator.now).isEmpty)
                 Button("Check now") {
                     Task { await coordinator.checkNow() }
                 }

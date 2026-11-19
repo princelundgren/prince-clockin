@@ -14,6 +14,16 @@ private let lead: TimeInterval = 30 * 60
         #expect(warningsDue([dev], now: start.addingTimeInterval(1), leadTime: lead) == [dev.id])
     }
 
+    @Test func neverWarnsAStillValidLogin() {
+        let now = at("2026-11-17T12:00:00Z")
+        let analytics = Login(
+            displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+            sessionLength: 3600, loginTime: now.addingTimeInterval(-7200),
+            lastDatabricksCheck: DatabricksCheckRecord(at: now, result: .valid))
+
+        #expect(warningsDue([analytics], now: now, leadTime: lead).isEmpty)
+    }
+
     @Test func doesNotWarnAgainSameLoginTime() {
         let now = at("2026-11-17T12:00:00Z")
         var dev = login(remaining: 10 * 60, now: now)

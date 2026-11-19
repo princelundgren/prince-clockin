@@ -265,8 +265,9 @@ depends on it being open. From top to bottom:
      Terminal, then click Done." (without a command: "Log in your own way, then click Done."), with
      Done and Cancel All. The waiting login's notification also has Done.
    - No progress within a single login.
-3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left, no
-   timer last. The order holds still while the panel is open, so nothing moves under the pointer.
+3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left (an
+   expired login by when it expired, earliest first), then Still valid, then No timer last. The
+   order holds still while the panel is open, so nothing moves under the pointer.
    Past about 420 pt the list scrolls with the system scroller.
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
@@ -548,7 +549,7 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
   - one queued login can leave the queue, and the running one be cancelled alone;
-  - a Still valid login is left out of the due list and the expired severity;
+  - a Still valid login is left out of the menu bar's expired severity;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";
   - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag

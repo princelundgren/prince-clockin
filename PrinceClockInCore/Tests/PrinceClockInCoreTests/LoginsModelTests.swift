@@ -398,16 +398,56 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(logins.state.logins[1].warnedForExpiry == nil)
     }
 
-    @Test func expiringSelection() {
+    @Test func dueLoginsAreExpiringOrExpiredButNeverStillValid() {
         let now = at("2026-11-17T12:00:00Z")
         let ok = login(remaining: 4 * hour, now: now, name: "dev")
         let expiring = login(remaining: 10 * 60, now: now, name: "prod")
         let expired = login(remaining: -hour, now: now, name: "analytics-dev")
         let unknown = databricks("analytics-prod", sessionLength: nil)
+        var loggedOut = login(remaining: 4 * hour, now: now, name: "qa")
+        loggedOut.invalidatedAt = now
+        var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        stillValid.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
 
-        let selected = model([ok, expiring, expired, unknown]).expiringOrExpired(now: now)
+        let due = model([ok, expiring, stillValid, expired, unknown, loggedOut]).dueLogins(now: now)
 
-        #expect(selected.map(\.id) == [expiring.id, expired.id])
+        #expect(due.map(\.id) == [expiring.id, expired.id, loggedOut.id])
+    }
+
+    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoTimer() {
+        let now = at("2026-11-17T12:00:00Z")
+        let unknown = databricks("analytics-prod", sessionLength: nil)
+        var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        stillValid.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+        let okLater = login(remaining: 5 * hour, now: now, name: "prod")
+        let okSooner = login(remaining: 2 * hour, now: now, name: "dev")
+        let expiring = login(remaining: 10 * 60, now: now, name: "qa")
+        let expiredRecently = login(remaining: -hour, now: now, name: "analytics-dev")
+        let expiredLongAgo = login(remaining: -3 * hour, now: now, name: "sandbox")
+        var loggedOut = login(remaining: 4 * hour, now: now, name: "billing")
+        loggedOut.invalidatedAt = now.addingTimeInterval(-30 * 60)
+        let logins = model([
+            unknown, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
+        ])
+
+        let order = logins.panelOrder(now: now)
+
+        #expect(order.map(\.id) == [
+            expiredLongAgo.id, expiredRecently.id, loggedOut.id, expiring.id, okSooner.id, okLater.id,
+            stillValid.id, unknown.id,
+        ])
+    }
+
+    @Test func panelOrderKeepsStoredOrderOnTies() {
+        let now = at("2026-11-17T12:00:00Z")
+        let first = login(remaining: 2 * hour, now: now, name: "dev")
+        let second = login(remaining: 2 * hour, now: now, name: "prod")
+        let noTimerFirst = databricks("analytics-dev", sessionLength: nil)
+        let noTimerSecond = databricks("analytics-prod", sessionLength: nil)
+
+        let order = model([noTimerFirst, first, noTimerSecond, second]).panelOrder(now: now)
+
+        #expect(order.map(\.id) == [first.id, second.id, noTimerFirst.id, noTimerSecond.id])
     }
 
     @Test func removeLoginStripsItFromEveryPreset() {

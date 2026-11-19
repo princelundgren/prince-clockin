@@ -76,14 +76,21 @@ public struct LoginsModel: Equatable, Sendable {
         state.logins.filter(isDatabricks)
     }
 
-    /// The logins that are expiring or expired at `now`, for "Log in to expiring".
-    public func expiringOrExpired(now: Date) -> [Login] {
-        state.logins.filter { login in
-            switch timerState(for: login, now: now, leadTime: state.settings.warningLeadTime) {
-            case .expiring, .expired: true
-            case .ok, .unknown: false
-            }
-        }
+    /// The logins due at `now`, in stored order, for Log In to N Due: expiring or expired, never
+    /// still valid and never with an unknown timer.
+    public func dueLogins(now: Date) -> [Login] {
+        state.logins.filter { isDue($0, now: now, leadTime: state.settings.warningLeadTime) }
+    }
+
+    /// The order of the panel's tiles at `now`: due logins by time left, so the expired come first,
+    /// the first to expire first; then the others with time left, by time left; then the still
+    /// valid; then those with no timer. Ties keep the stored order, since `sorted` is stable.
+    public func panelOrder(now: Date) -> [Login] {
+        let leadTime = state.settings.warningLeadTime
+        return state.logins
+            .map { (key: panelSortKey($0, now: now, leadTime: leadTime), login: $0) }
+            .sorted { ($0.key.group, $0.key.timeLeft) < ($1.key.group, $1.key.timeLeft) }
+            .map(\.login)
     }
 
     /// The preset's logins in its order, skipping any no longer tracked.
@@ -171,6 +178,18 @@ public struct LoginsModel: Equatable, Sendable {
 
     private func trackedLogins(_ ids: [UUID]) -> [Login] {
         ids.compactMap { id in index(of: id).map { state.logins[$0] } }
+    }
+}
+
+/// The panel's group for the login, 0 first, and its time left within the group: negative for an
+/// expired login, counted from when it expired.
+private func panelSortKey(_ login: Login, now: Date, leadTime: TimeInterval) -> (group: Int, timeLeft: TimeInterval) {
+    if isStillValid(login, now: now) { return (2, 0) }
+    switch timerState(for: login, now: now, leadTime: leadTime) {
+    case .expired: return (0, (expiredAt(login) ?? now).timeIntervalSince(now))
+    case .expiring(let remaining): return (0, remaining)
+    case .ok(let remaining): return (1, remaining)
+    case .unknown: return (3, 0)
     }
 }
 
