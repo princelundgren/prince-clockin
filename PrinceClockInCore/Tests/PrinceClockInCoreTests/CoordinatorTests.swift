@@ -595,6 +595,27 @@ private final class GatedLogins: Sendable {
         #expect(coordinator.login(dev.id)?.loginTime == nil)
     }
 
+    @Test func aDatabricksLoginWithNoSessionLengthTimesFromItsLogin() async throws {
+        let dev = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false))
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.login(dev.id)?.loginTime == launch })
+        let loggedIn = try #require(coordinator.login(dev.id))
+        #expect(timerState(for: loggedIn, now: launch, leadTime: 0) == .unknown)
+
+        let later = launch.addingTimeInterval(hour)
+        let sessionLength: TimeInterval = 8 * hour
+        let remaining: TimeInterval = 7 * hour
+        fixture.clock.advance(by: hour)
+        coordinator.setSessionLength(id: dev.id, to: sessionLength)
+
+        let timed = try #require(coordinator.login(dev.id))
+        #expect(timerState(for: timed, now: later, leadTime: 0) == .ok(remaining: remaining))
+    }
+
     @Test func queueSuccessIsSaved() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev])
