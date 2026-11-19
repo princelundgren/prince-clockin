@@ -408,8 +408,9 @@ lists.
 
 - Expiring is the house Warning colour, not system orange. Expired, Running and Link are new to
   this app. The Accent passes 4.5:1 under white text.
-- Tokens colour symbols, tile tints and links. Text uses `.primary` and `.secondary` and meets
-  4.5:1 in light, dark and Increase Contrast.
+- Tokens colour symbols, tile tints and links. Text uses `.primary` and `.secondary`, only
+  `.primary` on a light-appearance tile tint (see Tiles), and meets 4.5:1 in light, dark and
+  Increase Contrast.
 
 #### Controls and keyboard
 
