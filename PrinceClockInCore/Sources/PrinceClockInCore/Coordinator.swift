@@ -3,7 +3,7 @@ import Observation
 
 /// Posts the app's notifications.
 public protocol Notifying: Sendable {
-    /// One grouped notification for logins that entered their warning time, with a "Log in" action.
+    /// One grouped notification for logins that entered their warning time, with a "Log In" action.
     func postWarning(logins: [Login]) async
     /// A custom login waits for the user's Done; the notification carries a "Done" action.
     func postCustomDone(login: Login) async

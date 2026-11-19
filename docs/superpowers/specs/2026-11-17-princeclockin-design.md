@@ -448,8 +448,9 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
 
 | What | API | en_GB | sv_SE |
 |---|---|---|---|
-| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units | 5h 13m · 14h 5m · 2d 17h | 5 h 13 m · 14 h 5 m · 2 d 17 h |
-| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide | 5 hours, 13 minutes | 5 timmar, 13 minuter |
+| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5 h 13 m · 14 h 5 m · 2 d 17 h |
+| Time left under a minute (owner, 2026-11-19) | one form everywhere, instead of the "0m" the format style gives | <1m | <1m |
+| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide; under a minute, "less than a minute" | 5 hours, 13 minutes | 5 timmar, 13 minuter |
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
 | A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | imorgon 03:55 |
 | Batch progress | one form everywhere | 1 of 2 | 1 of 2 |

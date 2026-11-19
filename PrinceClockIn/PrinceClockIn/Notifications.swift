@@ -10,9 +10,9 @@ struct SystemNotifier: Notifying {
     private static let expiringCategory = "EXPIRING"
     private static let customDoneCategory = "CUSTOM_DONE"
 
-    /// Registers the "Log in" and "Done" buttons. Call before the first notification is posted.
+    /// Registers the "Log In" and "Done" buttons. Call before the first notification is posted.
     static func registerCategories() {
-        let logIn = UNNotificationAction(identifier: NotificationActionID.logIn, title: "Log in", options: [])
+        let logIn = UNNotificationAction(identifier: NotificationActionID.logIn, title: "Log In", options: [])
         let done = UNNotificationAction(identifier: NotificationActionID.done, title: "Done", options: [])
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: expiringCategory, actions: [logIn], intentIdentifiers: []),
@@ -27,7 +27,7 @@ struct SystemNotifier: Notifying {
     }
 
     func postWarning(logins: [Login]) async {
-        let warning = warningContent(logins, now: Date())
+        let warning = warningContent(logins, now: Date(), locale: .current)
         await post(title: warning.title, body: warning.body, category: Self.expiringCategory, ids: warning.ids)
     }
 

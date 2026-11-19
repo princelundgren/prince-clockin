@@ -353,7 +353,7 @@ private extension Coordinator {
 
         let posted = try #require(fixture.notifier.warnings.first)
         #expect(posted.first?.invalidatedAt == launch)
-        #expect(warningContent(posted, now: launch).title == "analytics-dev expired")
+        #expect(warningContent(posted, now: launch, locale: Locale(identifier: "en_GB")).title == "analytics-dev expired")
     }
 
     @Test func overlappingTickIsSkipped() async throws {

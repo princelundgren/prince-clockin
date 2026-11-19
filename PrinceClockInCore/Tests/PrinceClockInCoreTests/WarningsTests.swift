@@ -4,6 +4,7 @@ import PrinceClockInCore
 import UserNotifications
 
 private let lead: TimeInterval = 30 * 60
+private let british = Locale(identifier: "en_GB")
 
 @Suite struct WarningsTests {
     @Test func warnsWhenEnteringLeadTime() {
@@ -96,7 +97,7 @@ private let lead: TimeInterval = 30 * 60
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: 25 * 60, now: now)
 
-        let content = warningContent([dev], now: now)
+        let content = warningContent([dev], now: now, locale: british)
 
         #expect(content.title == "dev expires in 25m")
         #expect(content.ids == [dev.id])
@@ -108,8 +109,8 @@ private let lead: TimeInterval = 30 * 60
         var prod = login(remaining: 3600, now: now, name: "prod")
         prod.invalidatedAt = now
 
-        #expect(warningContent([dev], now: now).title == "dev expired")
-        #expect(warningContent([prod], now: now).title == "prod expired")
+        #expect(warningContent([dev], now: now, locale: british).title == "dev expired")
+        #expect(warningContent([prod], now: now, locale: british).title == "prod expired")
     }
 
     @Test func contentListsSeveral() {
@@ -117,11 +118,18 @@ private let lead: TimeInterval = 30 * 60
         let dev = login(remaining: 25 * 60, now: now, name: "dev")
         let prod = login(remaining: -3600, now: now, name: "prod")
 
-        let content = warningContent([dev, prod], now: now)
+        let content = warningContent([dev, prod], now: now, locale: british)
 
         #expect(content.title == "2 logins need logging in")
         #expect(content.body == "dev: expires in 25m\nprod: expired")
         #expect(content.ids == [dev.id, prod.id])
+    }
+
+    @Test func contentFollowsTheLocale() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 5 * 3600 + 13 * 60, now: now)
+
+        #expect(warningContent([dev], now: now, locale: Locale(identifier: "sv_SE")).title == "dev expires in 5\u{202F}h 13\u{202F}m")
     }
 
     @Test func onlyActionButtonsGiveActions() {
