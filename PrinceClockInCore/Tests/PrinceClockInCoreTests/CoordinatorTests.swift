@@ -984,6 +984,23 @@ private final class GatedLogins: Sendable {
         #expect(coordinator.saveFailure != nil)
     }
 
+    @Test func retrySaveSavesTheUnchangedState() async throws {
+        let fixture = try Fixture()
+        let blocker = fixture.directory.appending(path: "not-a-directory")
+        try "".write(to: blocker, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: blocker))
+        let dev = aws("dev")
+        coordinator.addLogin(dev)
+        coordinator.retrySave()
+        #expect(coordinator.saveFailure != nil)
+
+        try FileManager.default.removeItem(at: blocker)
+        coordinator.retrySave()
+
+        #expect(coordinator.saveFailure == nil)
+        #expect(StateStore(directory: blocker).load() == .loaded(AppState(logins: [dev])))
+    }
+
     @Test func discoverCandidatesSkipsTracked() async throws {
         let fixture = try Fixture(logins: [
             aws("dev"),

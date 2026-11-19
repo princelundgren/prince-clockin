@@ -356,6 +356,12 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Saves the state again, for the Save Failed banner's Try Again, even if nothing changed since
+    /// the save that failed.
+    public func retrySave() {
+        save()
+    }
+
     public func updateSettings(_ settings: Settings) {
         model.state.settings = settings
         saveIfChanged()
@@ -455,6 +461,10 @@ public final class Coordinator {
 
     private func saveIfChanged() {
         guard model.state != savedState else { return }
+        save()
+    }
+
+    private func save() {
         do {
             try store.save(model.state)
             savedState = model.state

@@ -554,7 +554,7 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
-  - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
+  - `needsApproval(id:)` against the stored approvals;
   - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.
 
