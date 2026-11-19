@@ -396,9 +396,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
 
 #### Colours
 
-House colour tokens from the asset catalog, each with light, dark and Increase Contrast variants,
-as the maintainer's other menu bar apps define theirs. A token has only the meanings its row
-lists.
+House colour tokens from the asset catalog, each with light, dark and Increase Contrast variants.
+A token has only the meanings its row lists.
 
 | Token | Means | Light | Dark | Increase Contrast light | Increase Contrast dark |
 |---|---|---|---|---|---|
