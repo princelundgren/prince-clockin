@@ -223,13 +223,17 @@ to the login the badge is about.
 |---|---|---|
 | Logging in | `clock.arrow.circlepath` | the batch's progress, "1 of 2" |
 | A failure not yet seen, or a failed save | `exclamationmark.triangle` | none |
-| Any login expired (a Still valid login doesn't count) | `clock.badge.xmark` | none |
+| Any login expired | `clock.badge.xmark` | none |
 | A login expiring | `clock.badge.exclamationmark` | the soonest-expiring login's time left, "19m" |
-| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" (Still valid skipped) |
+| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" |
 | No timer at all | `clock` | none |
 
 - When several apply, the highest row wins. A dot after the label means an update is waiting (see
   Release), in any state.
+- Still valid logins are skipped in every row, so Still valid and no-timer logins alone show the
+  No timer at all row.
+- With several expired, the label is about the one that expired first, an invalidated login
+  counting from when it was invalidated if that came first; a tie goes to the first stored.
 - A failure is seen once the panel has been shown after it (`NSPopover`'s did-show notification).
   A failed save keeps its symbol until a save succeeds.
 - VoiceOver reads one label, such as "PrinceClockIn, prod expiring in 19 minutes".
@@ -550,13 +554,11 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
   - one queued login can leave the queue, and the running one be cancelled alone;
-  - a Still valid login is left out of the menu bar's expired severity;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";
   - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
     is published;
   - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
-  - the menu bar status carries the id of the login it is about;
   - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.
 

@@ -91,57 +91,51 @@ func expiredAt(_ login: Login) -> Date? {
     return min(timerExpiry ?? invalidatedAt, invalidatedAt)
 }
 
-public enum Severity: Equatable, Sendable { case normal, expiring, expired }
-
-public struct MenuBarStatus: Equatable, Sendable {
-    public let text: String
-    public let severity: Severity
-
-    public init(text: String, severity: Severity) {
-        self.text = text
-        self.severity = severity
-    }
+/// What the menu bar label shows. When several rows apply, the first case listed wins. A row about
+/// one login carries its id, so the label's time and the login it names always agree.
+public enum MenuBarStatus: Equatable, Sendable {
+    case loggingIn(BatchProgress)
+    /// A failure, or a failed save, as the caller reports it in `hasFailure`.
+    case failure
+    /// The login that expired first.
+    case expired(id: UUID)
+    /// The soonest-expiring login.
+    case expiring(id: UUID, remaining: TimeInterval)
+    /// The login with the soonest future expiry.
+    case ok(id: UUID, remaining: TimeInterval)
+    /// No login has time left, is expiring or has expired, leaving out the still valid.
+    case noTimer
 }
 
-/// The text is the time left on the soonest-expiring login that hasn't expired, rounded down:
-/// `2d03h` from 24 hours up, `2h05`, `45m`, `<1m`, or `—` when no login has a known, unexpired
-/// timer. The severity is `.expired` if any login has expired, else `.expiring` if any is inside
-/// the lead time.
-public func menuBarStatus(_ logins: [Login], now: Date, leadTime: TimeInterval) -> MenuBarStatus {
-    var soonest: TimeInterval?
-    var severity = Severity.normal
-    for login in logins {
+/// The menu bar's row for `logins` at `now`. A still valid login is skipped in every row. An
+/// expired login counts from when it expired, an invalidated one from when it was invalidated if
+/// that came first. Ties go to the login stored first.
+public func menuBarStatus(
+    _ logins: [Login], now: Date, leadTime: TimeInterval, batch: BatchProgress?, hasFailure: Bool
+) -> MenuBarStatus {
+    if let batch { return .loggingIn(batch) }
+    if hasFailure { return .failure }
+    var expired: [(id: UUID, key: Date)] = []
+    var expiring: [(id: UUID, key: TimeInterval)] = []
+    var ok: [(id: UUID, key: TimeInterval)] = []
+    for login in logins where !isStillValid(login, now: now) {
         switch timerState(for: login, now: now, leadTime: leadTime) {
-        case .expired:
-            severity = .expired
-        case .expiring(let remaining):
-            if severity == .normal { severity = .expiring }
-            soonest = min(soonest ?? remaining, remaining)
-        case .ok(let remaining):
-            soonest = min(soonest ?? remaining, remaining)
-        case .unknown:
-            break
+        case .expired: expired.append((login.id, expiredAt(login) ?? now))
+        case .expiring(let remaining): expiring.append((login.id, remaining))
+        case .ok(let remaining): ok.append((login.id, remaining))
+        case .unknown: break
         }
     }
-    return MenuBarStatus(text: soonest.map(remainingText) ?? "—", severity: severity)
+    if let first = firstLeast(expired) { return .expired(id: first.id) }
+    if let soonest = firstLeast(expiring) { return .expiring(id: soonest.id, remaining: soonest.key) }
+    if let soonest = firstLeast(ok) { return .ok(id: soonest.id, remaining: soonest.key) }
+    return .noTimer
 }
 
-/// The menu bar's text: which login is running ("2/3") while a batch runs, else `status`'s text.
-public func menuBarText(_ status: MenuBarStatus, batch: BatchProgress?) -> String {
-    batch.map { "\($0.position)/\($0.total)" } ?? status.text
-}
-
-func remainingText(_ remaining: TimeInterval) -> String {
-    let minutes = Int(remaining / 60)
-    if minutes >= 24 * 60 {
-        return "\(minutes / (24 * 60))d\(twoDigits(minutes % (24 * 60) / 60))h"
+/// The candidate with the least key, the earliest one on a tie.
+private func firstLeast<Key: Comparable>(_ candidates: [(id: UUID, key: Key)]) -> (id: UUID, key: Key)? {
+    candidates.reduce(nil) { least, candidate in
+        guard let least, least.key <= candidate.key else { return candidate }
+        return least
     }
-    if minutes >= 60 {
-        return "\(minutes / 60)h\(twoDigits(minutes % 60))"
-    }
-    return minutes >= 1 ? "\(minutes)m" : "<1m"
-}
-
-private func twoDigits(_ value: Int) -> String {
-    value < 10 ? "0\(value)" : "\(value)"
 }

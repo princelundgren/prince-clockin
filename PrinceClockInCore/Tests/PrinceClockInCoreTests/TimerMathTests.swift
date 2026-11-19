@@ -68,69 +68,77 @@ private let lead: TimeInterval = 30 * 60
     #expect(timerState(for: login, now: now.addingTimeInterval(5 * 3600), leadTime: lead) == .expired)
 }
 
-@Test func statusText() {
-    let now = at("2026-11-17T12:00:00Z")
-    func text(_ remaining: TimeInterval) -> String {
-        menuBarStatus([login(remaining: remaining, now: now)], now: now, leadTime: lead).text
-    }
+private let now = at("2026-11-17T12:00:00Z")
 
-    #expect(text(51 * 3600) == "2d03h")
-    #expect(text(24 * 3600) == "1d00h")
-    #expect(text(2 * 3600 + 5 * 60) == "2h05")
-    #expect(text(2 * 3600 + 5 * 60 + 59) == "2h05")
-    #expect(text(45 * 60) == "45m")
-    #expect(text(59 * 60 + 59) == "59m")
-    #expect(text(59) == "<1m")
+private func status(_ logins: [Login], batch: BatchProgress? = nil, hasFailure: Bool = false) -> MenuBarStatus {
+    menuBarStatus(logins, now: now, leadTime: lead, batch: batch, hasFailure: hasFailure)
 }
 
-@Test func statusTextAtUnitBoundaries() {
-    let now = at("2026-11-17T12:00:00Z")
-    func text(_ remaining: TimeInterval) -> String {
-        menuBarStatus([login(remaining: remaining, now: now)], now: now, leadTime: lead).text
-    }
-
-    #expect(text(3599) == "59m")
-    #expect(text(3600) == "1h00")
-    #expect(text(24 * 3600 - 1) == "23h59")
-    #expect(text(24 * 3600) == "1d00h")
+private func stillValid(_ name: String) -> Login {
+    Login(
+        displayName: name, kind: .databricksProfile(name: name, accountLevel: false), sessionLength: 3600,
+        loginTime: now.addingTimeInterval(-7200), lastDatabricksCheck: DatabricksCheckRecord(at: now, result: .valid))
 }
 
-@Test func statusTextShowsSoonestUnexpiredLogin() {
-    let now = at("2026-11-17T12:00:00Z")
-    let logins = [
-        login(remaining: 5 * 3600, now: now, name: "prod"),
-        login(remaining: 2 * 3600, now: now, name: "dev"),
-        login(remaining: -60, now: now, name: "old"),
-        Login(displayName: "unknown", kind: .custom(command: nil)),
-    ]
+private let noTimer = Login(displayName: "vpn", kind: .custom(command: nil))
 
-    #expect(menuBarStatus(logins, now: now, leadTime: lead).text == "2h00")
+@Test func menuBarShowsTheBatchAboveEverything() {
+    let batch = BatchProgress(position: 1, total: 2)
+
+    #expect(status([login(remaining: -60, now: now)], batch: batch, hasFailure: true) == .loggingIn(batch))
 }
 
-@Test func statusTextIsDashWithoutKnownUnexpiredLogin() {
-    let now = at("2026-11-17T12:00:00Z")
-
-    #expect(menuBarStatus([], now: now, leadTime: lead) == MenuBarStatus(text: "—", severity: .normal))
-    #expect(menuBarStatus([Login(displayName: "x", kind: .custom(command: nil))], now: now, leadTime: lead).text == "—")
-    let expired = menuBarStatus([login(remaining: -1, now: now)], now: now, leadTime: lead)
-    #expect(expired == MenuBarStatus(text: "—", severity: .expired))
+@Test func menuBarShowsAFailureAboveAnExpiredLogin() {
+    #expect(status([login(remaining: -60, now: now)], hasFailure: true) == .failure)
 }
 
-@Test func statusSeverity() {
-    let now = at("2026-11-17T12:00:00Z")
+@Test func menuBarExpiredIsAboutTheLoginThatExpiredFirst() {
+    let expiring = login(remaining: 10 * 60, now: now, name: "dev")
+    let recently = login(remaining: -60, now: now, name: "prod")
+    let longAgo = login(remaining: -3600, now: now, name: "qa")
+
+    #expect(status([expiring, recently, longAgo]) == .expired(id: longAgo.id))
+}
+
+@Test func menuBarCountsAnInvalidatedLoginFromWhenItWasInvalidated() {
+    let expired = login(remaining: -3600, now: now, name: "dev")
+    var loggedOut = login(remaining: 4 * 3600, now: now, name: "prod")
+    loggedOut.invalidatedAt = now.addingTimeInterval(-2 * 3600)
+
+    #expect(status([expired, loggedOut]) == .expired(id: loggedOut.id))
+}
+
+@Test func menuBarExpiredTieGoesToTheFirstStored() {
+    let first = login(remaining: -60, now: now, name: "dev")
+    let second = login(remaining: -60, now: now, name: "prod")
+
+    #expect(status([first, second]) == .expired(id: first.id))
+}
+
+@Test func menuBarExpiringIsTheSoonest() {
+    let ok = login(remaining: 5 * 3600, now: now, name: "dev")
+    let later = login(remaining: 25 * 60, now: now, name: "prod")
+    let sooner = login(remaining: 19 * 60, now: now, name: "qa")
+
+    #expect(status([ok, later, sooner]) == .expiring(id: sooner.id, remaining: 19 * 60))
+}
+
+@Test func menuBarOkIsTheSoonestFutureExpiry() {
+    let later = login(remaining: 14 * 3600, now: now, name: "dev")
+    let soonerRemaining: TimeInterval = 5 * 3600 + 13 * 60
+    let sooner = login(remaining: soonerRemaining, now: now, name: "prod")
+
+    #expect(status([later, noTimer, sooner]) == .ok(id: sooner.id, remaining: soonerRemaining))
+}
+
+@Test func menuBarSkipsStillValidLogins() {
     let ok = login(remaining: 5 * 3600, now: now)
-    let expiring = login(remaining: 10 * 60, now: now)
-    let expired = login(remaining: -60, now: now)
 
-    #expect(menuBarStatus([ok], now: now, leadTime: lead).severity == .normal)
-    #expect(menuBarStatus([ok, expiring], now: now, leadTime: lead).severity == .expiring)
-    #expect(menuBarStatus([ok, expired], now: now, leadTime: lead).severity == .expired)
-    #expect(menuBarStatus([expiring, expired], now: now, leadTime: lead).severity == .expired)
+    #expect(status([stillValid("analytics-dev"), ok]) == .ok(id: ok.id, remaining: 5 * 3600))
+    #expect(status([stillValid("analytics-dev"), noTimer]) == .noTimer)
 }
 
-@Test func menuBarTextShowsBatchPositionWhileOneRuns() {
-    let status = MenuBarStatus(text: "2h14", severity: .expiring)
-
-    #expect(menuBarText(status, batch: nil) == "2h14")
-    #expect(menuBarText(status, batch: BatchProgress(position: 2, total: 3)) == "2/3")
+@Test func menuBarWithNoTimerAtAll() {
+    #expect(status([]) == .noTimer)
+    #expect(status([noTimer]) == .noTimer)
 }
