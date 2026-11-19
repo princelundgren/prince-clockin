@@ -30,7 +30,7 @@ public struct LoginsModel: Equatable, Sendable {
             guard index(of: id) != nil else { return }
             possibleLogins[id] = time.wholeSeconds
         case .loggedOut:
-            invalidate(id, at: now)
+            invalidate(id, at: now, reason: .loggedOut)
         case .noChange, .renewed:
             break
         }
@@ -50,7 +50,7 @@ public struct LoginsModel: Equatable, Sendable {
         let login = state.logins[index]
         switch validity {
         case .invalid:
-            invalidate(id, at: now)
+            invalidate(id, at: now, reason: .foundInvalid)
         case .valid where isInvalidated(login):
             changeLoginTime(of: id) { $0.loginTime = now.wholeSeconds }
         case .valid:
@@ -101,6 +101,7 @@ public struct LoginsModel: Equatable, Sendable {
         changeLoginTime(of: id) { login in
             login.loginTime = time.wholeSeconds
             login.invalidatedAt = nil
+            login.invalidationReason = nil
         }
     }
 
@@ -153,9 +154,10 @@ public struct LoginsModel: Equatable, Sendable {
         validWhileExpired.remove(id)
     }
 
-    private mutating func invalidate(_ id: UUID, at now: Date) {
+    private mutating func invalidate(_ id: UUID, at now: Date, reason: InvalidationReason) {
         guard let index = index(of: id) else { return }
         state.logins[index].invalidatedAt = now.wholeSeconds
+        state.logins[index].invalidationReason = reason
         validWhileExpired.remove(id)
     }
 

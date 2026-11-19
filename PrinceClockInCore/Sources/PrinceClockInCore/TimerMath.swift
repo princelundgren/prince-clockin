@@ -39,6 +39,20 @@ func isInvalidated(_ login: Login) -> Bool {
     return (login.loginTime ?? .distantPast) <= invalidatedAt
 }
 
+/// Whether the login is invalidated because its AWS session was logged out, for "Logged out". With
+/// no stored reason, an AWS login counts as logged out, since a logout was its only cause before
+/// the reason was stored.
+public func isLoggedOut(_ login: Login) -> Bool {
+    guard isInvalidated(login) else { return false }
+    switch login.invalidationReason {
+    case .loggedOut: return true
+    case .foundInvalid: return false
+    case nil:
+        if case .awsSSOSession = login.kind { return true }
+        return false
+    }
+}
+
 /// Computed from absolute times only, so it is right after sleep or a clock change.
 /// An invalidated login is `.expired` until a login newer than `invalidatedAt` is recorded.
 public func timerState(for login: Login, now: Date, leadTime: TimeInterval) -> TimerState {

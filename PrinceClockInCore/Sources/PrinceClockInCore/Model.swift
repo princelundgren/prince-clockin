@@ -68,6 +68,14 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
+/// Why a login was invalidated.
+public enum InvalidationReason: String, Codable, Hashable, Sendable {
+    /// Its AWS cache file disappeared, as `aws sso logout` does.
+    case loggedOut
+    /// A Databricks check found it invalid.
+    case foundInvalid
+}
+
 public struct Login: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var displayName: String
@@ -78,6 +86,9 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Set when the AWS cache file disappears or a Databricks check says invalid. The login counts
     /// as expired while `loginTime` is `nil` or not newer.
     public var invalidatedAt: Date?
+    /// Why `invalidatedAt` was set. `nil` in a file written before the reason was stored, which
+    /// `isLoggedOut` reads by the kind's only earlier cause.
+    public var invalidationReason: InvalidationReason?
     /// The expiry the last warning was for, so a relaunch doesn't warn twice. A new login or a
     /// longer session changes the expiry and so re-arms the warning.
     public var warnedForExpiry: Date?
@@ -91,6 +102,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         sessionLength: TimeInterval? = nil,
         loginTime: Date? = nil,
         invalidatedAt: Date? = nil,
+        invalidationReason: InvalidationReason? = nil,
         warnedForExpiry: Date? = nil,
         lastAWSCache: AWSCacheRecord? = nil
     ) {
@@ -100,6 +112,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.sessionLength = sessionLength.map { $0.rounded(.down) }
         self.loginTime = loginTime?.wholeSeconds
         self.invalidatedAt = invalidatedAt?.wholeSeconds
+        self.invalidationReason = invalidationReason
         self.warnedForExpiry = warnedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
     }
@@ -116,7 +129,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     func roundedToWholeSeconds() -> Login {
         Login(
             id: id, displayName: displayName, kind: kind, sessionLength: sessionLength,
-            loginTime: loginTime, invalidatedAt: invalidatedAt, warnedForExpiry: warnedForExpiry,
+            loginTime: loginTime, invalidatedAt: invalidatedAt, invalidationReason: invalidationReason,
+            warnedForExpiry: warnedForExpiry,
             lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) })
     }
 }

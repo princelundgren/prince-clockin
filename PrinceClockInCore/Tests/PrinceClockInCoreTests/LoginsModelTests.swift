@@ -54,7 +54,32 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.loggedOut, login: dev.id, now: now)
 
         #expect(logins.state.logins[0].invalidatedAt == now)
+        #expect(logins.state.logins[0].invalidationReason == .loggedOut)
+        #expect(isLoggedOut(logins.state.logins[0]))
         #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .expired)
+    }
+
+    @Test func loggedOutEndsWithANewerLogin() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 4 * hour, now: now)
+        var logins = model([dev])
+        logins.apply(.loggedOut, login: dev.id, now: now)
+
+        logins.apply(.newLogin(at: now.addingTimeInterval(60)), login: dev.id, now: now.addingTimeInterval(60))
+
+        #expect(!isLoggedOut(logins.state.logins[0]))
+    }
+
+    @Test func setLoginTimeClearsTheInvalidationReason() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 4 * hour, now: now)
+        var logins = model([dev])
+        logins.apply(.loggedOut, login: dev.id, now: now)
+
+        logins.setLoginTime(id: dev.id, at: now.addingTimeInterval(-hour))
+
+        #expect(logins.state.logins[0].invalidationReason == nil)
+        #expect(!isLoggedOut(logins.state.logins[0]))
     }
 
     @Test func possibleLoginAsksAndConfirmSetsLoginTime() {
@@ -255,6 +280,8 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.invalid, login: prod.id, now: now)
 
         #expect(logins.state.logins[0].invalidatedAt == now)
+        #expect(logins.state.logins[0].invalidationReason == .foundInvalid)
+        #expect(!isLoggedOut(logins.state.logins[0]))
         #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .expired)
     }
 

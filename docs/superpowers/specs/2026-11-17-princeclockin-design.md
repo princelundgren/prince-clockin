@@ -539,17 +539,16 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   reads `SMAppService.mainApp.status`, since the user can change it in System Settings.
 - Settings, logins, presets and timers are stored as JSON in
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
-  login time, session length, the time it was last found invalid, the expiry the last warning was
-  for (so a relaunch doesn't warn twice), for Databricks, whether the profile is account-level and
-  the time and result of its last check, and, for AWS, the cache file's last-seen modified and
-  `expiresAt` times. Fingerprints are never stored.
+  login time, session length, the time it was last invalidated and whether by a logout or a
+  check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
+  whether the profile is account-level and the time and result of its last check, and, for AWS,
+  the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - A file that is unreadable, or from a newer version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
   - removing a login removes it from its presets; one queued login can leave the queue, and the
     running one be cancelled alone;
-  - an AWS logout is kept apart from other invalidation, for "Logged out";
   - a Still valid login is left out of the due list and the expired severity;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";

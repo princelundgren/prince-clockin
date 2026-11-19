@@ -14,7 +14,7 @@ private func sampleState() -> AppState {
     let aws = Login(
         displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: 8 * 3600,
         loginTime: at("2026-11-17T09:00:00Z"), invalidatedAt: at("2026-11-17T08:00:00Z"),
-        warnedForExpiry: at("2026-11-17T17:00:00Z"),
+        invalidationReason: .loggedOut, warnedForExpiry: at("2026-11-17T17:00:00Z"),
         lastAWSCache: AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     let databricks = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true))
     let custom = Login(displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
@@ -162,6 +162,33 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
         #expect(text.contains(#""version" : 1"#))
         #expect(text.contains(#""loginTime" : "2026-11-17T09:00:00Z""#))
         #expect(!text.contains("fingerprint"))
+        #expect(text.contains(#""invalidationReason" : "loggedOut""#))
+    }
+}
+
+@Test(arguments: [
+    (#"{"type": "awsSSOSession", "name": "dev"}"#, true),
+    (#"{"type": "databricksProfile", "name": "dev", "accountLevel": false}"#, false),
+])
+func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, loggedOut: Bool) throws {
+    try withTemporaryDirectory { directory in
+        let json = """
+        {"version": 1, "presets": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300},
+         "logins": [{"id": "00000000-0000-0000-0000-000000000001", "displayName": "dev",
+           "kind": \(kind), "sessionLength": 28800,
+           "loginTime": "2026-11-17T09:00:00Z", "invalidatedAt": "2026-11-17T10:00:00Z"}]}
+        """
+        try Data(json.utf8).write(to: directory.appending(path: "state.json"))
+
+        guard case .loaded(let state) = StateStore(directory: directory).load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+
+        let login = try #require(state.logins.first)
+        #expect(login.invalidationReason == nil)
+        #expect(isLoggedOut(login) == loggedOut)
+        #expect(timerState(for: login, now: at("2026-11-17T11:00:00Z"), leadTime: 0) == .expired)
     }
 }
 
