@@ -28,17 +28,22 @@ struct PanelView: View {
     private var showsLogInToDue: Bool {
         PrinceClockInCore.showsLogInToDue(dueCount: dueCount, isBatchRunning: coordinator.batch != nil)
     }
+    /// The custom login whose Done the batch card shows.
+    private var waitingForDone: UUID? {
+        if case .waitingForDone(let id, _, _) = coordinator.batchCard { id } else { nil }
+    }
 
     var body: some View {
         let tiles = tilePresentations
         let prominent = prominentAction(
-            tiles: tiles.map(\.tile), showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
+            openSetTimer: session.openSetTimer, waitingForDone: waitingForDone, tiles: tiles.map(\.tile),
+            showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
         VStack(alignment: .leading, spacing: 10) {
             ForEach(appModel.panelBanners, id: \.self) { banner in
                 BannerView(banner: banner) { perform($0, on: banner) }
             }
             if let card = coordinator.batchCard {
-                BatchCardView(card: card, coordinator: coordinator)
+                BatchCardView(card: card, coordinator: coordinator, prominent: prominent)
             }
             if logins.isEmpty, let empty = session.emptyPanel {
                 EmptyPanelView(empty: empty, addLogins: openSettingsOnLogins)
@@ -325,6 +330,7 @@ private struct FlowButtons: View {
 private struct BatchCardView: View {
     let card: BatchCard
     let coordinator: Coordinator
+    let prominent: ProminentAction?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -367,6 +373,7 @@ private struct BatchCardView: View {
             Button("Cancel All") { coordinator.cancelBatch() }
             if let done {
                 Button("Done") { coordinator.confirmCustomDone(id: done) }
+                    .prominent(prominent == .done(id: done))
             }
         }
         .buttonStyle(.bordered)

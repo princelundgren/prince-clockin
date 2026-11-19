@@ -171,8 +171,8 @@ private struct JustAddedSetTimer: View {
 
     var body: some View {
         SetTimerForm(
-            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip", onCancel: onClose,
-            onSet: onClose)
+            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip", isSetProminent: false,
+            onCancel: onClose, onSet: onClose)
     }
 }
 

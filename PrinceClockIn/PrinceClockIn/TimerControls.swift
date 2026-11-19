@@ -11,6 +11,7 @@ struct SetTimerForm: View {
     let coordinator: Coordinator
     let note: String?
     let cancelTitle: String
+    let isSetProminent: Bool
     let onCancel: () -> Void
     let onSet: () -> Void
     /// What Set was refused with, when the clock moved past what the caption checked.
@@ -66,6 +67,7 @@ struct SetTimerForm: View {
                 Spacer()
                 Button(cancelTitle, action: onCancel)
                 Button("Set") { set() }
+                    .prominent(isSetProminent)
                     .disabled(!check.isReady)
             }
             .buttonStyle(.bordered)
