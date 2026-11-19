@@ -356,17 +356,10 @@ public final class Coordinator {
 
     // MARK: Edits from the views; each saves.
 
-    /// Set Timer with Expires In; see `LoginsModel.setTimer(id:expiresIn:sessionLength:now:)`.
+    /// Set Timer, at the clock's time; see `LoginsModel.setTimer(id:_:now:)`.
     /// - Throws: a `TimerError`, leaving the login unchanged.
-    public func setTimer(id: UUID, expiresIn: TimeInterval, sessionLength: TimeInterval) throws(TimerError) {
-        try model.setTimer(id: id, expiresIn: expiresIn, sessionLength: sessionLength, now: clock())
-        saveIfChanged()
-    }
-
-    /// Set Timer with Logged In At; see `LoginsModel.setTimer(id:loggedInAt:sessionLength:now:)`.
-    /// - Throws: a `TimerError`, leaving the login unchanged.
-    public func setTimer(id: UUID, loggedInAt: Date, sessionLength: TimeInterval) throws(TimerError) {
-        try model.setTimer(id: id, loggedInAt: loggedInAt, sessionLength: sessionLength, now: clock())
+    public func setTimer(id: UUID, _ entry: TimerEntry) throws(TimerError) {
+        try model.setTimer(id: id, entry, now: clock())
         saveIfChanged()
     }
 
@@ -402,9 +395,24 @@ public final class Coordinator {
         edit(id) { $0.displayName = displayName }
     }
 
-    /// Sets the session length, rounded down to whole seconds.
-    public func setSessionLength(id: UUID, to length: TimeInterval?) {
-        edit(id) { $0.sessionLength = length.map { $0.rounded(.down) } }
+    /// Sets the session length, rounded down to whole seconds, or makes it unknown with `nil`.
+    /// - Throws: `.sessionLengthTooLong` for a length that isn't finite or is longer than
+    ///   `maximumSessionLength`, and `.sessionLengthNotPositive` for one of zero or less, or under
+    ///   a second, either leaving the session length as it was.
+    public func setSessionLength(id: UUID, to length: TimeInterval?) throws(TimerError) {
+        let length = try length.map(checkedSessionLength)
+        edit(id) { $0.sessionLength = length }
+    }
+
+    /// Sets the session length from the session length field's text, as
+    /// `sessionLength(fieldText:locale:)` reads it. The text the field shows for the stored length
+    /// leaves it exactly as it is.
+    /// - Throws: That function's refusal, leaving the session length as it was.
+    public func setSessionLength(id: UUID, fieldText: String, locale: Locale) throws(SessionLengthRefusal) {
+        let shown = sessionLengthHoursText(login(id)?.sessionLength, locale: locale)
+        guard fieldText.trimmingCharacters(in: .whitespaces) != shown else { return }
+        let length = try sessionLength(fieldText: fieldText, locale: locale)
+        edit(id) { $0.sessionLength = length }
     }
 
     /// Sets a custom login's command and approves it, since the user typed it. A login held back

@@ -238,7 +238,7 @@ func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, logg
     let now = Date(timeIntervalSince1970: 1_800_000_000.7)
     let dev = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"))
     var model = LoginsModel(state: AppState(logins: [dev]))
-    try model.setTimer(id: dev.id, expiresIn: 9_999.6, sessionLength: 8 * 3600 + 0.4, now: now)
+    try model.setTimer(id: dev.id, .expiresIn(9_999.6, sessionLength: 8 * 3600 + 0.4), now: now)
     let before = try #require(model.state.logins.first.flatMap(expiry(of:)))
 
     try withTemporaryDirectory { directory in

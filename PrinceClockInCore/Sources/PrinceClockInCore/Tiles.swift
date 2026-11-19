@@ -199,16 +199,21 @@ public struct SessionLengthOption: Hashable, Sendable {
 /// Settings: 8 hours, 12 hours, 1 day, 3 days, 7 days, Custom… and No timer. Custom… is checked
 /// for a length not listed.
 public func sessionLengthOptions(current: TimeInterval?) -> [SessionLengthOption] {
-    let hour: TimeInterval = 3600
-    let lengths = [8 * hour, 12 * hour, 24 * hour, 72 * hour, 168 * hour]
-    let listed = lengths.map {
+    let listed = listedSessionLengths.map {
         SessionLengthOption(choice: .length($0), title: sessionLengthText($0), isSelected: current == $0)
     }
-    let isCustom = current.map { !lengths.contains($0) } ?? false
+    let isCustom = current.map { !isListedSessionLength($0) } ?? false
     return listed + [
         SessionLengthOption(choice: .custom, title: "Custom…", isSelected: isCustom),
         SessionLengthOption(choice: .noTimer, title: "No timer", isSelected: current == nil),
     ]
+}
+
+private let listedSessionLengths: [TimeInterval] = [8, 12, 24, 72, 168].map { $0 * 3600 }
+
+/// Whether `length` has its own item in `sessionLengthOptions(current:)`, rather than Custom….
+func isListedSessionLength(_ length: TimeInterval) -> Bool {
+    listedSessionLengths.contains(length)
 }
 
 /// A session length as English copy, in whole days, else whole hours, else minutes ("8 hours",

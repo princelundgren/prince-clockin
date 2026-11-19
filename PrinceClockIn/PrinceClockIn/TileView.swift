@@ -4,21 +4,19 @@ import SwiftUI
 /// One login's tile in the panel. Its first line is a menu of the login's actions, or, for a due
 /// login, a button that logs in beside a "…" menu; below it is whatever the login needs answered.
 /// The core decides everything shown; the tile draws it and forwards the user's choices. Its own
-/// state lasts one opening of the panel.
+/// state, and its Set Timer's in the panel session, lasts one opening of the panel.
 struct TileView: View {
-    private enum Expanded {
-        case setTimer, sessionLength
-    }
-
     let login: Login
     let tile: TilePresentation
     let coordinator: Coordinator
-    let prominent: ProminentAction?
+    let session: PanelSession
+    let defaults: PanelDefaults
+    let focus: FocusState<PanelFocus?>.Binding
     /// The control the tile was when the pointer entered it, so a click's action can't change
     /// under the pointer. The panel keeps it, since it builds the tile from it.
     @Binding var heldControl: TileControl?
     let openSettingsOnLogins: () -> Void
-    @State private var expanded: Expanded?
+    @State private var showsSessionLengthField = false
     @State private var output: String?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -29,7 +27,15 @@ struct TileView: View {
             if let detail = tile.detail {
                 detailView(detail, tile: tile)
             }
-            expansion
+            if session.openSetTimer == login.id {
+                setTimerForm
+                    .foregroundStyle(secondaryText(tile))
+            }
+            if showsSessionLengthField {
+                SessionLengthField(
+                    login: login, coordinator: coordinator, focus: focus,
+                    draft: Bindable(session).sessionLengthDrafts[login.id])
+            }
         }
         .padding(8)
         .background(tint(tile), in: RoundedRectangle(cornerRadius: 8))
@@ -50,6 +56,7 @@ struct TileView: View {
             .menuStyle(.button)
             .menuIndicator(.hidden)
             .buttonStyle(TileButtonStyle())
+            .focused(focus, equals: .tile(tile.id))
             .accessibilityLabel(tile.accessibilityLabel)
             .accessibilityHint(tile.accessibilityHint)
             .accessibilityActions { accessibilityActions(tile) }
@@ -61,6 +68,8 @@ struct TileView: View {
                     firstLine(tile, showsEllipsis: false)
                 }
                 .buttonStyle(TileButtonStyle())
+                .returnKey(defaults.onReturn == .logIn(id: tile.id))
+                .focused(focus, equals: .tile(tile.id))
                 .accessibilityLabel(tile.accessibilityLabel)
                 .accessibilityHint(tile.accessibilityHint)
                 .accessibilityActions { accessibilityActions(tile) }
@@ -71,7 +80,8 @@ struct TileView: View {
                 }
                 .menuStyle(.button)
                 .menuIndicator(.hidden)
-                .buttonStyle(.borderless)
+                // The whole-tile menu's style: with `.borderless`, Tab stopped on this menu.
+                .buttonStyle(TileButtonStyle())
                 .fixedSize()
                 .accessibilityLabel(tile.actionsLabel)
             }
@@ -137,7 +147,7 @@ struct TileView: View {
         case .stateWord(let word):
             Text(word)
         case .logIn:
-            LogInLabel(isProminent: prominent == .logIn(id: tile.id))
+            LogInLabel(isProminent: defaults.prominent == .logIn(id: tile.id))
         }
     }
 
@@ -151,7 +161,8 @@ struct TileView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Button("Try Again") { perform(.logIn) }
-                        .prominent(prominent == .tryAgain(id: tile.id))
+                        .prominent(defaults.prominent == .tryAgain(id: tile.id))
+                        .returnKey(defaults.onReturn == .tryAgain(id: tile.id))
                     if output == nil {
                         Button("Show Output…") {
                             Task { output = await coordinator.output(for: login.id) ?? "No output." }
@@ -174,13 +185,14 @@ struct TileView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Button(confirmTitle) { coordinator.confirmPossibleLogin(id: login.id) }
-                        .prominent(prominent == .markAsLoggedInAt(id: tile.id))
-                    Button("Set Timer…") { expanded = .setTimer }
+                        .prominent(defaults.prominent == .markAsLoggedInAt(id: tile.id))
+                        .returnKey(defaults.onReturn == .markAsLoggedInAt(id: tile.id))
+                    Button("Set Timer…") { openSetTimer() }
                 }
             case .stillValid(let message):
                 Text(message)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Edit Session Length…") { expanded = .sessionLength }
+                Button("Edit Session Length…") { showsSessionLengthField = true }
             case .notYetApproved(let command):
                 Text("This command hasn't run on this Mac yet:")
                 Text(command)
@@ -198,15 +210,19 @@ struct TileView: View {
         .buttonStyle(.bordered)
     }
 
-    @ViewBuilder private var expansion: some View {
-        switch expanded {
-        case .setTimer:
-            SetTimerControls(login: login, coordinator: coordinator) { expanded = nil }
-        case .sessionLength:
-            SessionLengthField(login: login, coordinator: coordinator)
-        case nil:
-            EmptyView()
-        }
+    private var setTimerForm: some View {
+        let draft = Binding(
+            get: { session.setTimerDrafts[login.id] ?? newSetTimerDraft() },
+            set: { session.setTimerDrafts[login.id] = $0 })
+        return SetTimerForm(
+            id: login.id, draft: draft, coordinator: coordinator, note: PanelSession.setTimerNote, cancelTitle: "Cancel",
+            defaults: defaults, focus: focus, onClose: closeSetTimer)
+    }
+
+    /// After Cancel or Set, focus goes back to the tile.
+    private func closeSetTimer() {
+        session.closeSetTimer(for: login.id)
+        focus.wrappedValue = .tile(login.id)
     }
 
     // MARK: Actions
@@ -249,7 +265,9 @@ struct TileView: View {
     private func perform(_ item: TileMenuItem) {
         switch item {
         case .logIn: coordinator.logIn([login.id])
-        case .setTimer, .markLoggedInNow(opensSetTimer: true): expanded = .setTimer
+        case .setTimer: openSetTimer()
+        case .markLoggedInNow(opensSetTimer: true):
+            session.openSetTimerMarkingLoggedInNow(for: login.id, now: coordinator.now, newDraft: newSetTimerDraft)
         case .markLoggedInNow(opensSetTimer: false): coordinator.markLoggedInNow(id: login.id)
         case .sessionLength: break
         case .editInSettings: openSettingsOnLogins()
@@ -259,10 +277,19 @@ struct TileView: View {
 
     private func choose(_ choice: SessionLengthChoice) {
         switch choice {
-        case .length(let length): coordinator.setSessionLength(id: login.id, to: length)
-        case .custom: expanded = .sessionLength
-        case .noTimer: coordinator.setSessionLength(id: login.id, to: nil)
+        // Only listed lengths, which the core accepts; any other length shows as Custom….
+        case .length(let length): try? coordinator.setSessionLength(id: login.id, to: length)
+        case .custom: showsSessionLengthField = true
+        case .noTimer: try? coordinator.setSessionLength(id: login.id, to: nil)
         }
+    }
+
+    private func openSetTimer() {
+        session.openSetTimer(for: login.id, newDraft: newSetTimerDraft)
+    }
+
+    private func newSetTimerDraft() -> SetTimerDraft {
+        SetTimerDraft(for: login, now: coordinator.now, locale: .current)
     }
 
     // MARK: Colour
@@ -280,7 +307,7 @@ struct TileView: View {
     }
 }
 
-/// A tile's first line as a control: the label alone, dimmed while pressed.
+/// A tile's first line, or its "…", as a control: the label alone, dimmed while pressed.
 private struct TileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

@@ -121,10 +121,17 @@ The login time comes from:
    from now, or **Logged In At**, a clock time. Expires In becomes a login time through the
    session length. A time that would make the login already expired is refused with "That login
    would already have expired", a Logged In At time in the future with "That time is in the
-   future", and an Expires In longer than the session length with "That's longer than the
-   session length". While the session length is unknown, Set Timer asks for it in the same form, so the
-   time left is never stored as the session length, and Mark as Logged In Now opens Set Timer to
-   ask for it. The core sets a login time through `setLoginTime(id:at:)`.
+   future", an Expires In longer than the session length with "That's longer than the session
+   length", a session length over a year with "A session length can be at most a year", and one of
+   zero or less with "A session length must be more than zero". Both limits hold for every session
+   length. Settings' and Edit Session Length's field stores its text on Return or when focus
+   leaves it within the panel or Settings, never while typing, and closing the panel discards
+   unsaved text. Empty text makes the session length unknown, text that isn't a positive number of
+   hours is refused with "Enter a number of hours", and one over a year with the same words as Set
+   Timer. A refused text stays in the field with the refusal under it until it changes, and
+   nothing is stored. While the session length is unknown, Set Timer asks for it in the same form,
+   so the time left is never stored as the session length, and Mark as Logged In Now opens Set
+   Timer to ask for it. The core sets a login time through `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
    - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
      The app compares what it last saw of the file with what it reads now, in this order:
@@ -295,6 +302,7 @@ files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When no
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
 databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
 with its + menu open; until the Logins pane is rebuilt, it opens the pane without the menu.
+Discovery reads the config files again on each opening; while it runs, no earlier text shows.
 
 #### Tiles
 
@@ -342,7 +350,16 @@ with its + menu open; until the Logins pane is rebuilt, it opens the pane withou
     popover: Expires In (hours and minutes) or Logged In At, a Session Length pop-up, a caption
     ("Expires tomorrow at 03:55. The session length times its next login."), Cancel and Set. A
     click outside keeps the draft until the popover closes, then discards it, and the form says
-    so.
+    so: "This form is kept until the panel closes." Set Timer…, Logged in elsewhere?'s Set
+    Timer… and Mark as Logged In Now with an unknown length open it, the last on Logged In At
+    now, also over a draft already open. One is open at a time; opening another tile's keeps
+    this one's draft for when it opens again. Expiry today reads "Expires at 15:00."; a refusal
+    takes the caption's place as the draft changes, and Set is unavailable until the draft has a
+    time and a session length. With No timer chosen the caption reads "Choose a session length";
+    an empty or non-numeric field, negative hours or minutes outside 0 to 59 leave it empty.
+    Custom… shows a field for a number of hours, and keeps a length the list doesn't have exactly
+    until it is edited. Until the Logins pane is rebuilt, Settings' prompt after adding a login
+    shows this form with Skip in place of Cancel.
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.
@@ -435,6 +452,17 @@ A token has only the meanings its row lists.
   Set Timer, else closes the panel.
 - **Tab** moves through every control in visual order; the **arrow keys** move between tiles.
   Opening the panel makes its window key, with focus on the first tile.
+- Return and Escape are key equivalents (`keyboardShortcut(.defaultAction)` on the default,
+  `.cancelAction` on Set Timer's Cancel, and the panel's `cancelOperation(_:)` otherwise), so
+  neither needs focus: Return triggers the default from anywhere but a text field, which it
+  commits instead, and Escape works from a text field too. Settings' Set Timer prompt after adding
+  a login takes Return and Escape the same way, Set the default and Escape its Skip. The rest
+  follows the user's Keyboard Navigation setting, since buttons and menus, the tiles among them,
+  take focus only with it on, as is conventional on the Mac: with it on, Tab, Space, the arrows
+  and focus on the first tile work as above; with it off, Tab moves only between text fields,
+  nothing starts focused, and the arrows and Space do nothing in the panel. The core's
+  `panelKeyResponse(to:in:)` decides Return and the arrows, and
+  `escapeResponse(openSetTimer:tiles:)` Escape.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
   shows none.
 - **VoiceOver:** every tile follows one template, a label of "name, kind, state, time" ("prod, AWS
@@ -662,6 +690,13 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     `square.stack.3d.up`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
+  - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
+    order, on past each tile's "…"; Return and Escape while a tile or button has focus. With it
+    off, Return, Escape, and Escape from a text field were checked on macOS 27.2.1. In Settings'
+    prompt after adding a login, Return sets and Escape skips without closing the window.
+  - The session length field stores nothing while typing: "9000" then Return leaves the length
+    and the tile as they were and shows the refusal; a valid length stores on Return and when
+    focus leaves the field.
   - Sparkle can postpone an update's relaunch until a batch ends, through its updater delegate.
   - At 320 pt, with a 24-hour region (Swedish) as well as a 12-hour one (US), no tile's state or
     time is cut off.

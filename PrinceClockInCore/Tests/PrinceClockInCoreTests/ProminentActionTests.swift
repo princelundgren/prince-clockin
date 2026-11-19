@@ -16,10 +16,36 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
 }
 
 @Suite struct ProminentActionTests {
-    @Test func logInToDueComesFirst() {
+    @Test func setInAnOpenSetTimerComesFirst() {
+        let due = tile(remaining: 10 * 60, name: "prod")
+        let ok = tile(remaining: 5 * hour, name: "staging")
+
+        #expect(prominentAction(
+            openSetTimer: ok.id, waitingForDone: UUID(), tiles: [due, ok], showsLogInToDue: true, isBatchRunning: true)
+            == .set(id: ok.id))
+    }
+
+    @Test func aSetTimerWhoseLoginIsGoneIsNotProminent() {
+        let due = tile(remaining: 10 * 60, name: "prod")
+
+        #expect(prominentAction(
+            openSetTimer: UUID(), waitingForDone: nil, tiles: [due], showsLogInToDue: false, isBatchRunning: false)
+            == .logIn(id: due.id))
+    }
+
+    @Test func doneWhileACustomLoginWaitsComesNext() {
+        let vpn = UUID()
+        let due = tile(remaining: 10 * 60, name: "prod")
+
+        #expect(prominentAction(
+            openSetTimer: nil, waitingForDone: vpn, tiles: [due], showsLogInToDue: true, isBatchRunning: true)
+            == .done(id: vpn))
+    }
+
+    @Test func logInToDueComesBeforeTheTiles() {
         let tiles = [tile(remaining: -hour, name: "dev"), tile(remaining: 10 * 60, name: "prod")]
 
-        #expect(prominentAction(tiles: tiles, showsLogInToDue: true, isBatchRunning: false) == .logInToDue)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: tiles, showsLogInToDue: true, isBatchRunning: false) == .logInToDue)
     }
 
     @Test func otherwiseTheFirstDueTilesLogIn() {
@@ -27,7 +53,7 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let ok = tile(remaining: 5 * hour, name: "staging")
         let due = tile(remaining: 10 * 60, name: "prod")
 
-        #expect(prominentAction(tiles: [question, ok, due], showsLogInToDue: false, isBatchRunning: false)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [question, ok, due], showsLogInToDue: false, isBatchRunning: false)
             == .logIn(id: due.id))
     }
 
@@ -37,13 +63,13 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
             for: dev, now: now, leadTime: hour / 2, facts: TileFacts(activity: .running), holding: .logInButton,
             locale: Locale(identifier: "en_GB"), calendar: Calendar(identifier: .gregorian))
 
-        #expect(prominentAction(tiles: [running], showsLogInToDue: false, isBatchRunning: true) == nil)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [running], showsLogInToDue: false, isBatchRunning: true) == nil)
     }
 
     @Test func aFailedDueTileOffersTryAgain() {
         let failed = tile(remaining: -hour, name: "dev", facts: TileFacts(failure: .timedOut))
 
-        #expect(prominentAction(tiles: [failed], showsLogInToDue: false, isBatchRunning: false)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [failed], showsLogInToDue: false, isBatchRunning: false)
             == .tryAgain(id: failed.id))
     }
 
@@ -51,7 +77,7 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let failed = tile(remaining: -hour, name: "dev", facts: TileFacts(failure: .timedOut))
         let question = tile(remaining: 5 * hour, name: "qa", facts: TileFacts(possibleLoginAt: now))
 
-        #expect(prominentAction(tiles: [failed, question], showsLogInToDue: false, isBatchRunning: true)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [failed, question], showsLogInToDue: false, isBatchRunning: true)
             == .markAsLoggedInAt(id: question.id))
     }
 
@@ -59,7 +85,7 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let running = tile(remaining: -hour, name: "dev", facts: TileFacts(activity: .running))
         let due = tile(remaining: 10 * 60, name: "prod")
 
-        #expect(prominentAction(tiles: [running, due], showsLogInToDue: false, isBatchRunning: true)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [running, due], showsLogInToDue: false, isBatchRunning: true)
             == .logIn(id: due.id))
     }
 
@@ -67,7 +93,7 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let first = tile(remaining: 5 * hour, name: "qa", facts: TileFacts(possibleLoginAt: now))
         let second = tile(remaining: 5 * hour, name: "staging", facts: TileFacts(possibleLoginAt: now))
 
-        #expect(prominentAction(tiles: [first, second], showsLogInToDue: false, isBatchRunning: false)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [first, second], showsLogInToDue: false, isBatchRunning: false)
             == .markAsLoggedInAt(id: first.id))
     }
 
@@ -75,8 +101,8 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let ok = tile(remaining: 5 * hour, name: "dev")
         let running = tile(remaining: -hour, name: "prod", facts: TileFacts(activity: .running))
 
-        #expect(prominentAction(tiles: [ok, running], showsLogInToDue: false, isBatchRunning: true) == nil)
-        #expect(prominentAction(tiles: [], showsLogInToDue: false, isBatchRunning: false) == nil)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [ok, running], showsLogInToDue: false, isBatchRunning: true) == nil)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [], showsLogInToDue: false, isBatchRunning: false) == nil)
     }
 
     @Test func runItIsNeverProminent() {
@@ -86,6 +112,6 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let vpn = tile(expired, facts: TileFacts(isAwaitingApproval: true))
 
         #expect(vpn.isDue)
-        #expect(prominentAction(tiles: [vpn], showsLogInToDue: false, isBatchRunning: false) == nil)
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [vpn], showsLogInToDue: false, isBatchRunning: false) == nil)
     }
 }

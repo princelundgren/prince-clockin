@@ -105,12 +105,12 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         asked.apply(.possibleLogin(at: rewrite), login: dev.id, now: now)
 
         var byExpiresIn = asked
-        try byExpiresIn.setTimer(id: dev.id, expiresIn: 4 * hour, sessionLength: 8 * hour, now: now)
+        try byExpiresIn.setTimer(id: dev.id, .expiresIn(4 * hour, sessionLength: 8 * hour), now: now)
         #expect(byExpiresIn.state.logins[0].loginTime == at("2026-11-17T08:00:00Z"))
         #expect(byExpiresIn.possibleLogins.isEmpty)
 
         var byLoggedInAt = asked
-        try byLoggedInAt.setTimer(id: dev.id, loggedInAt: at("2026-11-17T10:00:00Z"), sessionLength: 8 * hour, now: now)
+        try byLoggedInAt.setTimer(id: dev.id, .loggedInAt(at("2026-11-17T10:00:00Z"), sessionLength: 8 * hour), now: now)
         #expect(byLoggedInAt.state.logins[0].loginTime == at("2026-11-17T10:00:00Z"))
         #expect(byLoggedInAt.possibleLogins.isEmpty)
 
@@ -144,7 +144,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         let vpn = Login(displayName: "vpn", kind: .custom(command: nil))
         var logins = model([vpn])
 
-        try logins.setTimer(id: vpn.id, expiresIn: 4.5 * hour, sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: vpn.id, .expiresIn(4.5 * hour, sessionLength: 8 * hour), now: now)
 
         #expect(logins.state.logins[0].sessionLength == 8 * hour)
         #expect(logins.state.logins[0].loginTime == at("2026-11-17T08:30:00Z"))
@@ -156,7 +156,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         let prod = databricks("prod", sessionLength: nil)
         var logins = model([prod])
 
-        try logins.setTimer(id: prod.id, loggedInAt: at("2026-11-17T09:00:00Z"), sessionLength: 72 * hour, now: now)
+        try logins.setTimer(id: prod.id, .loggedInAt(at("2026-11-17T09:00:00Z"), sessionLength: 72 * hour), now: now)
 
         #expect(logins.state.logins[0].sessionLength == 72 * hour)
         #expect(logins.state.logins[0].loginTime == at("2026-11-17T09:00:00Z"))
@@ -168,7 +168,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         dev.invalidatedAt = now
         var logins = model([dev])
 
-        try logins.setTimer(id: dev.id, loggedInAt: at("2026-11-17T09:00:00Z"), sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: dev.id, .loggedInAt(at("2026-11-17T09:00:00Z"), sessionLength: 8 * hour), now: now)
 
         #expect(logins.state.logins[0].invalidatedAt == nil)
         #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .ok(remaining: 5 * hour))
@@ -180,14 +180,14 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var logins = model([dev])
 
         #expect(throws: TimerError.wouldAlreadyBeExpired) {
-            try logins.setTimer(id: dev.id, expiresIn: 0, sessionLength: 8 * hour, now: now)
+            try logins.setTimer(id: dev.id, .expiresIn(0, sessionLength: 8 * hour), now: now)
         }
         #expect(throws: TimerError.longerThanSessionLength) {
-            try logins.setTimer(id: dev.id, expiresIn: 8 * hour + 1, sessionLength: 8 * hour, now: now)
+            try logins.setTimer(id: dev.id, .expiresIn(8 * hour + 1, sessionLength: 8 * hour), now: now)
         }
-        try logins.setTimer(id: dev.id, expiresIn: 1, sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: dev.id, .expiresIn(1, sessionLength: 8 * hour), now: now)
         #expect(expiry(of: logins.state.logins[0]) == now.addingTimeInterval(1))
-        try logins.setTimer(id: dev.id, expiresIn: 8 * hour, sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: dev.id, .expiresIn(8 * hour, sessionLength: 8 * hour), now: now)
         #expect(logins.state.logins[0].loginTime == now)
     }
 
@@ -197,14 +197,14 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var logins = model([dev])
 
         #expect(throws: TimerError.inFuture) {
-            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(1), sessionLength: 8 * hour, now: now)
+            try logins.setTimer(id: dev.id, .loggedInAt(now.addingTimeInterval(1), sessionLength: 8 * hour), now: now)
         }
         #expect(throws: TimerError.wouldAlreadyBeExpired) {
-            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-8 * hour), sessionLength: 8 * hour, now: now)
+            try logins.setTimer(id: dev.id, .loggedInAt(now.addingTimeInterval(-8 * hour), sessionLength: 8 * hour), now: now)
         }
-        try logins.setTimer(id: dev.id, loggedInAt: now, sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: dev.id, .loggedInAt(now, sessionLength: 8 * hour), now: now)
         #expect(logins.state.logins[0].loginTime == now)
-        try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-8 * hour + 1), sessionLength: 8 * hour, now: now)
+        try logins.setTimer(id: dev.id, .loggedInAt(now.addingTimeInterval(-8 * hour + 1), sessionLength: 8 * hour), now: now)
         #expect(expiry(of: logins.state.logins[0]) == now.addingTimeInterval(1))
     }
 
@@ -217,13 +217,13 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         let before = logins
 
         #expect(throws: TimerError.wouldAlreadyBeExpired) {
-            try logins.setTimer(id: dev.id, expiresIn: -60, sessionLength: 4 * hour, now: now)
+            try logins.setTimer(id: dev.id, .expiresIn(-60, sessionLength: 4 * hour), now: now)
         }
         #expect(throws: TimerError.longerThanSessionLength) {
-            try logins.setTimer(id: dev.id, expiresIn: 5 * hour, sessionLength: 4 * hour, now: now)
+            try logins.setTimer(id: dev.id, .expiresIn(5 * hour, sessionLength: 4 * hour), now: now)
         }
         #expect(throws: TimerError.inFuture) {
-            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(60), sessionLength: 4 * hour, now: now)
+            try logins.setTimer(id: dev.id, .loggedInAt(now.addingTimeInterval(60), sessionLength: 4 * hour), now: now)
         }
         #expect(logins == before)
     }
@@ -234,7 +234,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var logins = model([dev])
 
         // 1.1 * 3600 is 3960.0000000000005, so only rounding both down makes them equal.
-        try logins.setTimer(id: dev.id, expiresIn: 1.1 * hour, sessionLength: 1.1 * hour, now: now)
+        try logins.setTimer(id: dev.id, .expiresIn(1.1 * hour, sessionLength: 1.1 * hour), now: now)
 
         #expect(logins.state.logins[0].loginTime == now)
         #expect(logins.state.logins[0].sessionLength == 3960)
@@ -246,7 +246,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var logins = model([dev])
 
         #expect(throws: TimerError.wouldAlreadyBeExpired) {
-            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-hour + 0.5), sessionLength: hour, now: now)
+            try logins.setTimer(id: dev.id, .loggedInAt(now.addingTimeInterval(-hour + 0.5), sessionLength: hour), now: now)
         }
         #expect(logins == model([dev]))
     }
@@ -256,12 +256,12 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         let dev = login(remaining: hour, now: now)
         var logins = model([dev])
 
-        try logins.setTimer(id: dev.id, expiresIn: hour, sessionLength: 8 * hour + 0.5, now: now)
+        try logins.setTimer(id: dev.id, .expiresIn(hour, sessionLength: 8 * hour + 0.5), now: now)
         #expect(logins.state.logins[0].sessionLength == 8 * hour)
         #expect(logins.state.logins[0].loginTime == Date(timeIntervalSince1970: 1_800_000_000 - 7 * hour))
 
         try logins.setTimer(
-            id: dev.id, loggedInAt: Date(timeIntervalSince1970: 1_799_999_000.9), sessionLength: 2 * hour + 0.5, now: now)
+            id: dev.id, .loggedInAt(Date(timeIntervalSince1970: 1_799_999_000.9), sessionLength: 2 * hour + 0.5), now: now)
         #expect(logins.state.logins[0].sessionLength == 2 * hour)
         #expect(logins.state.logins[0].loginTime == Date(timeIntervalSince1970: 1_799_999_000))
     }
@@ -270,6 +270,27 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(TimerError.wouldAlreadyBeExpired.message == "That login would already have expired")
         #expect(TimerError.inFuture.message == "That time is in the future")
         #expect(TimerError.longerThanSessionLength.message == "That's longer than the session length")
+        #expect(TimerError.sessionLengthTooLong.message == "A session length can be at most a year")
+        #expect(TimerError.sessionLengthNotPositive.message == "A session length must be more than zero")
+    }
+
+    @Test func aSessionLengthThatIsNotFiniteOrOverAYearIsRefused() {
+        let now = at("2026-11-17T12:00:00Z")
+        var logins = model([login(remaining: hour, now: now)])
+        let before = logins
+        let id = logins.state.logins[0].id
+
+        for length in [TimeInterval.infinity, .nan, 1e300, maximumSessionLength + 1] {
+            #expect(throws: TimerError.sessionLengthTooLong) {
+                try logins.setTimer(id: id, .expiresIn(hour, sessionLength: length), now: now)
+            }
+            #expect(throws: TimerError.sessionLengthTooLong) {
+                try logins.setTimer(id: id, .loggedInAt(now, sessionLength: length), now: now)
+            }
+        }
+        #expect(logins == before)
+        try? logins.setTimer(id: id, .loggedInAt(now, sessionLength: maximumSessionLength), now: now)
+        #expect(logins.state.logins[0].sessionLength == maximumSessionLength)
     }
 
     @Test func databricksInvalidExpires() {
