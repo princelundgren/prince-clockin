@@ -133,33 +133,12 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
-    /// Set Timer with Expires In: the login expires `expiresIn` after `now`, and its session length
-    /// becomes `sessionLength`, so the time left is never stored as the length.
-    /// - Throws: `TimerError.wouldAlreadyBeExpired` when `expiresIn` is zero or less, and
-    ///   `.longerThanSessionLength` when it exceeds `sessionLength`, leaving the model unchanged.
-    public mutating func setTimer(
-        id: UUID, expiresIn: TimeInterval, sessionLength: TimeInterval, now: Date
-    ) throws(TimerError) {
-        let expiresIn = expiresIn.rounded(.down)
-        let length = sessionLength.rounded(.down)
-        guard expiresIn > 0 else { throw TimerError.wouldAlreadyBeExpired }
-        guard expiresIn <= length else { throw TimerError.longerThanSessionLength }
-        setSessionLengthAndLoginTime(id: id, length: length, loginTime: now.addingTimeInterval(expiresIn - length))
-    }
-
-    /// Set Timer with Logged In At: the login logged in at `loggedInAt`, with session length
-    /// `sessionLength`.
-    /// - Throws: `TimerError.inFuture` when `loggedInAt` is after `now`, and
-    ///   `.wouldAlreadyBeExpired` when the login would have expired by `now`, leaving the model
-    ///   unchanged.
-    public mutating func setTimer(
-        id: UUID, loggedInAt: Date, sessionLength: TimeInterval, now: Date
-    ) throws(TimerError) {
-        let loggedInAt = loggedInAt.wholeSeconds
-        let length = sessionLength.rounded(.down)
-        guard loggedInAt <= now else { throw TimerError.inFuture }
-        guard loggedInAt.addingTimeInterval(length) > now else { throw TimerError.wouldAlreadyBeExpired }
-        setSessionLengthAndLoginTime(id: id, length: length, loginTime: loggedInAt)
+    /// Set Timer: the login time and session length `entry` sets at `now`; see
+    /// `timerSetting(for:now:)`.
+    /// - Throws: the `TimerError` that refuses `entry`, leaving the model unchanged.
+    public mutating func setTimer(id: UUID, _ entry: TimerEntry, now: Date) throws(TimerError) {
+        let setting = try timerSetting(for: entry, now: now)
+        setSessionLengthAndLoginTime(id: id, length: setting.sessionLength, loginTime: setting.loginTime)
     }
 
     /// The user's Mark as Logged In Now.

@@ -69,9 +69,9 @@ struct SetTimerControls: View {
             case .expiresIn:
                 guard let expiresInHours else { return }
                 try coordinator.setTimer(
-                    id: login.id, expiresIn: expiresInHours * Self.secondsPerHour, sessionLength: sessionLength)
+                    id: login.id, .expiresIn(expiresInHours * Self.secondsPerHour, sessionLength: sessionLength))
             case .loggedInAt:
-                try coordinator.setTimer(id: login.id, loggedInAt: loggedInAt, sessionLength: sessionLength)
+                try coordinator.setTimer(id: login.id, .loggedInAt(loggedInAt, sessionLength: sessionLength))
             }
             refusal = nil
             onSet()
@@ -97,19 +97,26 @@ private struct HoursField: View {
     }
 }
 
-/// A login's session length in hours, saved when the field is submitted. Empty means unknown.
+/// A login's session length in hours, saved when the field is submitted. Empty means unknown; a
+/// length over the cap isn't saved, and the field says why.
 struct SessionLengthField: View {
     private static let secondsPerHour: Double = 3600
 
     let login: Login
     let coordinator: Coordinator
+    @State private var refusal: TimerError?
 
     var body: some View {
-        LabeledContent("Session length") {
-            HStack(spacing: 4) {
-                TextField("Unknown", value: hours, format: .number)
-                    .frame(width: 70)
-                Text("hours")
+        VStack(alignment: .leading, spacing: 2) {
+            LabeledContent("Session length") {
+                HStack(spacing: 4) {
+                    TextField("Unknown", value: hours, format: .number)
+                        .frame(width: 70)
+                    Text("hours")
+                }
+            }
+            if let refusal {
+                Text(refusal.message)
             }
         }
         .font(.callout)
@@ -120,7 +127,12 @@ struct SessionLengthField: View {
             get: { login.sessionLength.map { $0 / Self.secondsPerHour } },
             set: { hours in
                 let length = hours.flatMap { $0 > 0 ? $0 * Self.secondsPerHour : nil }
-                coordinator.setSessionLength(id: login.id, to: length)
+                do throws(TimerError) {
+                    try coordinator.setSessionLength(id: login.id, to: length)
+                    refusal = nil
+                } catch {
+                    refusal = error
+                }
             })
     }
 }

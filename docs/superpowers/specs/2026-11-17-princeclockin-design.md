@@ -121,10 +121,13 @@ The login time comes from:
    from now, or **Logged In At**, a clock time. Expires In becomes a login time through the
    session length. A time that would make the login already expired is refused with "That login
    would already have expired", a Logged In At time in the future with "That time is in the
-   future", and an Expires In longer than the session length with "That's longer than the
-   session length". While the session length is unknown, Set Timer asks for it in the same form, so the
-   time left is never stored as the session length, and Mark as Logged In Now opens Set Timer to
-   ask for it. The core sets a login time through `setLoginTime(id:at:)`.
+   future", an Expires In longer than the session length with "That's longer than the session
+   length", a session length over a year with "A session length can be at most a year", and one of
+   zero or less with "A session length must be more than zero". Both limits hold for every session
+   length: Settings' and Edit Session Length's field refuses one over a year with the same words
+   and keeps the one before. While the session length is unknown, Set Timer asks for it in the
+   same form, so the time left is never stored as the session length, and Mark as Logged In Now
+   opens Set Timer to ask for it. The core sets a login time through `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
    - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
      The app compares what it last saw of the file with what it reads now, in this order:

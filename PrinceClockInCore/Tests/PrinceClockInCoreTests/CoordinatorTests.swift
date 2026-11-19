@@ -621,7 +621,7 @@ private final class GatedLogins: Sendable {
         let sessionLength: TimeInterval = 8 * hour
         let remaining: TimeInterval = 7 * hour
         fixture.clock.advance(by: hour)
-        coordinator.setSessionLength(id: dev.id, to: sessionLength)
+        try coordinator.setSessionLength(id: dev.id, to: sessionLength)
 
         let timed = try #require(coordinator.login(dev.id))
         #expect(timerState(for: timed, now: later, leadTime: 0) == .ok(remaining: remaining))
@@ -1167,6 +1167,81 @@ private final class GatedLogins: Sendable {
         #expect(fixture.terminal.commands.isEmpty)
     }
 
+    @Test func theSessionLengthFieldsShownTextStoresNothingNew() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let british = Locale(identifier: "en_GB")
+
+        for length: TimeInterval in [20 * 60, 7 * hour + 13 * 60 + 7] {
+            try coordinator.setSessionLength(id: dev.id, to: length)
+            let shown = sessionLengthHoursText(length, locale: british)
+            try coordinator.setSessionLength(id: dev.id, fieldText: shown, locale: british)
+            try coordinator.setSessionLength(id: dev.id, fieldText: " \(shown) ", locale: british)
+
+            #expect(coordinator.login(dev.id)?.sessionLength == length)
+        }
+    }
+
+    @Test func theSessionLengthFieldsTextIsStoredOnlyWhenItPassesTheCheck() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let british = Locale(identifier: "en_GB")
+        try coordinator.setSessionLength(id: dev.id, fieldText: "8", locale: british)
+
+        #expect(throws: SessionLengthRefusal.tooLong) {
+            try coordinator.setSessionLength(id: dev.id, fieldText: "9000", locale: british)
+        }
+        #expect(throws: SessionLengthRefusal.notANumberOfHours) {
+            try coordinator.setSessionLength(id: dev.id, fieldText: "9000x", locale: british)
+        }
+
+        #expect(coordinator.login(dev.id)?.sessionLength == 8 * hour)
+        try coordinator.setSessionLength(id: dev.id, fieldText: "", locale: british)
+        #expect(coordinator.login(dev.id)?.sessionLength == nil)
+    }
+
+    @Test func aSessionLengthThatIsNotFiniteOrOverAYearIsNotStored() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        try coordinator.setSessionLength(id: dev.id, to: 8 * hour)
+
+        for length in [9000 * hour, maximumSessionLength + 1, .infinity, .nan] {
+            #expect(throws: TimerError.sessionLengthTooLong) {
+                try coordinator.setSessionLength(id: dev.id, to: length)
+            }
+        }
+
+        #expect(coordinator.login(dev.id)?.sessionLength == 8 * hour)
+        try coordinator.setSessionLength(id: dev.id, to: maximumSessionLength)
+        #expect(coordinator.login(dev.id)?.sessionLength == maximumSessionLength)
+        try coordinator.setSessionLength(id: dev.id, to: nil)
+        #expect(coordinator.login(dev.id)?.sessionLength == nil)
+    }
+
+    @Test func aSessionLengthOfZeroOrLessIsNotStored() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        try coordinator.setSessionLength(id: dev.id, to: 8 * hour)
+
+        for length in [0, -5, 0.5] {
+            #expect(throws: TimerError.sessionLengthNotPositive) {
+                try coordinator.setSessionLength(id: dev.id, to: length)
+            }
+        }
+
+        #expect(coordinator.login(dev.id)?.sessionLength == 8 * hour)
+        try coordinator.setSessionLength(id: dev.id, to: 1)
+        #expect(coordinator.login(dev.id)?.sessionLength == 1)
+    }
+
     @Test func editsAreSaved() async throws {
         let dev = aws("dev")
         let prod = aws("prod")
@@ -1176,7 +1251,7 @@ private final class GatedLogins: Sendable {
         coordinator.addLogin(dev)
         coordinator.addLogin(prod)
         coordinator.rename(id: dev.id, to: "Dev account")
-        coordinator.setSessionLength(id: dev.id, to: 4 * hour + 0.5)
+        try coordinator.setSessionLength(id: dev.id, to: 4 * hour + 0.5)
         coordinator.markLoggedInNow(id: dev.id)
         coordinator.removeLogin(id: prod.id)
         let preset = Preset(name: "Morning", loginIDs: [dev.id])
@@ -1200,7 +1275,7 @@ private final class GatedLogins: Sendable {
         let fixture = try Fixture(logins: [dev])
         let coordinator = fixture.makeCoordinator()
 
-        try coordinator.setTimer(id: dev.id, expiresIn: 4 * hour, sessionLength: 12 * hour)
+        try coordinator.setTimer(id: dev.id, .expiresIn(4 * hour, sessionLength: 12 * hour))
 
         let stored = try #require(fixture.stored?.logins.first)
         #expect(stored.loginTime == launch.addingTimeInterval(-8 * hour))
@@ -1214,7 +1289,7 @@ private final class GatedLogins: Sendable {
         let before = coordinator.model
 
         #expect(throws: TimerError.inFuture) {
-            try coordinator.setTimer(id: dev.id, loggedInAt: launch.addingTimeInterval(60), sessionLength: 12 * hour)
+            try coordinator.setTimer(id: dev.id, .loggedInAt(launch.addingTimeInterval(60), sessionLength: 12 * hour))
         }
 
         #expect(coordinator.model == before)

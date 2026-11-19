@@ -379,6 +379,15 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(options[6].choice == .noTimer)
     }
 
+    @Test func theOptionsOfferOnlyListedLengthsSoALengthOverTheCapIsCustom() {
+        let options = sessionLengthOptions(current: 9000 * hour)
+
+        #expect(options.filter(\.isSelected).map(\.title) == ["Custom…"])
+        for case .length(let length) in options.map(\.choice) {
+            #expect(throws: Never.self) { try checkedSessionLength(length) }
+        }
+    }
+
     @Test func anUnlistedLengthChecksCustomAndNoneChecksNoTimer() {
         #expect(sessionLengthOptions(current: 10 * hour).filter(\.isSelected).map(\.title) == ["Custom…"])
         #expect(sessionLengthOptions(current: nil).filter(\.isSelected).map(\.title) == ["No timer"])

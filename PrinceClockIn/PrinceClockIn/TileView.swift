@@ -259,9 +259,10 @@ struct TileView: View {
 
     private func choose(_ choice: SessionLengthChoice) {
         switch choice {
-        case .length(let length): coordinator.setSessionLength(id: login.id, to: length)
+        // Only listed lengths, which the core accepts; any other length shows as Custom….
+        case .length(let length): try? coordinator.setSessionLength(id: login.id, to: length)
         case .custom: expanded = .sessionLength
-        case .noTimer: coordinator.setSessionLength(id: login.id, to: nil)
+        case .noTimer: try? coordinator.setSessionLength(id: login.id, to: nil)
         }
     }
 

@@ -17,13 +17,77 @@ public enum TimerError: Error, Equatable, Sendable {
     case inFuture
     /// An Expires In longer than the session length.
     case longerThanSessionLength
+    /// A session length longer than `maximumSessionLength`, or not a finite number.
+    case sessionLengthTooLong
+    /// A session length of zero or less, once rounded down to whole seconds.
+    case sessionLengthNotPositive
 
     public var message: String {
         switch self {
         case .wouldAlreadyBeExpired: "That login would already have expired"
         case .inFuture: "That time is in the future"
         case .longerThanSessionLength: "That's longer than the session length"
+        case .sessionLengthTooLong: "A session length can be at most a year"
+        case .sessionLengthNotPositive: "A session length must be more than zero"
         }
+    }
+}
+
+/// The longest session length a login can have: a year.
+public let maximumSessionLength: TimeInterval = 365 * 24 * 3600
+
+/// `length` rounded down to whole seconds, as a login stores it.
+/// - Throws: `.sessionLengthTooLong` when it isn't finite or is longer than `maximumSessionLength`;
+///   `.sessionLengthNotPositive` when it is zero or less.
+public func checkedSessionLength(_ length: TimeInterval) throws(TimerError) -> TimeInterval {
+    let length = length.rounded(.down)
+    guard length.isFinite, length <= maximumSessionLength else { throw .sessionLengthTooLong }
+    guard length > 0 else { throw .sessionLengthNotPositive }
+    return length
+}
+
+/// What Set Timer was told, either way, with the session length it sets.
+public enum TimerEntry: Equatable, Sendable {
+    /// The login expires this long from now.
+    case expiresIn(TimeInterval, sessionLength: TimeInterval)
+    /// The login logged in at this time.
+    case loggedInAt(Date, sessionLength: TimeInterval)
+}
+
+/// A login time and session length that Set Timer accepted, in whole seconds.
+public struct TimerSetting: Equatable, Sendable {
+    public let loginTime: Date
+    public let sessionLength: TimeInterval
+
+    public init(loginTime: Date, sessionLength: TimeInterval) {
+        self.loginTime = loginTime
+        self.sessionLength = sessionLength
+    }
+
+    public var expiry: Date { loginTime.addingTimeInterval(sessionLength) }
+}
+
+/// The login time and session length `entry` sets at `now`. Expires In becomes a login time through
+/// the session length, so the time left is never stored as the length.
+/// - Throws: `TimerError.wouldAlreadyBeExpired` for an Expires In of zero or less, or a Logged In
+///   At a session length or more ago; `.longerThanSessionLength` for an Expires In longer than the
+///   session length; `.inFuture` for a Logged In At after `now`; `.sessionLengthTooLong` for a
+///   session length that isn't finite or is longer than `maximumSessionLength`;
+///   `.sessionLengthNotPositive` for one of zero or less, or under a second.
+public func timerSetting(for entry: TimerEntry, now: Date) throws(TimerError) -> TimerSetting {
+    switch entry {
+    case .expiresIn(let expiresIn, let sessionLength):
+        let expiresIn = expiresIn.rounded(.down)
+        let length = try checkedSessionLength(sessionLength)
+        guard expiresIn > 0 else { throw .wouldAlreadyBeExpired }
+        guard expiresIn <= length else { throw .longerThanSessionLength }
+        return TimerSetting(loginTime: now.addingTimeInterval(expiresIn - length).wholeSeconds, sessionLength: length)
+    case .loggedInAt(let loggedInAt, let sessionLength):
+        let loggedInAt = loggedInAt.wholeSeconds
+        let length = try checkedSessionLength(sessionLength)
+        guard loggedInAt <= now else { throw .inFuture }
+        guard loggedInAt.addingTimeInterval(length) > now else { throw .wouldAlreadyBeExpired }
+        return TimerSetting(loginTime: loggedInAt, sessionLength: length)
     }
 }
 
