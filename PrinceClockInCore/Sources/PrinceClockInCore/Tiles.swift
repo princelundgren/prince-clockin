@@ -153,7 +153,7 @@ public func tilePresentation(
     let due = isDue(login, now: now, leadTime: leadTime)
     let control = heldControl ?? (due && pending == nil ? .logInButton : .actionsMenu)
     let clickLogsIn = control == .logInButton && due && pending == nil
-    let kind = kindName(login.kind)
+    let kind = loginKindName(login.kind)
     var menuItems: [TileMenuItem] = [
         .logIn, .setTimer, .markLoggedInNow(opensSetTimer: login.sessionLength == nil), .sessionLength,
         .editInSettings,
@@ -224,7 +224,7 @@ public func sessionLengthText(_ length: TimeInterval) -> String {
 }
 
 /// The session length before a noun ("1-day timer").
-private func sessionLengthAdjective(_ length: TimeInterval) -> String {
+func sessionLengthAdjective(_ length: TimeInterval) -> String {
     let (count, unit) = sessionLengthUnits(length)
     return "\(count)-\(unit)"
 }
@@ -236,7 +236,8 @@ private func sessionLengthUnits(_ length: TimeInterval) -> (count: Int, unit: St
     return (minutes, "minute")
 }
 
-private func kindName(_ kind: LoginKind) -> String {
+/// The kind as the glossary names it ("AWS SSO session").
+func loginKindName(_ kind: LoginKind) -> String {
     switch kind {
     case .awsSSOSession: "AWS SSO session"
     case .databricksProfile(_, accountLevel: false): "Databricks profile"
