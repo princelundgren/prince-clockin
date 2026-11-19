@@ -2,7 +2,8 @@ import AppKit
 import PrinceClockInCore
 import SwiftUI
 
-/// Owns the app's AppKit side: the status item, the panel's popover and the Settings window.
+/// Owns the app's AppKit side: the status item, the panel's popover, the Settings window and the
+/// hidden main menu.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // Created with the delegate, before launch finishes, so a notification button that launched
@@ -14,10 +15,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.mainMenu = makeMainMenu()
         statusItem = StatusItemController(
             coordinator: appModel.coordinator, updater: updater,
             togglePanel: { [weak self] in self?.togglePanel() }, openSettings: { [weak self] in self?.showSettings() })
         setUpPopover()
+    }
+
+    /// The menu bar an `LSUIElement` app never shows, there so its key equivalents work while the
+    /// app is active: Settings… and Quit, and the Close and Edit commands Settings' fields need.
+    private func makeMainMenu() -> NSMenu {
+        let appMenu = NSMenu()
+        let settings = RightClickMenuItem.settings
+        let quit = RightClickMenuItem.quit
+        appMenu.addItem(withTitle: settings.title, action: #selector(settingsChosen), keyEquivalent: settings.keyEquivalent)
+            .target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: quit.title, action: #selector(NSApplication.terminate(_:)), keyEquivalent: quit.keyEquivalent)
+
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let mainMenu = NSMenu()
+        for submenu in [appMenu, fileMenu, editMenu] {
+            let item = NSMenuItem()
+            item.submenu = submenu
+            mainMenu.addItem(item)
+        }
+        return mainMenu
+    }
+
+    @objc private func settingsChosen() {
+        showSettings()
     }
 
     private func setUpPopover() {
