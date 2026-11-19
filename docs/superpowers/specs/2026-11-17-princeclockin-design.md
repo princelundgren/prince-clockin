@@ -554,8 +554,6 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
-  - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
-    the batch's position as "1 of 2";
   - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
     is published;
   - `retrySave()`, and `needsApproval(id:)` against the stored approvals;

@@ -44,6 +44,31 @@ public struct BatchProgress: Equatable, Sendable {
     }
 }
 
+/// How one login of the running batch ended.
+public enum LoginOutcome: Equatable, Sendable {
+    case succeeded(id: UUID)
+    case failed(id: UUID, reason: LoginFailure)
+    /// Ended by Cancel All.
+    case cancelled(id: UUID)
+
+    /// The login that ended.
+    public var id: UUID {
+        switch self {
+        case .succeeded(let id), .failed(let id, _), .cancelled(let id): id
+        }
+    }
+
+    /// The outcome a queue event reports; `nil` for an event that ends no login.
+    init?(_ event: QueueEvent) {
+        switch event {
+        case .succeeded(let id, _): self = .succeeded(id: id)
+        case .failed(let id, .cancelled): self = .cancelled(id: id)
+        case .failed(let id, let reason): self = .failed(id: id, reason: reason)
+        case .queued, .started, .waitingForDone, .finished: return nil
+        }
+    }
+}
+
 /// The one object the app drives. It owns the model, saves every change, runs the tick and feeds
 /// the login queue. The views read it directly.
 @MainActor
@@ -61,8 +86,16 @@ public final class Coordinator {
     public private(set) var now: Date
     /// Where an unreadable or newer state file was set aside at launch.
     public private(set) var loadNotice: URL?
-    /// The running batch, or `nil` when the queue is idle.
+    /// The running batch's position of its total, or `nil` when the queue is idle.
     public private(set) var batch: BatchProgress?
+    /// The login running now.
+    public private(set) var running: UUID?
+    /// The logins waiting to run, in order. Empty when a batch ends, unless a login was queued
+    /// while Cancel All was ending it: that one waits for the next batch.
+    public private(set) var queued: [UUID] = []
+    /// How each finished login of the running batch ended, in order; empty once the batch ends. A
+    /// login no longer tracked has none.
+    public private(set) var outcomes: [LoginOutcome] = []
     /// The custom login waiting for the user's Done.
     public private(set) var waitingCustomID: UUID?
     /// Custom logins held back because their command isn't approved on this Mac, in request order.
@@ -272,6 +305,9 @@ public final class Coordinator {
     public func removeLogin(id: UUID) {
         commandSink.yield(.remove(id))
         model.removeLogin(id: id)
+        queued.removeAll { $0 == id }
+        if running == id { running = nil }
+        outcomes.removeAll { $0.id == id }
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil
@@ -321,12 +357,21 @@ public final class Coordinator {
     private func handle(_ event: QueueEvent) async {
         model.apply(event)
         switch event {
+        case .queued(let ids, let total):
+            queued = ids
+            if let batch { self.batch = BatchProgress(position: batch.position, total: total) }
         case .started(let id, let position, let total):
             batch = BatchProgress(position: position, total: total)
+            running = id
+            queued.removeAll { $0 == id }
             lastFailures[id] = nil
             if let login = login(id), case .databricksProfile = login.kind { runningDatabricksID = id }
         case .succeeded(let id, _), .failed(let id, _):
-            if case .failed(_, let reason) = event, reason != .cancelled { lastFailures[id] = reason }
+            if let outcome = LoginOutcome(event), login(id) != nil {
+                outcomes.append(outcome)
+                if case .failed(_, let reason) = outcome { lastFailures[id] = reason }
+            }
+            if running == id { running = nil }
             if waitingCustomID == id { waitingCustomID = nil }
             if runningDatabricksID == id { runningDatabricksID = nil }
         case .waitingForDone(let id):
@@ -334,6 +379,8 @@ public final class Coordinator {
             if let login = login(id) { await notifier.postCustomDone(login: login) }
         case .finished:
             batch = nil
+            running = nil
+            outcomes = []
             waitingCustomID = nil
             runningDatabricksID = nil
         }

@@ -178,6 +178,57 @@ private extension Coordinator {
     func login(_ id: UUID) -> Login? {
         model.state.logins.first { $0.id == id }
     }
+
+    var batchState: BatchState {
+        BatchState(running: running, queued: queued, outcomes: outcomes, batch: batch)
+    }
+}
+
+/// Every field the coordinator publishes about the running batch, compared at once.
+private struct BatchState: Equatable {
+    var running: UUID?
+    var queued: [UUID] = []
+    var outcomes: [LoginOutcome] = []
+    var batch: BatchProgress?
+
+    static let idle = BatchState()
+}
+
+/// Waits for the coordinator's batch fields to reach `expected`, then checks them, so a failure
+/// shows the difference.
+@MainActor
+private func expectBatch(
+    _ coordinator: Coordinator, _ expected: BatchState, sourceLocation: SourceLocation = #_sourceLocation
+) async {
+    _ = await eventually { coordinator.batchState == expected }
+    #expect(coordinator.batchState == expected, sourceLocation: sourceLocation)
+}
+
+/// Runs each AWS login once its session's gate opens, answering with `outcomes[session]`, or
+/// success. A session in `hanging` instead waits until it is cancelled.
+private final class GatedLogins: Sendable {
+    private let gates: [String: Gate]
+    private let outcomes: [String: ProcessOutcome]
+    private let hanging: Set<String>
+
+    init(_ sessions: [String], outcomes: [String: ProcessOutcome] = [:], hanging: Set<String> = []) {
+        gates = Dictionary(uniqueKeysWithValues: sessions.map { ($0, Gate()) })
+        self.outcomes = outcomes
+        self.hanging = hanging
+    }
+
+    func release(_ session: String) async {
+        await gates[session]?.open()
+    }
+
+    var runner: ArgumentRunner {
+        ArgumentRunner { [gates, outcomes, hanging] arguments in
+            let session = arguments.last?.replacingOccurrences(of: "--sso-session=", with: "") ?? ""
+            if hanging.contains(session) { return await hangUntilCancelled() }
+            await gates[session]?.wait()
+            return outcomes[session] ?? .exited(code: 0, output: "")
+        }
+    }
 }
 
 @MainActor
@@ -547,6 +598,131 @@ private extension Coordinator {
         coordinator.removeLogin(id: dev.id)
 
         #expect(await eventually { coordinator.login(prod.id)?.loginTime == launch })
+    }
+
+    // MARK: The batch's published state
+
+    @Test func twoLoginBatchPublishesEachStep() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"], outcomes: ["dev": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.batchState == .idle)
+
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.failed(id: dev.id, reason: .exitCode(1))],
+            batch: BatchProgress(position: 2, total: 2)))
+
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+        #expect(coordinator.lastFailures[dev.id] == .exitCode(1))
+    }
+
+    @Test func midRunEnqueueJoinsTheQueueAndGrowsTheTotal() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        await expectBatch(coordinator, BatchState(running: dev.id, batch: BatchProgress(position: 1, total: 1)))
+
+        coordinator.logIn([prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingAQueuedLoginShrinksTheBatch() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let staging = aws("staging")
+        let logins = GatedLogins(["dev", "prod", "staging"])
+        let fixture = try Fixture(logins: [dev, prod, staging], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id, staging.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id, staging.id], batch: BatchProgress(position: 1, total: 3)))
+
+        coordinator.removeLogin(id: prod.id)
+
+        #expect(coordinator.queued == [staging.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [staging.id], batch: BatchProgress(position: 1, total: 2)))
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: staging.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("staging")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingTheRunningLoginKeepsNoOutcomeForIt() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["prod"], hanging: ["dev"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.running == nil)
+        await expectBatch(coordinator, BatchState(running: prod.id, batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingALoginForgetsItsOutcome() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.outcomes.isEmpty)
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func cancelAllResetsTheBatch() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["prod"], hanging: ["dev"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        coordinator.cancelBatch()
+
+        await expectBatch(coordinator, .idle)
+        #expect(fixture.loginRunner.calls.count == 1)
     }
 
     @Test func cancellingALoginIsNotAFailure() async throws {

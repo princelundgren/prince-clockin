@@ -151,6 +151,7 @@ private final class StepLog: @unchecked Sendable {
         await releaseFirst.open()
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id, analytics.id], total: 3),
             .started(id: dev.id, position: 1, total: 3), .succeeded(id: dev.id, at: now),
             .started(id: prod.id, position: 2, total: 3), .succeeded(id: prod.id, at: now),
             .started(id: analytics.id, position: 3, total: 3), .succeeded(id: analytics.id, at: now),
@@ -224,6 +225,7 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id], total: 2),
             .started(id: dev.id, position: 1, total: 2), .succeeded(id: dev.id, at: now),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
@@ -254,7 +256,8 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
-            .started(id: dev.id, position: 1, total: 1), .succeeded(id: dev.id, at: now),
+            .queued(ids: [dev.id], total: 1), .started(id: dev.id, position: 1, total: 1),
+            .queued(ids: [prod.id], total: 2), .succeeded(id: dev.id, at: now),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
         ])
@@ -272,6 +275,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([dev], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
             .started(id: dev.id, position: 1, total: 1),
             .failed(id: dev.id, reason: .cliNotFound("aws")),
             .finished,
@@ -294,6 +298,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([dev, prod], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id], total: 2),
             .started(id: dev.id, position: 1, total: 2), .failed(id: dev.id, reason: .exitCode(1)),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
@@ -329,6 +334,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([dev, prod], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id], total: 2),
             .started(id: dev.id, position: 1, total: 2), .failed(id: dev.id, reason: .timedOut),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
@@ -346,6 +352,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([dev], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
             .started(id: dev.id, position: 1, total: 1), .succeeded(id: dev.id, at: loggedIn), .finished,
         ])
     }
@@ -362,7 +369,8 @@ private final class StepLog: @unchecked Sendable {
 
         await queue.enqueue([custom, dev], timeout: timeout)
 
-        #expect(await events.next(2) == [
+        #expect(await events.next(3) == [
+            .queued(ids: [custom.id, dev.id], total: 2),
             .started(id: custom.id, position: 1, total: 2), .waitingForDone(id: custom.id),
         ])
         #expect(terminal.commands == ["az login"])
@@ -385,7 +393,8 @@ private final class StepLog: @unchecked Sendable {
 
         await queue.enqueue([custom], timeout: timeout)
 
-        #expect(await events.next(2) == [
+        #expect(await events.next(3) == [
+            .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1), .waitingForDone(id: custom.id),
         ])
         #expect(terminal.commands.isEmpty)
@@ -403,6 +412,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([custom], timeout: shortTimeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1), .waitingForDone(id: custom.id),
             .failed(id: custom.id, reason: .timedOut), .finished,
         ])
@@ -419,6 +429,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([custom], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1),
             .failed(id: custom.id, reason: .terminalFailed("Not authorized to send Apple events to Terminal.")),
             .finished,
@@ -446,11 +457,13 @@ private final class StepLog: @unchecked Sendable {
         await queue.cancel()
 
         #expect(await events.throughFinished() == [
-            .started(id: dev.id, position: 1, total: 3), .failed(id: dev.id, reason: .cancelled), .finished,
+            .queued(ids: [dev.id, prod.id, analytics.id], total: 3), .started(id: dev.id, position: 1, total: 3),
+            .queued(ids: [], total: 1), .failed(id: dev.id, reason: .cancelled), .finished,
         ])
         let later = awsLogin("later")
         await queue.enqueue([later], timeout: timeout)
         #expect(await events.throughFinished() == [
+            .queued(ids: [later.id], total: 1),
             .started(id: later.id, position: 1, total: 1), .succeeded(id: later.id, at: now), .finished,
         ])
         #expect(runner.calls.map(\.arguments) == [
@@ -469,11 +482,13 @@ private final class StepLog: @unchecked Sendable {
         await queue.cancel()
         await queue.enqueue([dev], timeout: timeout)
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
             .started(id: dev.id, position: 1, total: 1), .succeeded(id: dev.id, at: now), .finished,
         ])
         await queue.cancel()
         await queue.enqueue([prod], timeout: timeout)
         #expect(await events.throughFinished() == [
+            .queued(ids: [prod.id], total: 1),
             .started(id: prod.id, position: 1, total: 1), .succeeded(id: prod.id, at: now), .finished,
         ])
     }
@@ -500,6 +515,7 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
             .started(id: dev.id, position: 1, total: 1), .failed(id: dev.id, reason: .cancelled), .finished,
         ])
         #expect(runner.calls.isEmpty)
@@ -528,7 +544,8 @@ private final class StepLog: @unchecked Sendable {
         await stopped.open()
 
         #expect(await events.throughFinished() == [
-            .started(id: dev.id, position: 1, total: 1), .failed(id: dev.id, reason: .cancelled), .finished,
+            .queued(ids: [dev.id], total: 1), .started(id: dev.id, position: 1, total: 1),
+            .queued(ids: [dev.id], total: 1), .failed(id: dev.id, reason: .cancelled), .finished,
         ])
         #expect(await events.throughFinished() == [
             .started(id: dev.id, position: 1, total: 1), .succeeded(id: dev.id, at: now), .finished,
@@ -546,12 +563,15 @@ private final class StepLog: @unchecked Sendable {
         let dev = awsLogin("dev")
 
         await queue.enqueue([custom, dev], timeout: timeout)
-        #expect(await events.next(2) == [
+        #expect(await events.next(3) == [
+            .queued(ids: [custom.id, dev.id], total: 2),
             .started(id: custom.id, position: 1, total: 2), .waitingForDone(id: custom.id),
         ])
         await queue.cancel()
 
-        #expect(await events.throughFinished() == [.failed(id: custom.id, reason: .cancelled), .finished])
+        #expect(await events.throughFinished() == [
+            .queued(ids: [], total: 1), .failed(id: custom.id, reason: .cancelled), .finished,
+        ])
         #expect(runner.calls.isEmpty)
     }
 
@@ -571,6 +591,7 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1), .failed(id: custom.id, reason: .cancelled), .finished,
         ])
     }
@@ -599,7 +620,8 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
-            .started(id: dev.id, position: 1, total: 3), .succeeded(id: dev.id, at: now),
+            .queued(ids: [dev.id, prod.id, analytics.id], total: 3), .started(id: dev.id, position: 1, total: 3),
+            .queued(ids: [analytics.id], total: 2), .succeeded(id: dev.id, at: now),
             .started(id: analytics.id, position: 2, total: 2), .succeeded(id: analytics.id, at: now),
             .finished,
         ])
@@ -628,6 +650,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.remove(id: dev.id)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id], total: 2),
             .started(id: dev.id, position: 1, total: 2), .failed(id: dev.id, reason: .cancelled),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
@@ -643,7 +666,8 @@ private final class StepLog: @unchecked Sendable {
         let dev = awsLogin("dev")
 
         await queue.enqueue([custom, dev], timeout: timeout)
-        #expect(await events.next(2) == [
+        #expect(await events.next(3) == [
+            .queued(ids: [custom.id, dev.id], total: 2),
             .started(id: custom.id, position: 1, total: 2), .waitingForDone(id: custom.id),
         ])
         await queue.remove(id: custom.id)
@@ -678,7 +702,8 @@ private final class StepLog: @unchecked Sendable {
         await stopped.open()
 
         #expect(await events.throughFinished() == [
-            .started(id: dev.id, position: 1, total: 1), .failed(id: dev.id, reason: .cancelled),
+            .queued(ids: [dev.id], total: 1), .started(id: dev.id, position: 1, total: 1),
+            .queued(ids: [dev.id], total: 2), .failed(id: dev.id, reason: .cancelled),
             .started(id: dev.id, position: 2, total: 2), .succeeded(id: dev.id, at: now),
             .finished,
         ])
@@ -708,6 +733,7 @@ private final class StepLog: @unchecked Sendable {
         await release.open()
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id, prod.id], total: 2),
             .started(id: dev.id, position: 1, total: 2), .succeeded(id: dev.id, at: now),
             .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
             .finished,
@@ -765,6 +791,7 @@ private final class StepLog: @unchecked Sendable {
 
         await queue.enqueue([custom], timeout: shortTimeout)
         #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1), .waitingForDone(id: custom.id),
             .failed(id: custom.id, reason: .timedOut), .finished,
         ])
@@ -772,6 +799,7 @@ private final class StepLog: @unchecked Sendable {
         await queue.enqueue([dev], timeout: timeout)
 
         #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
             .started(id: dev.id, position: 1, total: 1), .succeeded(id: dev.id, at: now), .finished,
         ])
     }
