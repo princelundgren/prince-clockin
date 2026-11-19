@@ -4,9 +4,9 @@ import Foundation
 /// It does no I/O and reads no clock: every time comes in with its event.
 public struct LoginsModel: Equatable, Sendable {
     public var state: AppState
-    /// AWS logins whose cache rewrite could be a login or a renewal, with the rewrite's time. The
-    /// row asks "Logged in at <time>?".
-    public var possibleLogins: [UUID: Date] = [:]
+    /// AWS logins whose cache rewrite could be a login or a renewal. The tile asks whether it was
+    /// the user.
+    public var possibleLogins: [UUID: PossibleLogin] = [:]
 
     public init(state: AppState) {
         self.state = state
@@ -19,13 +19,16 @@ public struct LoginsModel: Equatable, Sendable {
     }
 
     /// Records what the AWS cache file showed for login `id`. A logout counts from `now`.
-    public mutating func apply(_ observation: AWSCacheObservation, login id: UUID, now: Date) {
+    /// `isFirstCheckAfterWake` marks a possible login found by the first check after the Mac woke.
+    public mutating func apply(
+        _ observation: AWSCacheObservation, login id: UUID, now: Date, isFirstCheckAfterWake: Bool = false
+    ) {
         switch observation {
         case .newLogin(let time):
             changeLoginTime(of: id) { $0.loginTime = time.wholeSeconds }
         case .possibleLogin(let time):
             guard index(of: id) != nil else { return }
-            possibleLogins[id] = time.wholeSeconds
+            possibleLogins[id] = PossibleLogin(time: time.wholeSeconds, isFoundOnWake: isFirstCheckAfterWake)
         case .loggedOut:
             invalidate(id, at: now, reason: .loggedOut)
         case .noChange, .renewed:
@@ -35,8 +38,8 @@ public struct LoginsModel: Equatable, Sendable {
 
     /// The user's yes to "Logged in at <time>?": the login time becomes the rewrite's time.
     public mutating func confirmPossibleLogin(id: UUID) {
-        guard let time = possibleLogins[id] else { return }
-        setLoginTime(id: id, at: time)
+        guard let possibleLogin = possibleLogins[id] else { return }
+        setLoginTime(id: id, at: possibleLogin.time)
     }
 
     /// Records a Databricks check of login `id` made at `now`, whatever it found, and a valid or
@@ -94,6 +97,15 @@ public struct LoginsModel: Equatable, Sendable {
             .map { (key: panelSortKey($0, now: now, leadTime: leadTime), login: $0) }
             .sorted { ($0.key.group, $0.key.timeLeft) < ($1.key.group, $1.key.timeLeft) }
             .map(\.login)
+    }
+
+    /// The tracked logins in the order `ids` gives, which the panel took when it opened, so its
+    /// tiles hold still while it is open. A login removed since is left out; one added since
+    /// follows, in stored order.
+    public func logins(inOrder ids: [UUID]) -> [Login] {
+        let ordered = trackedLogins(ids)
+        let placed = Set(ids)
+        return ordered + state.logins.filter { !placed.contains($0.id) }
     }
 
     /// The preset's logins in its order, skipping any no longer tracked.
@@ -199,4 +211,17 @@ private func panelSortKey(_ login: Login, now: Date, leadTime: TimeInterval) -> 
 private func isDatabricks(_ login: Login) -> Bool {
     if case .databricksProfile = login.kind { return true }
     return false
+}
+
+/// An AWS cache rewrite that could be a login or a renewal.
+public struct PossibleLogin: Equatable, Sendable {
+    /// When the cache file was rewritten.
+    public var time: Date
+    /// Whether the first check after the Mac woke found it.
+    public var isFoundOnWake: Bool
+
+    public init(time: Date, isFoundOnWake: Bool) {
+        self.time = time
+        self.isFoundOnWake = isFoundOnWake
+    }
 }

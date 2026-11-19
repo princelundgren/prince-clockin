@@ -1,23 +1,40 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// The menu bar panel: notices, custom logins waiting for approval, the running batch, one row per
-/// login, the log-in actions and the footer.
+/// The menu bar panel: notices, the running batch, one tile per login, the log-in actions and the
+/// footer.
 struct PanelView: View {
+    /// Past this height the tiles scroll.
+    private static let tilesMaximumHeight: CGFloat = 420
+
     let appModel: AppModel
     let updater: Updater
+    let session: PanelSession
     let openSettings: () -> Void
-    @State private var selection: Set<UUID> = []
+    let openSettingsOnLogins: () -> Void
 
     private var coordinator: Coordinator { appModel.coordinator }
     private var logins: [Login] { coordinator.model.state.logins }
+    /// Each login's tile, in the order the panel took when it opened, built with the control
+    /// each tile holds.
+    private var tilePresentations: [(login: Login, tile: TilePresentation)] {
+        coordinator.model.logins(inOrder: session.order).compactMap { login in
+            coordinator.tile(
+                for: login.id, holding: session.heldControls[login.id], locale: .current, calendar: .current
+            ).map { (login, $0) }
+        }
+    }
+    private var dueCount: Int { coordinator.model.dueLogins(now: coordinator.now).count }
+    private var showsLogInToDue: Bool {
+        PrinceClockInCore.showsLogInToDue(dueCount: dueCount, isBatchRunning: coordinator.batch != nil)
+    }
 
     var body: some View {
+        let tiles = tilePresentations
+        let prominent = prominentAction(
+            tiles: tiles.map(\.tile), showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
         VStack(alignment: .leading, spacing: 10) {
             notices
-            ForEach(pendingLogins) { login in
-                PendingApprovalRow(login: login, coordinator: coordinator)
-            }
             if let batch = coordinator.batch {
                 BatchSection(batch: batch, coordinator: coordinator)
             }
@@ -25,8 +42,13 @@ struct PanelView: View {
                 Text("No logins tracked yet. Add them in Settings.")
                     .foregroundStyle(.secondary)
             }
-            ForEach(logins) { login in
-                LoginRow(login: login, coordinator: coordinator, isSelected: selectionBinding(for: login.id))
+            tileList(tiles, prominent: prominent)
+            if showsLogInToDue {
+                Button("Log In to \(dueCount) Due") {
+                    coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
+                }
+                .prominent(prominent == .logInToDue)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             if !logins.isEmpty {
                 Divider()
@@ -49,6 +71,26 @@ struct PanelView: View {
         .frame(width: 320)
     }
 
+    /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
+    private func tileList(_ tiles: [(login: Login, tile: TilePresentation)], prominent: ProminentAction?) -> some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                ForEach(tiles, id: \.tile.id) { entry in
+                    TileView(
+                        login: entry.login, tile: entry.tile, coordinator: coordinator, prominent: prominent,
+                        heldControl: heldControl(for: entry.login.id), openSettingsOnLogins: openSettingsOnLogins)
+                }
+            }
+        }
+        .id(session.closings)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxHeight: Self.tilesMaximumHeight)
+    }
+
+    private func heldControl(for id: UUID) -> Binding<TileControl?> {
+        Binding(get: { session.heldControls[id] }, set: { session.heldControls[id] = $0 })
+    }
+
     @ViewBuilder private var notices: some View {
         if let backup = coordinator.loadNotice {
             Notice("The settings file couldn't be read, so it was set aside as \(backup.lastPathComponent) and the app started empty.")
@@ -69,15 +111,6 @@ struct PanelView: View {
                 }
             }
             HStack {
-                Button("Log in to selected") {
-                    coordinator.logIn(logins.map(\.id).filter(selection.contains))
-                    selection.removeAll()
-                }
-                .disabled(selection.isEmpty)
-                Button("Log in to expiring") {
-                    coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
-                }
-                .disabled(coordinator.model.dueLogins(now: coordinator.now).isEmpty)
                 Button("Check now") {
                     Task { await coordinator.checkNow() }
                 }
@@ -103,17 +136,25 @@ struct PanelView: View {
         }
         .font(.callout)
     }
+}
 
-    private var pendingLogins: [Login] {
-        coordinator.pendingApprovals.compactMap { id in logins.first { $0.id == id } }
+/// What the panel keeps for one opening: its tiles' order, taken as it opens, and the control each
+/// tile held when the pointer entered it. Closing the panel clears it and counts the closing, which
+/// gives the tiles new state for the next opening.
+@MainActor
+@Observable
+final class PanelSession {
+    private(set) var order: [UUID] = []
+    var heldControls: [UUID: TileControl] = [:]
+    private(set) var closings = 0
+
+    func open(order: [UUID]) {
+        self.order = order
     }
 
-    private func selectionBinding(for id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { selection.contains(id) },
-            set: { isOn in
-                if isOn { selection.insert(id) } else { selection.remove(id) }
-            })
+    func close() {
+        heldControls = [:]
+        closings += 1
     }
 }
 
@@ -167,28 +208,6 @@ private struct BatchSection: View {
                 }
                 Spacer()
                 Button("Cancel") { coordinator.cancelBatch() }
-            }
-        }
-    }
-}
-
-private struct PendingApprovalRow: View {
-    let login: Login
-    let coordinator: Coordinator
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Run this command for \(login.displayName)?")
-                .font(.headline)
-            if case .custom(let command?) = login.kind {
-                Text(command)
-                    .font(.body.monospaced())
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            HStack {
-                Button("Run it") { coordinator.approveAndLogIn(login.id) }
-                Button("Cancel") { coordinator.dismissPendingApproval(id: login.id) }
             }
         }
     }

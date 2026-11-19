@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let appModel: AppModel
     private let updater: Updater
     private let popover = NSPopover()
+    private let panelSession = PanelSession()
     private var statusItem: StatusItemController?
     private var settingsWindow: NSWindow?
 
@@ -68,7 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func setUpPopover() {
         popover.behavior = .transient
-        let panel = PanelView(appModel: appModel, updater: updater, openSettings: { [weak self] in self?.showSettings() })
+        let panel = PanelView(
+            appModel: appModel, updater: updater, session: panelSession,
+            openSettings: { [weak self] in self?.showSettings() },
+            openSettingsOnLogins: { [weak self] in self?.showSettings(on: .logins) })
         let hosting = NSHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
         popover.contentViewController = hosting
@@ -81,8 +85,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NotificationCenter.default.addObserver(
             forName: NSPopover.didCloseNotification, object: popover, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.statusItem?.button?.highlight(false) }
+            Task { @MainActor in
+                self?.statusItem?.button?.highlight(false)
+                self?.panelSession.close()
+            }
         }
+    }
+
+    /// The tiles take their order before the panel appears, so they don't re-sort once it is
+    /// shown, and keep it until it next opens.
+    func popoverWillShow(_ notification: Notification) {
+        let coordinator = appModel.coordinator
+        panelSession.open(order: coordinator.model.panelOrder(now: coordinator.now).map(\.id))
     }
 
     /// The panel's content is built once, so what it shows from the system is read on each showing.
@@ -119,8 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     /// Shows the Settings window in front of other apps: the open one if it is open, else a new
     /// one, so its panes read the config files and the system again. It opens where and at the
-    /// size the user last left it, else centred at its ideal size, on the pane last chosen.
-    private func showSettings() {
+    /// size the user last left it, else centred at its ideal size, on `pane`, else the pane last
+    /// chosen.
+    private func showSettings(on pane: SettingsPane? = nil) {
+        if let pane { UserDefaults.standard.set(pane.rawValue, forKey: SettingsView.paneKey) }
         popover.performClose(nil)
         if settingsWindow == nil {
             let hosting = NSHostingController(rootView: SettingsView(appModel: appModel, updater: updater))

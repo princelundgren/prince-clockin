@@ -33,10 +33,12 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     static let minimumSize = CGSize(width: 620, height: 540)
     static let idealSize = CGSize(width: 760, height: 640)
+    /// The user defaults key of the pane shown.
+    static let paneKey = "settingsPane"
 
     let appModel: AppModel
     let updater: Updater
-    @AppStorage("settingsPane") private var pane: SettingsPane = .logins
+    @AppStorage(SettingsView.paneKey) private var pane: SettingsPane = .logins
 
     var body: some View {
         NavigationSplitView {

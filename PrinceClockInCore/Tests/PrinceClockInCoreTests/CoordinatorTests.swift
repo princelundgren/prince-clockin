@@ -720,6 +720,106 @@ private final class GatedLogins: Sendable {
         #expect(await eventually { coordinator.login(prod.id)?.loginTime == launch })
     }
 
+    // MARK: Tiles
+
+    @Test func aTileShowsTheRunningAndQueuedLogins() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let british = Locale(identifier: "en_GB")
+        let calendar = Calendar(identifier: .gregorian)
+
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: calendar)?.trailing == .stateWord("Logging in"))
+        #expect(coordinator.tile(for: prod.id, locale: british, calendar: calendar)?.trailing == .stateWord("Queued"))
+        #expect(coordinator.tile(for: UUID(), locale: british, calendar: calendar) == nil)
+        await logins.release("dev")
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func aTileShowsTheLastFailureAndAHeldBackCommand() async throws {
+        let dev = aws("dev")
+        let vpn = custom(command: "vpn-connect --profile dev")
+        let fixture = try Fixture(
+            logins: [dev, vpn], loginRunner: ArgumentRunner { _ in .exited(code: 1, output: "denied") })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let british = Locale(identifier: "en_GB")
+        let calendar = Calendar(identifier: .gregorian)
+
+        coordinator.logIn([dev.id, vpn.id])
+        #expect(await eventually { coordinator.lastFailures[dev.id] != nil && coordinator.batch == nil })
+
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: calendar)?.detail
+            == .failed(message: "The login exited with status 1"))
+        #expect(coordinator.tile(for: vpn.id, locale: british, calendar: calendar)?.detail
+            == .notYetApproved(command: "vpn-connect --profile dev"))
+    }
+
+    /// A rewrite of dev's cache, which has no timer, close to its old expiry and with no token hash
+    /// to compare: a possible login.
+    private func rewriteDevCache(_ fixture: Fixture, at time: Date) {
+        fixture.aws.set("dev", .present(AWSCacheSnapshot(modified: time, expiresAt: time.addingTimeInterval(hour))))
+    }
+
+    /// dev, with no timer, and a fixture whose cache file is the one last seen.
+    private func devWithACache() throws -> (Login, Fixture) {
+        let seen = launch.addingTimeInterval(-hour)
+        let dev = aws("dev", lastAWSCache: AWSCacheRecord(modified: seen, expiresAt: launch))
+        let fixture = try Fixture(logins: [dev])
+        fixture.aws.set("dev", .present(AWSCacheSnapshot(modified: seen, expiresAt: launch)))
+        return (dev, fixture)
+    }
+
+    private func utc() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    @Test func aPossibleLoginFoundByTheFirstCheckAfterWakingSaysTheMacSlept() async throws {
+        let (dev, fixture) = try devWithACache()
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let british = Locale(identifier: "en_GB")
+        let asleepQuestion = TileDetail.possibleLogin(
+            question: "Its login changed at 10:00, while this Mac slept. Was that you?",
+            confirmTitle: "Mark as Logged In at 10:00")
+
+        fixture.clock.advance(by: 8 * hour)
+        rewriteDevCache(fixture, at: launch.addingTimeInterval(hour))
+        coordinator.systemDidWake()
+        await coordinator.tick()
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc())?.detail == asleepQuestion)
+
+        fixture.clock.advance(by: 60)
+        await coordinator.tick()
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc())?.detail == asleepQuestion)
+    }
+
+    @Test func aPossibleLoginFoundAfterTheFirstCheckAfterWakingDoesntMentionSleep() async throws {
+        let (dev, fixture) = try devWithACache()
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.systemDidWake()
+        await coordinator.tick()
+
+        rewriteDevCache(fixture, at: launch.addingTimeInterval(110 * 60))
+        fixture.clock.advance(by: 2 * hour)
+        await coordinator.tick()
+
+        #expect(coordinator.tile(for: dev.id, locale: Locale(identifier: "en_GB"), calendar: utc())?.detail
+            == .possibleLogin(
+                question: "Its login changed at 10:50. Was that you?", confirmTitle: "Mark as Logged In at 10:50"))
+    }
+
     // MARK: The batch's published state
 
     @Test func twoLoginBatchPublishesEachStep() async throws {

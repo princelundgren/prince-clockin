@@ -1,0 +1,31 @@
+import Foundation
+
+/// The panel's one prominent button: the state's single default.
+public enum ProminentAction: Equatable, Sendable {
+    case logInToDue
+    /// A due tile's own Log In.
+    case logIn(id: UUID)
+    /// A due tile's Try Again, after its login failed.
+    case tryAgain(id: UUID)
+    /// A question's Mark as Logged In at <time>.
+    case markAsLoggedInAt(id: UUID)
+}
+
+/// The prominent button for the panel's `tiles`, in panel order, in the design's order: Log In
+/// to N Due, then the first due tile with an action of its own (a Log In its click runs, or Try
+/// Again when it failed), then the first question's Mark as Logged In at <time>. `nil` when
+/// nothing needs the user. Try Again is never prominent during a batch; Cancel All and Run It
+/// never are.
+public func prominentAction(
+    tiles: [TilePresentation], showsLogInToDue: Bool, isBatchRunning: Bool
+) -> ProminentAction? {
+    if showsLogInToDue { return .logInToDue }
+    for tile in tiles where tile.isDue {
+        if tile.clickLogsIn { return .logIn(id: tile.id) }
+        if case .failed = tile.detail, !isBatchRunning { return .tryAgain(id: tile.id) }
+    }
+    for tile in tiles {
+        if case .possibleLogin = tile.detail { return .markAsLoggedInAt(id: tile.id) }
+    }
+    return nil
+}
