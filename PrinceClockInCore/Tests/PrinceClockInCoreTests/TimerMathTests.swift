@@ -68,47 +68,6 @@ private let lead: TimeInterval = 30 * 60
     #expect(timerState(for: login, now: now.addingTimeInterval(5 * 3600), leadTime: lead) == .expired)
 }
 
-@Test func setExpiryInPastThrows() {
-    let now = at("2026-11-17T12:00:00Z")
-    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"))
-
-    #expect(throws: TimerError.expiryInPast) {
-        try setExpiry(&login, expiresAt: now.addingTimeInterval(-60), now: now)
-    }
-    #expect(throws: TimerError.expiryInPast) {
-        try setExpiry(&login, expiresAt: now, now: now)
-    }
-    #expect(login.loginTime == nil)
-}
-
-@Test func setExpiryDerivesLoginTimeFromSessionLength() throws {
-    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: eightHours)
-
-    try setExpiry(&login, expiresAt: at("2026-11-17T16:30:00Z"), now: at("2026-11-17T12:00:00Z"))
-
-    #expect(login.loginTime == at("2026-11-17T08:30:00Z"))
-    #expect(expiry(of: login) == at("2026-11-17T16:30:00Z"))
-}
-
-@Test func setExpiryWithoutLengthStartsAtNow() throws {
-    var login = Login(displayName: "prod", kind: .custom(command: nil))
-
-    try setExpiry(&login, expiresAt: at("2026-11-17T16:30:00Z"), now: at("2026-11-17T12:00:00Z"))
-
-    #expect(login.loginTime == at("2026-11-17T12:00:00Z"))
-    #expect(login.sessionLength == 4.5 * 3600)
-}
-
-@Test func setExpiryClearsInvalidation() throws {
-    let now = at("2026-11-17T12:00:00Z")
-    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: eightHours,
-                      loginTime: at("2026-11-17T01:00:00Z"), invalidatedAt: at("2026-11-17T11:00:00Z"))
-
-    try setExpiry(&login, expiresAt: at("2026-11-17T16:30:00Z"), now: now)
-
-    #expect(timerState(for: login, now: now, leadTime: lead) == .ok(remaining: 4.5 * 3600))
-}
-
 @Test func statusText() {
     let now = at("2026-11-17T12:00:00Z")
     func text(_ remaining: TimeInterval) -> String {

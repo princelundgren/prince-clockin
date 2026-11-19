@@ -550,8 +550,6 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   - removing a login removes it from its presets; one queued login can leave the queue, and the
     running one be cancelled alone;
   - an AWS logout is kept apart from other invalidation, for "Logged out";
-  - Set Timer never stores the time left as the session length, and `setLoginTime(id:at:)` sets a
-    login time directly;
   - a Still valid login is left out of the due list and the expired severity;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";

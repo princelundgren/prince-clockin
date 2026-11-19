@@ -238,9 +238,17 @@ public final class Coordinator {
 
     // MARK: Edits from the views; each saves.
 
-    /// - Throws: `TimerError.expiryInPast`, leaving the login unchanged.
-    public func setExpiry(id: UUID, expiresAt: Date) throws {
-        try model.setExpiry(id: id, expiresAt: expiresAt, now: clock())
+    /// Set Timer with Expires In; see `LoginsModel.setTimer(id:expiresIn:sessionLength:now:)`.
+    /// - Throws: a `TimerError`, leaving the login unchanged.
+    public func setTimer(id: UUID, expiresIn: TimeInterval, sessionLength: TimeInterval) throws(TimerError) {
+        try model.setTimer(id: id, expiresIn: expiresIn, sessionLength: sessionLength, now: clock())
+        saveIfChanged()
+    }
+
+    /// Set Timer with Logged In At; see `LoginsModel.setTimer(id:loggedInAt:sessionLength:now:)`.
+    /// - Throws: a `TimerError`, leaving the login unchanged.
+    public func setTimer(id: UUID, loggedInAt: Date, sessionLength: TimeInterval) throws(TimerError) {
+        try model.setTimer(id: id, loggedInAt: loggedInAt, sessionLength: sessionLength, now: clock())
         saveIfChanged()
     }
 

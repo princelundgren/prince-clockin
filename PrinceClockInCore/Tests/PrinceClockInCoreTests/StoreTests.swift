@@ -191,30 +191,22 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
     }
 }
 
-// Fixture assumption: both instants carry a fraction, so the unrounded value differs from its
-// stored form. The save and load step is what proves in-memory equals on-disk.
-private func expiryAfterStoreRoundTrip(sessionLength: TimeInterval?) throws -> (before: Date?, after: Date?) {
+// Fixture assumption: `now` and the length carry a fraction, so the unrounded values differ from
+// their stored form. The save and load step is what proves in-memory equals on-disk.
+@Test func setTimerWithFractionalTimesSurvivesStore() throws {
     let now = Date(timeIntervalSince1970: 1_800_000_000.7)
-    let expiresAt = Date(timeIntervalSince1970: 1_800_010_000.3)
-    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: sessionLength)
-    try setExpiry(&login, expiresAt: expiresAt, now: now)
-    #expect(login.loginTime == login.loginTime?.wholeSeconds)
-    #expect(login.sessionLength == login.sessionLength?.rounded(.down))
+    let dev = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"))
+    var model = LoginsModel(state: AppState(logins: [dev]))
+    try model.setTimer(id: dev.id, expiresIn: 9_999.6, sessionLength: 8 * 3600 + 0.4, now: now)
+    let before = try #require(model.state.logins.first.flatMap(expiry(of:)))
 
-    return try withTemporaryDirectory { directory in
+    try withTemporaryDirectory { directory in
         let store = StateStore(directory: directory)
-        try store.save(AppState(logins: [login]))
-        guard case .loaded(let loaded) = store.load() else { return (expiry(of: login), nil) }
-        return (expiry(of: login), loaded.logins.first.flatMap(expiry(of:)))
+        try store.save(model.state)
+        guard case .loaded(let loaded) = store.load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+        #expect(loaded.logins.first.flatMap(expiry(of:)) == before)
     }
-}
-
-@Test func setExpiryWithFractionalTimesSurvivesStore() throws {
-    let withoutLength = try expiryAfterStoreRoundTrip(sessionLength: nil)
-    #expect(withoutLength.before != nil)
-    #expect(withoutLength.after == withoutLength.before)
-
-    let withLength = try expiryAfterStoreRoundTrip(sessionLength: 8 * 3600)
-    #expect(withLength.before != nil)
-    #expect(withLength.after == withLength.before)
 }

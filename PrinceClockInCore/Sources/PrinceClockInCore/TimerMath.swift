@@ -9,8 +9,22 @@ public enum TimerState: Equatable, Sendable {
     case unknown
 }
 
+/// Why Set Timer refused a time. Each `message` is the copy the form shows.
 public enum TimerError: Error, Equatable, Sendable {
-    case expiryInPast
+    /// An Expires In of zero or less, or a Logged In At a session length or more ago.
+    case wouldAlreadyBeExpired
+    /// A Logged In At after now.
+    case inFuture
+    /// An Expires In longer than the session length.
+    case longerThanSessionLength
+
+    public var message: String {
+        switch self {
+        case .wouldAlreadyBeExpired: "That login would already have expired"
+        case .inFuture: "That time is in the future"
+        case .longerThanSessionLength: "That's longer than the session length"
+        }
+    }
 }
 
 /// The login time plus the session length, or `nil` when either is unknown.
@@ -33,25 +47,6 @@ public func timerState(for login: Login, now: Date, leadTime: TimeInterval) -> T
     let remaining = expiry.timeIntervalSince(now)
     if remaining <= 0 { return .expired }
     return remaining <= leadTime ? .expiring(remaining: remaining) : .ok(remaining: remaining)
-}
-
-/// Records that the login expires at `expiresAt` (rounded down to whole seconds) and clears
-/// `invalidatedAt`, since the user is stating the login is valid.
-///
-/// With a session length, the login time is derived from it. Without one, the login time is `now`
-/// and the length is the whole seconds until `expiresAt`.
-/// - Throws: `TimerError.expiryInPast` when the rounded `expiresAt` is not after `now`.
-public func setExpiry(_ login: inout Login, expiresAt: Date, now: Date) throws {
-    let expiresAt = expiresAt.wholeSeconds
-    guard expiresAt > now else { throw TimerError.expiryInPast }
-    if let sessionLength = login.sessionLength {
-        login.loginTime = expiresAt.addingTimeInterval(-sessionLength)
-    } else {
-        let loginTime = now.wholeSeconds
-        login.loginTime = loginTime
-        login.sessionLength = expiresAt.timeIntervalSince(loginTime)
-    }
-    login.invalidatedAt = nil
 }
 
 public enum Severity: Equatable, Sendable { case normal, expiring, expired }

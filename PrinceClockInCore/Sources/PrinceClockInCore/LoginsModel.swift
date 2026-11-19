@@ -39,7 +39,7 @@ public struct LoginsModel: Equatable, Sendable {
     /// The user's yes to "Logged in at <time>?": the login time becomes the rewrite's time.
     public mutating func confirmPossibleLogin(id: UUID) {
         guard let time = possibleLogins[id] else { return }
-        changeLoginTime(of: id) { $0.loginTime = time }
+        setLoginTime(id: id, at: time)
     }
 
     /// Records a Databricks check of login `id` made at `now`. Valid after being found invalid is a
@@ -95,22 +95,60 @@ public struct LoginsModel: Equatable, Sendable {
         trackedLogins(preset.loginIDs)
     }
 
-    /// The user's "expires at": see the free `setExpiry`, which this applies to login `id`.
-    /// - Throws: `TimerError.expiryInPast`, leaving the model unchanged.
-    public mutating func setExpiry(id: UUID, expiresAt: Date, now: Date) throws {
-        try changeLoginTime(of: id) { try PrinceClockInCore.setExpiry(&$0, expiresAt: expiresAt, now: now) }
+    /// The user stating when login `id` logged in: sets its login time, rounded down to whole
+    /// seconds, and clears any invalidation, since the user is saying the login is valid.
+    public mutating func setLoginTime(id: UUID, at time: Date) {
+        changeLoginTime(of: id) { login in
+            login.loginTime = time.wholeSeconds
+            login.invalidatedAt = nil
+        }
     }
 
-    /// The user's "logged in now".
+    /// Set Timer with Expires In: the login expires `expiresIn` after `now`, and its session length
+    /// becomes `sessionLength`, so the time left is never stored as the length.
+    /// - Throws: `TimerError.wouldAlreadyBeExpired` when `expiresIn` is zero or less, and
+    ///   `.longerThanSessionLength` when it exceeds `sessionLength`, leaving the model unchanged.
+    public mutating func setTimer(
+        id: UUID, expiresIn: TimeInterval, sessionLength: TimeInterval, now: Date
+    ) throws(TimerError) {
+        let expiresIn = expiresIn.rounded(.down)
+        let length = sessionLength.rounded(.down)
+        guard expiresIn > 0 else { throw TimerError.wouldAlreadyBeExpired }
+        guard expiresIn <= length else { throw TimerError.longerThanSessionLength }
+        setSessionLengthAndLoginTime(id: id, length: length, loginTime: now.addingTimeInterval(expiresIn - length))
+    }
+
+    /// Set Timer with Logged In At: the login logged in at `loggedInAt`, with session length
+    /// `sessionLength`.
+    /// - Throws: `TimerError.inFuture` when `loggedInAt` is after `now`, and
+    ///   `.wouldAlreadyBeExpired` when the login would have expired by `now`, leaving the model
+    ///   unchanged.
+    public mutating func setTimer(
+        id: UUID, loggedInAt: Date, sessionLength: TimeInterval, now: Date
+    ) throws(TimerError) {
+        let loggedInAt = loggedInAt.wholeSeconds
+        let length = sessionLength.rounded(.down)
+        guard loggedInAt <= now else { throw TimerError.inFuture }
+        guard loggedInAt.addingTimeInterval(length) > now else { throw TimerError.wouldAlreadyBeExpired }
+        setSessionLengthAndLoginTime(id: id, length: length, loginTime: loggedInAt)
+    }
+
+    /// The user's Mark as Logged In Now.
     public mutating func markLoggedInNow(id: UUID, now: Date) {
-        changeLoginTime(of: id) { $0.loginTime = now.wholeSeconds }
+        setLoginTime(id: id, at: now)
+    }
+
+    private mutating func setSessionLengthAndLoginTime(id: UUID, length: TimeInterval, loginTime: Date) {
+        guard let index = index(of: id) else { return }
+        state.logins[index].sessionLength = length
+        setLoginTime(id: id, at: loginTime)
     }
 
     /// Every write of a login time goes through here. A new login time answers the "Logged in
     /// at?" question and ends any "valid while expired" mismatch, whatever time it sets.
-    private mutating func changeLoginTime(of id: UUID, _ change: (inout Login) throws -> Void) rethrows {
+    private mutating func changeLoginTime(of id: UUID, _ change: (inout Login) -> Void) {
         guard let index = index(of: id) else { return }
-        try change(&state.logins[index])
+        change(&state.logins[index])
         possibleLogins[id] = nil
         validWhileExpired.remove(id)
     }

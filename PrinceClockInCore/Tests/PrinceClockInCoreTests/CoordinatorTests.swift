@@ -647,6 +647,32 @@ private extension Coordinator {
         #expect(coordinator.saveFailure == nil)
     }
 
+    @Test func setTimerIsSaved() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+
+        try coordinator.setTimer(id: dev.id, expiresIn: 4 * hour, sessionLength: 12 * hour)
+
+        let stored = try #require(fixture.stored?.logins.first)
+        #expect(stored.loginTime == launch.addingTimeInterval(-8 * hour))
+        #expect(stored.sessionLength == 12 * hour)
+    }
+
+    @Test func refusedSetTimerNeitherChangesNorSaves() async throws {
+        let dev = aws("dev", loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        let before = coordinator.model
+
+        #expect(throws: TimerError.inFuture) {
+            try coordinator.setTimer(id: dev.id, loggedInAt: launch.addingTimeInterval(60), sessionLength: 12 * hour)
+        }
+
+        #expect(coordinator.model == before)
+        #expect(fixture.stored == AppState(logins: [dev]))
+    }
+
     @Test func saveFailureIsReported() async throws {
         let fixture = try Fixture()
         let blocker = fixture.directory.appending(path: "not-a-directory")
