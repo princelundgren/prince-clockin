@@ -20,7 +20,7 @@ private let british = Locale(identifier: "en_GB")
         let analytics = Login(
             displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
             sessionLength: 3600, loginTime: now.addingTimeInterval(-7200),
-            lastDatabricksCheck: DatabricksCheckRecord(at: now, result: .valid))
+            lastDatabricksAnswer: DatabricksCheckRecord(at: now, result: .valid))
 
         #expect(warningsDue([analytics], now: now, leadTime: lead).isEmpty)
     }

@@ -170,7 +170,8 @@ Facts the timer design rests on:
 
 Each timer has a state: **ok**, **expiring** (within the warning time), **expired**, or
 **unknown** (no login time or no session length), shown as "No timer". A Databricks login whose
-timer says expired but whose last check since that expiry found it valid is **still valid**.
+timer says expired but whose last check that answered (valid or invalid) since that expiry found
+it valid is **still valid** (owner, 2026-11-19).
 
 A login is **due** when its timer is expiring or expired and it isn't still valid (owner,
 2026-11-18). An unknown timer isn't due. Due logins are the ones Log In to N Due starts, a tile
@@ -196,7 +197,8 @@ clicks Check Databricks Now in Settings → Logins.
 - A profile reported invalid moves its timer to expired, even if time remains.
 - A profile reported valid whose timer says expired is still valid (see Timers). Its tile says
   "Still valid" and offers Edit Session Length…, since the session length may be too short.
-- A check that fails (offline, VPN down) changes nothing but its result. Only the CLI's
+- A check that fails (offline, VPN down) changes nothing but its result: it is kept and shown as
+  the last check, and a still valid login stays still valid (owner, 2026-11-19). Only the CLI's
   no-credentials error counts as invalid.
 - Account profiles are offered but never checked: they run on their timer alone and say "Not
   checked", and their Settings row says the Databricks CLI can't check an account profile.
@@ -549,7 +551,8 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
-  whether the profile is account-level and the time and result of its last check, and, for AWS,
+  whether the profile is account-level, the time and result of its last check and of its last
+  answer (valid or invalid), and, for AWS,
   the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - A file that is unreadable, or from a newer version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next

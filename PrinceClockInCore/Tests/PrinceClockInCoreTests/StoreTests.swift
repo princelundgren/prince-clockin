@@ -19,7 +19,8 @@ private func sampleState() -> AppState {
     let databricks = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true))
     let checked = Login(
         displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
-        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck))
+        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck),
+        lastDatabricksAnswer: DatabricksCheckRecord(at: at("2026-11-17T09:00:00Z"), result: .valid))
     let custom = Login(displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
     return AppState(
         logins: [aws, databricks, checked, custom],
@@ -54,6 +55,16 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     let kind = try JSONDecoder().decode(LoginKind.self, from: Data(json.utf8))
 
     #expect(kind == .databricksProfile(name: "analytics-dev", accountLevel: false))
+}
+
+@Test func aLoginWithoutALastAnswerEncodesNoKeyAndDecodes() throws {
+    let login = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false))
+
+    let json = String(decoding: try JSONEncoder().encode(login), as: UTF8.self)
+    let decoded = try JSONDecoder().decode(Login.self, from: Data(json.utf8))
+
+    #expect(!json.contains("lastDatabricksAnswer"))
+    #expect(decoded == login)
 }
 
 @Test func storeRoundTripsState() throws {
