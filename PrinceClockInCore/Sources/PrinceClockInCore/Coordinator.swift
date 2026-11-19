@@ -219,7 +219,7 @@ public final class Coordinator {
     public func logIn(_ ids: [UUID]) {
         var ready: [Login] = []
         for login in ids.compactMap(login) {
-            if needsApproval(login, approvals: approvals) {
+            if PrinceClockInCore.needsApproval(login, approvals: approvals) {
                 if !pendingApprovals.contains(login.id) { pendingApprovals.append(login.id) }
             } else {
                 ready.append(login)
@@ -227,6 +227,13 @@ public final class Coordinator {
         }
         guard !ready.isEmpty else { return }
         commandSink.yield(.enqueue(ready, timeout: model.state.settings.loginTimeout))
+    }
+
+    /// Whether login `id` is a custom login whose command isn't approved on this Mac, so it won't
+    /// run until the user's Run It. `false` for a login not tracked.
+    public func needsApproval(id: UUID) -> Bool {
+        guard let login = login(id) else { return false }
+        return PrinceClockInCore.needsApproval(login, approvals: approvals)
     }
 
     /// The user's "Run it" on a held-back custom login: approves its command, then logs in.
@@ -237,7 +244,8 @@ public final class Coordinator {
         logIn([id])
     }
 
-    /// The user's "Cancel" on a held-back custom login: it neither runs nor is approved.
+    /// The user's Not Now on a held-back custom login: it is skipped this time, neither run nor
+    /// approved.
     public func dismissPendingApproval(id: UUID) {
         pendingApprovals.removeAll { $0 == id }
     }

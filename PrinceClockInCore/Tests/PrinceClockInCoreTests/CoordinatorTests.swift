@@ -863,6 +863,20 @@ private final class GatedLogins: Sendable {
         #expect(fixture.terminal.commands.isEmpty)
     }
 
+    @Test func needsApprovalAnswersForAnyTrackedLogin() async throws {
+        let vpn = custom(command: "vpn-connect --profile dev")
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [vpn, dev])
+        let coordinator = fixture.makeCoordinator()
+
+        #expect(coordinator.needsApproval(id: vpn.id))
+        #expect(!coordinator.needsApproval(id: dev.id))
+        #expect(!coordinator.needsApproval(id: UUID()))
+
+        fixture.approvals.approve(approvalKey(for: "vpn-connect --profile dev"))
+        #expect(!coordinator.needsApproval(id: vpn.id))
+    }
+
     @Test func approveAndLogInRuns() async throws {
         let command = "vpn-connect --profile dev"
         let vpn = custom(command: command)
