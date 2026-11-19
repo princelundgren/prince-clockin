@@ -345,7 +345,16 @@ with its + menu open; until the Logins pane is rebuilt, it opens the pane withou
     popover: Expires In (hours and minutes) or Logged In At, a Session Length pop-up, a caption
     ("Expires tomorrow at 03:55. The session length times its next login."), Cancel and Set. A
     click outside keeps the draft until the popover closes, then discards it, and the form says
-    so.
+    so: "This form is kept until the panel closes." Set Timer…, Logged in elsewhere?'s Set
+    Timer… and Mark as Logged In Now with an unknown length open it, the last on Logged In At
+    now, also over a draft already open. One is open at a time; opening another tile's keeps
+    this one's draft for when it opens again. Expiry today reads "Expires at 15:00."; a refusal
+    takes the caption's place as the draft changes, and Set is unavailable until the draft has a
+    time and a session length. With No timer chosen the caption reads "Choose a session length";
+    an empty or non-numeric field, negative hours or minutes outside 0 to 59 leave it empty.
+    Custom… shows a field for a number of hours, and keeps a length the list doesn't have exactly
+    until it is edited. Until the Logins pane is rebuilt, Settings' prompt after adding a login
+    shows this form with Skip in place of Cancel.
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.

@@ -4,21 +4,18 @@ import SwiftUI
 /// One login's tile in the panel. Its first line is a menu of the login's actions, or, for a due
 /// login, a button that logs in beside a "…" menu; below it is whatever the login needs answered.
 /// The core decides everything shown; the tile draws it and forwards the user's choices. Its own
-/// state lasts one opening of the panel.
+/// state, and its Set Timer's in the panel session, lasts one opening of the panel.
 struct TileView: View {
-    private enum Expanded {
-        case setTimer, sessionLength
-    }
-
     let login: Login
     let tile: TilePresentation
     let coordinator: Coordinator
+    let session: PanelSession
     let prominent: ProminentAction?
     /// The control the tile was when the pointer entered it, so a click's action can't change
     /// under the pointer. The panel keeps it, since it builds the tile from it.
     @Binding var heldControl: TileControl?
     let openSettingsOnLogins: () -> Void
-    @State private var expanded: Expanded?
+    @State private var showsSessionLengthField = false
     @State private var output: String?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -29,7 +26,13 @@ struct TileView: View {
             if let detail = tile.detail {
                 detailView(detail, tile: tile)
             }
-            expansion
+            if session.openSetTimer == login.id {
+                setTimerForm
+                    .foregroundStyle(secondaryText(tile))
+            }
+            if showsSessionLengthField {
+                SessionLengthField(login: login, coordinator: coordinator)
+            }
         }
         .padding(8)
         .background(tint(tile), in: RoundedRectangle(cornerRadius: 8))
@@ -175,12 +178,12 @@ struct TileView: View {
                 HStack {
                     Button(confirmTitle) { coordinator.confirmPossibleLogin(id: login.id) }
                         .prominent(prominent == .markAsLoggedInAt(id: tile.id))
-                    Button("Set Timer…") { expanded = .setTimer }
+                    Button("Set Timer…") { openSetTimer() }
                 }
             case .stillValid(let message):
                 Text(message)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Edit Session Length…") { expanded = .sessionLength }
+                Button("Edit Session Length…") { showsSessionLengthField = true }
             case .notYetApproved(let command):
                 Text("This command hasn't run on this Mac yet:")
                 Text(command)
@@ -198,15 +201,13 @@ struct TileView: View {
         .buttonStyle(.bordered)
     }
 
-    @ViewBuilder private var expansion: some View {
-        switch expanded {
-        case .setTimer:
-            SetTimerControls(login: login, coordinator: coordinator) { expanded = nil }
-        case .sessionLength:
-            SessionLengthField(login: login, coordinator: coordinator)
-        case nil:
-            EmptyView()
-        }
+    private var setTimerForm: some View {
+        let draft = Binding(
+            get: { session.setTimerDrafts[login.id] ?? newSetTimerDraft() },
+            set: { session.setTimerDrafts[login.id] = $0 })
+        return SetTimerForm(
+            id: login.id, draft: draft, coordinator: coordinator, note: PanelSession.setTimerNote, cancelTitle: "Cancel",
+            onCancel: { session.closeSetTimer(for: login.id) }, onSet: { session.closeSetTimer(for: login.id) })
     }
 
     // MARK: Actions
@@ -249,7 +250,9 @@ struct TileView: View {
     private func perform(_ item: TileMenuItem) {
         switch item {
         case .logIn: coordinator.logIn([login.id])
-        case .setTimer, .markLoggedInNow(opensSetTimer: true): expanded = .setTimer
+        case .setTimer: openSetTimer()
+        case .markLoggedInNow(opensSetTimer: true):
+            session.openSetTimerMarkingLoggedInNow(for: login.id, now: coordinator.now, newDraft: newSetTimerDraft)
         case .markLoggedInNow(opensSetTimer: false): coordinator.markLoggedInNow(id: login.id)
         case .sessionLength: break
         case .editInSettings: openSettingsOnLogins()
@@ -261,9 +264,17 @@ struct TileView: View {
         switch choice {
         // Only listed lengths, which the core accepts; any other length shows as Custom….
         case .length(let length): try? coordinator.setSessionLength(id: login.id, to: length)
-        case .custom: expanded = .sessionLength
+        case .custom: showsSessionLengthField = true
         case .noTimer: try? coordinator.setSessionLength(id: login.id, to: nil)
         }
+    }
+
+    private func openSetTimer() {
+        session.openSetTimer(for: login.id, newDraft: newSetTimerDraft)
+    }
+
+    private func newSetTimerDraft() -> SetTimerDraft {
+        SetTimerDraft(for: login, now: coordinator.now, locale: .current)
     }
 
     // MARK: Colour

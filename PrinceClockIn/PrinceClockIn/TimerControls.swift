@@ -1,99 +1,106 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// Set Timer for one login: Mark as Logged In Now, or Expires In or Logged In At with a session
-/// length. Shown inline, never as a sheet, since a sheet in the `.window` panel loses focus with
-/// the panel. `onSet` runs once a timer is set.
-struct SetTimerControls: View {
-    private enum Mode: Hashable {
-        case expiresIn, loggedInAt
-    }
-
-    private static let secondsPerHour: Double = 3600
-
-    let login: Login
+/// Set Timer for one login: Expires In or Logged In At, a Session Length pop-up, a caption that
+/// says when the login would expire or why Set refuses, then `cancelTitle` and Set. Shown inline, never as
+/// a sheet, since a sheet in the popover loses focus with it. The draft belongs to the caller, so
+/// it outlives the form's redraws; `note`, when given, is a line on how long it is kept.
+struct SetTimerForm: View {
+    let id: UUID
+    @Binding var draft: SetTimerDraft
     let coordinator: Coordinator
+    let note: String?
+    let cancelTitle: String
+    let onCancel: () -> Void
     let onSet: () -> Void
-    @State private var mode = Mode.expiresIn
-    @State private var expiresInHours: Double? = 1
-    @State private var loggedInAt: Date
-    @State private var sessionLengthHours: Double?
-    @State private var refusal: String?
-
-    init(login: Login, coordinator: Coordinator, onSet: @escaping () -> Void) {
-        self.login = login
-        self.coordinator = coordinator
-        self.onSet = onSet
-        _loggedInAt = State(initialValue: login.loginTime ?? coordinator.now)
-        _sessionLengthHours = State(initialValue: login.sessionLength.map { $0 / Self.secondsPerHour })
-    }
+    /// What Set was refused with, when the clock moved past what the caption checked.
+    @State private var refusal: TimerError?
 
     var body: some View {
+        let check = draft.check(now: coordinator.now, locale: .current)
         VStack(alignment: .leading, spacing: 6) {
-            Button("Mark as Logged In Now") {
-                coordinator.markLoggedInNow(id: login.id)
-                onSet()
-            }
-            Picker("Set Timer", selection: $mode) {
-                Text("Expires In").tag(Mode.expiresIn)
-                Text("Logged In At").tag(Mode.loggedInAt)
+            Picker("Set Timer", selection: $draft.mode) {
+                Text("Expires In").tag(SetTimerMode.expiresIn)
+                Text("Logged In At").tag(SetTimerMode.loggedInAt)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            switch mode {
+            switch draft.mode {
             case .expiresIn:
-                HoursField(label: "Expires in", hours: $expiresInHours)
-            case .loggedInAt:
-                DatePicker("Logged in at", selection: $loggedInAt, displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.field)
-            }
-            HoursField(label: "Session length", hours: $sessionLengthHours)
-            HStack {
-                if let refusal {
-                    Text(refusal)
-                        .foregroundStyle(.red)
+                HStack(spacing: 4) {
+                    NumberField(label: "Hours", text: $draft.hours)
+                    Text("hours")
+                    NumberField(label: "Minutes", text: $draft.minutes)
+                        .padding(.leading, 4)
+                    Text("minutes")
                 }
-                Spacer()
-                Button("Set") { setTimer() }
-                    .disabled(sessionLengthHours == nil || (mode == .expiresIn && expiresInHours == nil))
+            case .loggedInAt:
+                DatePicker("Logged in at", selection: $draft.loggedInAt, displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.field)
+                    .labelsHidden()
             }
+            Picker("Session length", selection: $draft.sessionLength) {
+                ForEach(sessionLengthOptions(current: nil), id: \.choice) { option in
+                    Text(option.title).tag(option.choice)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            if draft.sessionLength == .custom {
+                HStack(spacing: 4) {
+                    NumberField(label: "Session length in hours", text: $draft.customHours)
+                    Text("hours")
+                }
+            }
+            if let caption = refusal?.message
+                ?? setTimerCaption(for: check, now: coordinator.now, locale: .current, calendar: .current) {
+                Text(caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Spacer()
+                Button(cancelTitle, action: onCancel)
+                Button("Set") { set() }
+                    .disabled(!check.isReady)
+            }
+            .buttonStyle(.bordered)
         }
         .font(.callout)
+        .onChange(of: draft) { refusal = nil }
     }
 
-    private func setTimer() {
-        guard let sessionLengthHours else { return }
-        let sessionLength = sessionLengthHours * Self.secondsPerHour
+    private func set() {
+        guard let entry = draft.entry(locale: .current) else { return }
         do throws(TimerError) {
-            switch mode {
-            case .expiresIn:
-                guard let expiresInHours else { return }
-                try coordinator.setTimer(
-                    id: login.id, .expiresIn(expiresInHours * Self.secondsPerHour, sessionLength: sessionLength))
-            case .loggedInAt:
-                try coordinator.setTimer(id: login.id, .loggedInAt(loggedInAt, sessionLength: sessionLength))
-            }
-            refusal = nil
+            try coordinator.setTimer(id: id, entry)
             onSet()
         } catch {
-            refusal = error.message
+            refusal = error
         }
     }
 }
 
-/// A number of hours, typed.
-private struct HoursField: View {
+private extension SetTimerCheck {
+    var isReady: Bool {
+        if case .ready = self { true } else { false }
+    }
+}
+
+/// A short field for a number typed as text, which the core parses.
+private struct NumberField: View {
     let label: String
-    @Binding var hours: Double?
+    @Binding var text: String
 
     var body: some View {
-        LabeledContent(label) {
-            HStack(spacing: 4) {
-                TextField("Hours", value: $hours, format: .number)
-                    .frame(width: 70)
-                Text("hours")
-            }
-        }
+        TextField(label, text: $text)
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 44)
     }
 }
 

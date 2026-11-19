@@ -97,8 +97,9 @@ struct PanelView: View {
             VStack(spacing: 6) {
                 ForEach(tiles, id: \.tile.id) { entry in
                     TileView(
-                        login: entry.login, tile: entry.tile, coordinator: coordinator, prominent: prominent,
-                        heldControl: heldControl(for: entry.login.id), openSettingsOnLogins: openSettingsOnLogins)
+                        login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
+                        prominent: prominent, heldControl: heldControl(for: entry.login.id),
+                        openSettingsOnLogins: openSettingsOnLogins)
                 }
             }
         }
@@ -160,15 +161,23 @@ struct PanelView: View {
 }
 
 /// What the panel keeps for one opening: its tiles' order, taken as it opens, what discovery found
-/// while no login is tracked, the control each tile held when the pointer entered it, and whether
-/// the Notifications off banner was on screen. Closing the panel clears it and counts the closing,
-/// which gives the tiles new state for the next opening.
+/// while no login is tracked, the control each tile held when the pointer entered it, the open Set
+/// Timer and its drafts, and whether the Notifications off banner was on screen. Closing the panel
+/// clears it and counts the closing, which gives the tiles new state for the next opening.
 @MainActor
 @Observable
 final class PanelSession {
+    /// The line in Set Timer that says how long its draft is kept.
+    static let setTimerNote = "This form is kept until the panel closes."
+
     private(set) var order: [UUID] = []
     private(set) var emptyPanel: EmptyPanel?
     var heldControls: [UUID: TileControl] = [:]
+    /// The login whose Set Timer is open; one at a time.
+    private(set) var openSetTimer: UUID?
+    /// Each login's Set Timer draft. Opening another login's form keeps this one's draft, so a
+    /// click elsewhere in the panel loses nothing; only Cancel, Set and closing the panel discard it.
+    var setTimerDrafts: [UUID: SetTimerDraft] = [:]
     private(set) var openings = 0
     private(set) var closings = 0
     @ObservationIgnored private var notificationsBanner = NotificationsBannerSighting()
@@ -196,10 +205,31 @@ final class PanelSession {
         notificationsBanner.panelShows(banners)
     }
 
+    /// Opens Set Timer on login `id`, with its draft from earlier in this opening, else `newDraft`.
+    func openSetTimer(for id: UUID, newDraft: () -> SetTimerDraft) {
+        if setTimerDrafts[id] == nil { setTimerDrafts[id] = newDraft() }
+        openSetTimer = id
+    }
+
+    /// Mark as Logged In Now while login `id`'s length is unknown: opens its Set Timer on Logged In
+    /// At `now`, keeping the rest of a draft from earlier in this opening, else from `newDraft`.
+    func openSetTimerMarkingLoggedInNow(for id: UUID, now: Date, newDraft: () -> SetTimerDraft) {
+        openSetTimer(for: id, newDraft: newDraft)
+        setTimerDrafts[id]?.markLoggedInNow(at: now)
+    }
+
+    /// Cancel or Set on login `id`'s Set Timer: closes it and discards its draft.
+    func closeSetTimer(for id: UUID) {
+        setTimerDrafts[id] = nil
+        if openSetTimer == id { openSetTimer = nil }
+    }
+
     /// Returns whether the Notifications off banner was on screen during this opening, once its
     /// permission was read.
     func close() -> Bool {
         heldControls = [:]
+        openSetTimer = nil
+        setTimerDrafts = [:]
         emptyPanel = nil
         closings += 1
         return notificationsBanner.panelClosed()

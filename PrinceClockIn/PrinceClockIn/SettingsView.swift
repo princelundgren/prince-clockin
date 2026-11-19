@@ -68,7 +68,7 @@ struct SettingsView: View {
 private struct LoginsSettings: View {
     let coordinator: Coordinator
     @State private var candidates: (aws: [String], databricks: [DatabricksProfile]) = ([], [])
-    /// The login just added from the config files, which shows its Set timer controls.
+    /// The login just added from the config files, which shows its Set Timer form.
     @State private var justAdded: UUID?
     @State private var customName = ""
     @State private var customCommand = ""
@@ -86,8 +86,7 @@ private struct LoginsSettings: View {
                         VStack(alignment: .leading) {
                             Text("Already logged in? Set its timer now, or skip.")
                                 .font(.callout)
-                            SetTimerControls(login: login, coordinator: coordinator) { justAdded = nil }
-                            Button("Skip") { justAdded = nil }
+                            JustAddedSetTimer(login: login, coordinator: coordinator) { justAdded = nil }
                         }
                     }
                 }
@@ -152,6 +151,28 @@ private struct LoginsSettings: View {
 
     private func refreshCandidates() {
         Task { candidates = await coordinator.discoverCandidates() }
+    }
+}
+
+/// Set Timer for a login just added, with Skip in place of Cancel; `onClose` runs after Skip or
+/// Set.
+private struct JustAddedSetTimer: View {
+    let login: Login
+    let coordinator: Coordinator
+    let onClose: () -> Void
+    @State private var draft: SetTimerDraft
+
+    init(login: Login, coordinator: Coordinator, onClose: @escaping () -> Void) {
+        self.login = login
+        self.coordinator = coordinator
+        self.onClose = onClose
+        _draft = State(initialValue: SetTimerDraft(for: login, now: coordinator.now, locale: .current))
+    }
+
+    var body: some View {
+        SetTimerForm(
+            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip", onCancel: onClose,
+            onSet: onClose)
     }
 }
 
