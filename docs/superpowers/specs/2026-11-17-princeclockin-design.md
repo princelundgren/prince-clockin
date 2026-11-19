@@ -120,8 +120,9 @@ The login time comes from:
 2. The user, by hand: Mark as Logged In Now, or Set Timer with either **Expires In**, a duration
    from now, or **Logged In At**, a clock time. Expires In becomes a login time through the
    session length. A time that would make the login already expired is refused with "That login
-   would already have expired", and a Logged In At time in the future with "That time is in the
-   future". While the session length is unknown, Set Timer asks for it in the same form, so the
+   would already have expired", a Logged In At time in the future with "That time is in the
+   future", and an Expires In longer than the session length with "That's longer than the
+   session length". While the session length is unknown, Set Timer asks for it in the same form, so the
    time left is never stored as the session length, and Mark as Logged In Now opens Set Timer to
    ask for it. The core sets a login time through `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
@@ -143,8 +144,7 @@ The login time comes from:
         rewrite's time, and offers Mark as Logged In at <time> beside Set Timer…; the first sets
         the login time to the rewrite's time. There is no "No", since a wrong timer is worse than
         an open question: the question stays until a time is set or the app logs the login in
-        (owner, 2026-11-19).
-        Any other rewrite is a renewal.
+        (owner, 2026-11-19). Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -225,7 +225,7 @@ to the login the badge is about.
 | A failure not yet seen, or a failed save | `exclamationmark.triangle` | none |
 | Any login expired (a Still valid login doesn't count) | `clock.badge.xmark` | none |
 | A login expiring | `clock.badge.exclamationmark` | the soonest-expiring login's time left, "19m" |
-| Every timer ok | `clock` | the soonest expiry's time left, "5h 13m" |
+| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" (Still valid skipped) |
 | No timer at all | `clock` | none |
 
 - When several apply, the highest row wins. A dot after the label means an update is waiting (see
@@ -291,8 +291,9 @@ with its + menu open.
   left or a state word, then a "…" menu (`ellipsis`).
   - A tile that isn't due: the kind as its subtitle ("AWS SSO session") and the time left
     ("5h 13m") or its state word trailing.
-  - A due tile drops the kind: "Expiring · 19m left" or "Expired 40m ago" as its subtitle, and a
-    visible Log In trailing, unless it has a pending item (see below).
+  - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an
+    AWS session seen logged out, as its subtitle, and a visible Log In trailing, unless it has a
+    pending item (see below).
   - State and time are never cut off at 320 pt; a subtitle that doesn't fit drops the kind first.
 - **Symbols:** expired `xmark.circle`; expiring `clock`; ok `checkmark.circle`; no timer `timer`;
   a question `questionmark.circle`; running or queued a small `ProgressView`; failed
