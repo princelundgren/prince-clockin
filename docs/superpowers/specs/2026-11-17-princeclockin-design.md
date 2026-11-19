@@ -282,8 +282,8 @@ depends on it being open. From top to bottom:
    its logins listed in its help tag. An empty preset reads "Night shift · No logins", is
    disabled, and its help tag says to add logins in Settings → Presets.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
-   Sparkle's update window. During a batch it reads "Update 1.0.1 installs after the logins
-   finish".
+   Sparkle's update window. While its installation waits for the logins to finish, it reads
+   "Update 1.0.1 installs after the logins finish", without View….
 7. **The footer**: a `gearshape` button for Settings on the left, Quit on the right.
 
 **Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
@@ -342,9 +342,9 @@ with its + menu open.
 #### Menus
 
 - **The right-click menu:** Log In to N Due (shown when it is in the panel), Install Update
-  1.0.1… (when one waits; it shows Sparkle's update window), Settings… ⌘,, Check for Updates…,
-  Report an Issue… and Quit PrinceClockIn ⌘Q. Every item is also reachable from the panel or
-  Settings.
+  1.0.1… (when one waits and isn't already waiting for the logins to finish; it shows Sparkle's
+  update window), Settings… ⌘,, Check for Updates…, Report an Issue… and Quit PrinceClockIn ⌘Q.
+  Every item is also reachable from the panel or Settings.
 - **The + menu** in Settings → Logins: a "Found in your config files" section with each untracked
   AWS SSO session, Databricks profile and Databricks account profile, its kind beside it, then
   Custom Login…. With nothing new: "No new AWS SSO sessions or Databricks profiles", then Custom
@@ -396,9 +396,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
 
 #### Colours
 
-House colour tokens from the asset catalog, each with light, dark and Increase Contrast variants,
-as the maintainer's other menu bar apps define theirs. A token has only the meanings its row
-lists.
+House colour tokens from the asset catalog, each with light, dark and Increase Contrast variants.
+A token has only the meanings its row lists.
 
 | Token | Means | Light | Dark | Increase Contrast light | Increase Contrast dark |
 |---|---|---|---|---|---|
@@ -557,8 +556,6 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
 - A file that is unreadable, or from a newer version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
-- Rules above that today's core doesn't yet follow, and must:
-  - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.
 
 ### Privacy and support

@@ -1,23 +1,63 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// The settings window: the logins, the presets, and the general settings.
+/// One pane of the Settings window's sidebar.
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case logins, presets, warnings, general, about
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .logins: "Logins"
+        case .presets: "Presets"
+        case .warnings: "Warnings"
+        case .general: "General"
+        case .about: "About"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .logins: "person.badge.key"
+        case .presets: "list.bullet"
+        case .warnings: "bell"
+        case .general: "gearshape"
+        case .about: "info.circle"
+        }
+    }
+}
+
+/// The Settings window's content: a sidebar of panes beside the chosen pane, which is restored
+/// the next time the window opens.
 struct SettingsView: View {
+    static let minimumSize = CGSize(width: 620, height: 540)
+    static let idealSize = CGSize(width: 760, height: 640)
+
     let appModel: AppModel
+    let updater: Updater
+    @AppStorage("settingsPane") private var pane: SettingsPane = .logins
 
     var body: some View {
-        TabView {
-            Tab("Logins", systemImage: "person.badge.key") {
-                LoginsSettings(coordinator: appModel.coordinator)
+        NavigationSplitView {
+            List(SettingsPane.allCases, selection: paneSelection) { pane in
+                Label(pane.title, systemImage: pane.symbolName)
             }
-            Tab("Presets", systemImage: "list.bullet") {
-                PresetsSettings(coordinator: appModel.coordinator)
-            }
-            Tab("General", systemImage: "gearshape") {
-                GeneralSettings(appModel: appModel)
+        } detail: {
+            switch pane {
+            case .logins: LoginsSettings(coordinator: appModel.coordinator)
+            case .presets: PresetsSettings(coordinator: appModel.coordinator)
+            case .warnings: WarningsSettings(coordinator: appModel.coordinator)
+            case .general: GeneralSettings(appModel: appModel)
+            case .about: AboutSettings(updater: updater)
             }
         }
-        .frame(width: 560, height: 520)
+        .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
+    }
+
+    /// The sidebar's selection, which can't be cleared, since a pane is always shown.
+    private var paneSelection: Binding<SettingsPane?> {
+        Binding(get: { pane }, set: { if let selected = $0 { pane = selected } })
     }
 }
 
@@ -271,22 +311,55 @@ private struct PresetEditor: View {
     }
 }
 
+// MARK: Warnings
+
+private struct WarningsSettings: View {
+    let coordinator: Coordinator
+
+    var body: some View {
+        Form {
+            MinutesField(title: "Warn before expiry", value: \.warningLeadTime, coordinator: coordinator)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// A setting in minutes, from 5 minutes to a day, stored in the settings in seconds.
+private struct MinutesField: View {
+    private static let secondsPerMinute: Double = 60
+
+    let title: String
+    let value: WritableKeyPath<PrinceClockInCore.Settings, TimeInterval>
+    let coordinator: Coordinator
+
+    var body: some View {
+        let minutes = Binding<Double>(
+            get: { coordinator.model.state.settings[keyPath: value] / Self.secondsPerMinute },
+            set: { minutes in
+                var settings = coordinator.model.state.settings
+                settings[keyPath: value] = (minutes * Self.secondsPerMinute).rounded(.down)
+                coordinator.updateSettings(settings)
+            })
+        LabeledContent(title) {
+            Stepper(value: minutes, in: 5...24 * 60, step: 5) {
+                Text("\(Int(minutes.wrappedValue)) min")
+                    .monospacedDigit()
+            }
+        }
+    }
+}
+
 // MARK: General
 
 private struct GeneralSettings: View {
-    private static let secondsPerMinute: Double = 60
-
     let appModel: AppModel
     @State private var launchesAtLogin = false
     @State private var launchAtLoginError: String?
 
-    private var coordinator: Coordinator { appModel.coordinator }
-
     var body: some View {
         Form {
             Section {
-                minutesField("Warn before expiry", value: \.warningLeadTime)
-                minutesField("Login timeout", value: \.loginTimeout)
+                MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
             }
             Section {
                 Toggle("Launch at login", isOn: launchAtLoginBinding)
@@ -311,22 +384,6 @@ private struct GeneralSettings: View {
         .task { await appModel.refreshNotificationPermission() }
     }
 
-    private func minutesField(_ title: String, value keyPath: WritableKeyPath<PrinceClockInCore.Settings, TimeInterval>) -> some View {
-        let minutes = Binding<Double>(
-            get: { coordinator.model.state.settings[keyPath: keyPath] / Self.secondsPerMinute },
-            set: { minutes in
-                var settings = coordinator.model.state.settings
-                settings[keyPath: keyPath] = (minutes * Self.secondsPerMinute).rounded(.down)
-                coordinator.updateSettings(settings)
-            })
-        return LabeledContent(title) {
-            Stepper(value: minutes, in: 5...24 * 60, step: 5) {
-                Text("\(Int(minutes.wrappedValue)) min")
-                    .monospacedDigit()
-            }
-        }
-    }
-
     /// Reads the system's answer back after each change, since registering can need the user's
     /// approval in System Settings.
     private var launchAtLoginBinding: Binding<Bool> {
@@ -341,5 +398,40 @@ private struct GeneralSettings: View {
                 }
                 launchesAtLogin = LaunchAtLogin.isEnabled
             })
+    }
+}
+
+// MARK: About
+
+private struct AboutSettings: View {
+    let updater: Updater
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("PrinceClockIn", value: version)
+                Button("Check for Updates…") { updater.checkForUpdates() }
+            }
+            Section {
+                Link("Report an Issue…", destination: AppLinks.reportIssue)
+                Link("Website", destination: AppLinks.website)
+                Button("Third-Party Notices…", action: openThirdPartyNotices)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// "v1.0.0 (42)": the marketing version and the build number.
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "v\(marketing) (\(build))"
+    }
+
+    /// Opens the bundled licenses in the user's text viewer.
+    private func openThirdPartyNotices() {
+        guard let notices = Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt") else { return }
+        NSWorkspace.shared.open(notices)
     }
 }
