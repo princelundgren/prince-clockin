@@ -246,8 +246,8 @@ depends on it being open. From top to bottom:
 
 1. **Banners**, at most two, highest first; a third waits until one clears:
    1. **State set aside**: "PrinceClockIn couldn't use its saved logins (the file was unreadable
-      or from a newer version), so it started empty. The old file was kept." With Show in Finder
-      and Dismiss.
+      or from a newer version), so it started empty. The old file was kept." With Show in
+      Finder… and Dismiss.
    2. **Save failed**: "Your changes couldn't be saved: <reason>. They'll be lost when
       PrinceClockIn quits." With Try Again, which calls the core's public `retrySave()`. It
       clears itself after a good save, and also posts a notification and puts the failure symbol
@@ -259,8 +259,8 @@ depends on it being open. From top to bottom:
 2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login that
    becomes due mid-batch joins the queue from its tile's Log In:
    - "Logging in to prod", its progress "1 of 2", "Finish in your browser. Next: staging", and
-     Cancel All, which cancels the whole batch. With failures, the progress reads "2 of 2 · 1
-     failed".
+     Cancel All, which cancels the whole batch. With failures, a line under the progress reads
+     "1 failed"; the progress itself keeps the one form.
    - For a custom login waiting for Done: "vpn is waiting for you" and "Finish the login in
      Terminal, then click Done." (without a command: "Log in your own way, then click Done."), with
      Done and Cancel All. The waiting login's notification also has Done.
