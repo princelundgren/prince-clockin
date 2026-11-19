@@ -39,11 +39,13 @@ public struct LoginsModel: Equatable, Sendable {
         setLoginTime(id: id, at: time)
     }
 
-    /// Records a Databricks check of login `id` made at `now`, whatever it found. Invalid
-    /// invalidates the login. Valid after being found invalid is a login at `now`, the best time
-    /// the app knows.
+    /// Records a Databricks check of login `id` made at `now`, whatever it found, and a valid or
+    /// invalid one as its last answer. Invalid invalidates the login. Valid after being found
+    /// invalid is a login at `now`, the best time the app knows. Couldn't check changes nothing
+    /// else.
     public mutating func apply(_ result: DatabricksCheckResult, login id: UUID, now: Date) {
         guard let index = index(of: id) else { return }
+        let record = DatabricksCheckRecord(at: now, result: result)
         switch result {
         case .invalid:
             invalidate(id, at: now, reason: .foundInvalid)
@@ -52,7 +54,8 @@ public struct LoginsModel: Equatable, Sendable {
         case .valid, .couldntCheck:
             break
         }
-        state.logins[index].lastDatabricksCheck = DatabricksCheckRecord(at: now, result: result)
+        state.logins[index].lastDatabricksCheck = record
+        if result != .couldntCheck { state.logins[index].lastDatabricksAnswer = record }
     }
 
     /// The logins due a warning at `now`, in stored order, each marked as warned for its current

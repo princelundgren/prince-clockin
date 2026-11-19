@@ -83,12 +83,20 @@ private final class FakeNotifier: Notifying, @unchecked Sendable {
     private let lock = NSLock()
     private var postedWarnings: [[Login]] = []
     private var postedDone: [Login] = []
+    /// Each save-failed post's reason, as it is posted.
+    let saveFailures: AsyncStream<String>
+    private let saveFailureSink: AsyncStream<String>.Continuation
+
+    init() {
+        (saveFailures, saveFailureSink) = AsyncStream.makeStream(of: String.self)
+    }
 
     var warnings: [[Login]] { lock.withLock { postedWarnings } }
     var customDone: [Login] { lock.withLock { postedDone } }
 
     func postWarning(logins: [Login]) async { lock.withLock { postedWarnings.append(logins) } }
     func postCustomDone(login: Login) async { lock.withLock { postedDone.append(login) } }
+    func postSaveFailed(reason: String) async { saveFailureSink.yield(reason) }
 }
 
 private final class FakeApprovals: ApprovalStoring, @unchecked Sendable {
@@ -177,6 +185,57 @@ private func eventually(_ condition: () -> Bool) async -> Bool {
 private extension Coordinator {
     func login(_ id: UUID) -> Login? {
         model.state.logins.first { $0.id == id }
+    }
+
+    var batchState: BatchState {
+        BatchState(running: running, queued: queued, outcomes: outcomes, batch: batch)
+    }
+}
+
+/// Every field the coordinator publishes about the running batch, compared at once.
+private struct BatchState: Equatable {
+    var running: UUID?
+    var queued: [UUID] = []
+    var outcomes: [LoginOutcome] = []
+    var batch: BatchProgress?
+
+    static let idle = BatchState()
+}
+
+/// Waits for the coordinator's batch fields to reach `expected`, then checks them, so a failure
+/// shows the difference.
+@MainActor
+private func expectBatch(
+    _ coordinator: Coordinator, _ expected: BatchState, sourceLocation: SourceLocation = #_sourceLocation
+) async {
+    _ = await eventually { coordinator.batchState == expected }
+    #expect(coordinator.batchState == expected, sourceLocation: sourceLocation)
+}
+
+/// Runs each AWS login once its session's gate opens, answering with `outcomes[session]`, or
+/// success. A session in `hanging` instead waits until it is cancelled.
+private final class GatedLogins: Sendable {
+    private let gates: [String: Gate]
+    private let outcomes: [String: ProcessOutcome]
+    private let hanging: Set<String>
+
+    init(_ sessions: [String], outcomes: [String: ProcessOutcome] = [:], hanging: Set<String> = []) {
+        gates = Dictionary(uniqueKeysWithValues: sessions.map { ($0, Gate()) })
+        self.outcomes = outcomes
+        self.hanging = hanging
+    }
+
+    func release(_ session: String) async {
+        await gates[session]?.open()
+    }
+
+    var runner: ArgumentRunner {
+        ArgumentRunner { [gates, outcomes, hanging] arguments in
+            let session = arguments.last?.replacingOccurrences(of: "--sso-session=", with: "") ?? ""
+            if hanging.contains(session) { return await hangUntilCancelled() }
+            await gates[session]?.wait()
+            return outcomes[session] ?? .exited(code: 0, output: "")
+        }
     }
 }
 
@@ -409,6 +468,97 @@ private extension Coordinator {
         #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev", "analytics-prod"])
     }
 
+    @Test func checkNowIsPublishedWhileItRuns() async throws {
+        let gate = Gate()
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+
+        let check = Task { await coordinator.checkNow() }
+        #expect(await eventually { fixture.checkRunner.calls.count == 1 })
+        #expect(coordinator.isCheckingDatabricks && !coordinator.canCheckDatabricksNow)
+
+        await gate.open()
+        await check.value
+        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+    }
+
+    @Test func theWarningTimeCheckIsPublishedWhileItRuns() async throws {
+        let gate = Gate()
+        let expiring = databricks("analytics-dev", remaining: 600)
+        let fixture = try Fixture(logins: [expiring], checkRunner: ArgumentRunner { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        let tick = Task { await coordinator.tick() }
+        #expect(await eventually { fixture.checkRunner.calls.count == 1 })
+        #expect(coordinator.isCheckingDatabricks)
+
+        await gate.open()
+        await tick.value
+        #expect(!coordinator.isCheckingDatabricks)
+    }
+
+    @Test func checkNowNeedsAWorkspaceProfile() async throws {
+        let account = Login(
+            displayName: "analytics-account", kind: .databricksProfile(name: "analytics-account", accountLevel: true))
+        let fixture = try Fixture(logins: [aws("dev"), account])
+        let coordinator = fixture.makeCoordinator()
+        #expect(!coordinator.canCheckDatabricksNow)
+
+        coordinator.addLogin(databricks("analytics-dev", remaining: 5 * hour))
+
+        #expect(coordinator.canCheckDatabricksNow)
+    }
+
+    @Test func checkNowWaitsForADatabricksLogin() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { !coordinator.canCheckDatabricksNow })
+
+        coordinator.cancelBatch()
+        #expect(await eventually { coordinator.canCheckDatabricksNow })
+    }
+
+    @Test func checkNowStoresCouldntCheck() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in .timedOut(output: "") })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        let couldntCheck = DatabricksCheckRecord(at: launch, result: .couldntCheck)
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == couldntCheck)
+        #expect(fixture.stored?.logins.first?.lastDatabricksCheck == couldntCheck)
+    }
+
+    @Test func aSkippedCheckKeepsTheLastCheck() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        await coordinator.checkNow()
+
+        fixture.clock.advance(by: 60)
+        await coordinator.checkNow()
+
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == DatabricksCheckRecord(at: launch, result: .valid))
+        #expect(fixture.checkRunner.calls.count == 1)
+    }
+
     // MARK: Logging in
 
     @Test func logInKeepsOrder() async throws {
@@ -443,6 +593,27 @@ private extension Coordinator {
         // Had the cancel overtaken the first enqueue, dev would still hang and prod never start.
         #expect(await eventually { coordinator.login(prod.id)?.loginTime != nil })
         #expect(coordinator.login(dev.id)?.loginTime == nil)
+    }
+
+    @Test func aDatabricksLoginWithNoSessionLengthTimesFromItsLogin() async throws {
+        let dev = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false))
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.login(dev.id)?.loginTime == launch })
+        let loggedIn = try #require(coordinator.login(dev.id))
+        #expect(timerState(for: loggedIn, now: launch, leadTime: 0) == .unknown)
+
+        let later = launch.addingTimeInterval(hour)
+        let sessionLength: TimeInterval = 8 * hour
+        let remaining: TimeInterval = 7 * hour
+        fixture.clock.advance(by: hour)
+        coordinator.setSessionLength(id: dev.id, to: sessionLength)
+
+        let timed = try #require(coordinator.login(dev.id))
+        #expect(timerState(for: timed, now: later, leadTime: 0) == .ok(remaining: remaining))
     }
 
     @Test func queueSuccessIsSaved() async throws {
@@ -531,6 +702,206 @@ private extension Coordinator {
         #expect(coordinator.lastFailures[dev.id] == nil)
     }
 
+    @Test func removingTheRunningLoginCancelsItAndRunsTheNext() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let fixture = try Fixture(
+            logins: [dev, prod],
+            loginRunner: ArgumentRunner { arguments in
+                arguments.last == "--sso-session=dev" ? await hangUntilCancelled() : .exited(code: 0, output: "")
+            })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        #expect(await eventually { fixture.loginRunner.calls.count == 1 })
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(await eventually { coordinator.login(prod.id)?.loginTime == launch })
+    }
+
+    // MARK: The batch's published state
+
+    @Test func twoLoginBatchPublishesEachStep() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"], outcomes: ["dev": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.batchState == .idle)
+
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.failed(id: dev.id, reason: .exitCode(1))],
+            batch: BatchProgress(position: 2, total: 2)))
+
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+        #expect(coordinator.lastFailures[dev.id] == .exitCode(1))
+    }
+
+    @Test func midRunEnqueueJoinsTheQueueAndGrowsTheTotal() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        await expectBatch(coordinator, BatchState(running: dev.id, batch: BatchProgress(position: 1, total: 1)))
+
+        coordinator.logIn([prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingAQueuedLoginShrinksTheBatch() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let staging = aws("staging")
+        let logins = GatedLogins(["dev", "prod", "staging"])
+        let fixture = try Fixture(logins: [dev, prod, staging], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id, staging.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id, staging.id], batch: BatchProgress(position: 1, total: 3)))
+
+        coordinator.removeLogin(id: prod.id)
+
+        #expect(coordinator.queued == [staging.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [staging.id], batch: BatchProgress(position: 1, total: 2)))
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: staging.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("staging")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingTheRunningLoginKeepsNoOutcomeForIt() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["prod"], hanging: ["dev"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.running == nil)
+        await expectBatch(coordinator, BatchState(running: prod.id, batch: BatchProgress(position: 2, total: 2)))
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func removingALoginForgetsItsOutcome() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await logins.release("dev")
+        await expectBatch(coordinator, BatchState(
+            running: prod.id, outcomes: [.succeeded(id: dev.id)], batch: BatchProgress(position: 2, total: 2)))
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.outcomes.isEmpty)
+        await logins.release("prod")
+        await expectBatch(coordinator, .idle)
+    }
+
+    @Test func cancelAllResetsTheBatch() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["prod"], hanging: ["dev"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        coordinator.cancelBatch()
+
+        await expectBatch(coordinator, .idle)
+        #expect(fixture.loginRunner.calls.count == 1)
+    }
+
+    // MARK: The menu bar
+
+    @Test func aFailureIsUnseenUntilThePanelIsShown() async throws {
+        let dev = aws("dev")
+        let logins = GatedLogins(["dev"], outcomes: ["dev": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.batch != nil })
+        #expect(coordinator.menuBarStatus == .loggingIn(BatchProgress(position: 1, total: 1)))
+
+        await logins.release("dev")
+        #expect(await eventually { coordinator.batch == nil })
+        #expect(coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .failure)
+
+        coordinator.markPanelShown()
+        #expect(!coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
+    @Test func removingTheFailedLoginClearsItsUnseenFailure() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"], outcomes: ["dev": .exited(code: 1, output: ""), "prod": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await logins.release("dev")
+        await logins.release("prod")
+        #expect(await eventually { coordinator.lastFailures.count == 2 && coordinator.batch == nil })
+
+        coordinator.removeLogin(id: dev.id)
+        #expect(coordinator.menuBarStatus == .failure)
+
+        coordinator.removeLogin(id: prod.id)
+        #expect(!coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
+    @Test func aFailedSaveKeepsTheFailureSymbolUntilASaveWorks() async throws {
+        let fixture = try Fixture()
+        let blocker = fixture.directory.appending(path: "not-a-directory")
+        try "".write(to: blocker, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: blocker))
+        coordinator.addLogin(aws("dev"))
+
+        coordinator.markPanelShown()
+        #expect(coordinator.menuBarStatus == .failure)
+
+        try FileManager.default.removeItem(at: blocker)
+        coordinator.retrySave()
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
     @Test func cancellingALoginIsNotAFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
@@ -543,6 +914,7 @@ private extension Coordinator {
 
         #expect(await eventually { coordinator.batch == nil })
         #expect(coordinator.lastFailures[dev.id] == nil)
+        #expect(!coordinator.hasUnseenFailure)
     }
 
     @Test func logInHoldsBackUnapprovedImportedCommand() async throws {
@@ -568,6 +940,20 @@ private extension Coordinator {
         coordinator.logIn([dev.id])
         #expect(await eventually { coordinator.login(dev.id)?.loginTime != nil })
         #expect(fixture.terminal.commands.isEmpty)
+    }
+
+    @Test func needsApprovalAnswersForAnyTrackedLogin() async throws {
+        let vpn = custom(command: "vpn-connect --profile dev")
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [vpn, dev])
+        let coordinator = fixture.makeCoordinator()
+
+        #expect(coordinator.needsApproval(id: vpn.id))
+        #expect(!coordinator.needsApproval(id: dev.id))
+        #expect(!coordinator.needsApproval(id: UUID()))
+
+        fixture.approvals.approve(approvalKey(for: "vpn-connect --profile dev"))
+        #expect(!coordinator.needsApproval(id: vpn.id))
     }
 
     @Test func approveAndLogInRuns() async throws {
@@ -697,6 +1083,50 @@ private extension Coordinator {
         coordinator.addLogin(aws("dev"))
 
         #expect(coordinator.saveFailure != nil)
+    }
+
+    @Test func aFailingSaveNotifiesOnceUntilASaveWorks() async throws {
+        let fixture = try Fixture()
+        let storeDirectory = fixture.directory.appending(path: "store")
+        let stateFile = storeDirectory.appending(path: "state.json")
+        try "".write(to: storeDirectory, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: storeDirectory))
+        var posts = fixture.notifier.saveFailures.makeAsyncIterator()
+
+        coordinator.addLogin(aws("dev"))
+        let noDirectory = try #require(coordinator.saveFailure)
+        #expect(await posts.next() == noDirectory)
+
+        coordinator.addLogin(aws("prod"))
+        try FileManager.default.removeItem(at: storeDirectory)
+        coordinator.retrySave()
+        #expect(coordinator.saveFailure == nil)
+        try FileManager.default.removeItem(at: stateFile)
+        try FileManager.default.createDirectory(at: stateFile, withIntermediateDirectories: false)
+        coordinator.addLogin(aws("staging"))
+        let fileIsADirectory = try #require(coordinator.saveFailure)
+
+        // Assumes the coordinator's posts arrive in the order it starts them: a post for the
+        // repeated failure would come before this one.
+        #expect(fileIsADirectory != noDirectory)
+        #expect(await posts.next() == fileIsADirectory)
+    }
+
+    @Test func retrySaveSavesTheUnchangedState() async throws {
+        let fixture = try Fixture()
+        let blocker = fixture.directory.appending(path: "not-a-directory")
+        try "".write(to: blocker, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: blocker))
+        let dev = aws("dev")
+        coordinator.addLogin(dev)
+        coordinator.retrySave()
+        #expect(coordinator.saveFailure != nil)
+
+        try FileManager.default.removeItem(at: blocker)
+        coordinator.retrySave()
+
+        #expect(coordinator.saveFailure == nil)
+        #expect(StateStore(directory: blocker).load() == .loaded(AppState(logins: [dev])))
     }
 
     @Test func discoverCandidatesSkipsTracked() async throws {

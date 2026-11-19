@@ -41,7 +41,7 @@ private func makeChecker(
         let (checker, runner) = try makeChecker(clock: clock) { _ in .exited(code: 0, output: "") }
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
         clock.advance(by: 299)
-        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == nil)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .skipped)
         #expect(runner.calls.count == 1)
         clock.advance(by: 1)
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
@@ -50,13 +50,13 @@ private func makeChecker(
 
     @Test func databricksSkipsWhileLoginRunning() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
-        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: true) == nil)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: true) == .skipped)
         #expect(runner.calls.isEmpty)
     }
 
     @Test func databricksSkipsAccountLevelProfile() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
-        #expect(await checker.check(profile: "dev", accountLevel: true, loginRunning: false) == nil)
+        #expect(await checker.check(profile: "dev", accountLevel: true, loginRunning: false) == .skipped)
         #expect(runner.calls.isEmpty)
     }
 
@@ -65,7 +65,7 @@ private func makeChecker(
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .invalid)
     }
 
-    @Test func databricksOtherFailureIsNil() async throws {
+    @Test func databricksOtherFailureIsCouldntCheck() async throws {
         let failures: [ProcessOutcome] = [
             .exited(code: 1, output: "Error: dial tcp: lookup example.cloud.databricks.com: no such host"),
             .exited(code: 1, output: ""),
@@ -75,7 +75,29 @@ private func makeChecker(
         ]
         for failure in failures {
             let (checker, _) = try makeChecker { _ in failure }
-            #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == nil, "\(failure)")
+            #expect(
+                await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .couldntCheck,
+                "\(failure)")
+        }
+    }
+
+    @Test func aCheckThatRanTheCLIHoldsTheInterval() async throws {
+        let ran: [ProcessOutcome] = [.exited(code: 1, output: ""), .timedOut(output: "")]
+        for outcome in ran {
+            let (checker, runner) = try makeChecker { _ in outcome }
+            _ = await checker.check(profile: "dev", accountLevel: false, loginRunning: false)
+            #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .skipped, "\(outcome)")
+            #expect(runner.calls.count == 1, "\(outcome)")
+        }
+    }
+
+    @Test func aCheckThatDidntRunTheCLILeavesTheIntervalFree() async throws {
+        let notRun: [ProcessOutcome] = [.launchFailed("databricks: not permitted"), .cancelled]
+        for outcome in notRun {
+            let (checker, runner) = try makeChecker { index in index == 0 ? outcome : .exited(code: 0, output: "") }
+            _ = await checker.check(profile: "dev", accountLevel: false, loginRunning: false)
+            #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid, "\(outcome)")
+            #expect(runner.calls.count == 2, "\(outcome)")
         }
     }
 
@@ -106,16 +128,17 @@ private func makeChecker(
         try await Task.sleep(for: .milliseconds(100))
         await gate.open()
         let results = await [first, second]
-        #expect(results.contains(.valid) && results.contains(nil))
+        #expect(results.contains(.valid) && results.contains(.skipped))
         #expect(runner.calls.count == 1)
     }
 
-    @Test func databricksNotOnPathIsNil() async {
+    @Test func databricksNotOnPathIsCouldntCheckAndLeavesTheIntervalFree() async {
         let shellRunner = FakeRunner { _ in pathOutput("/nonexistent-dir") }
         let resolver = ShellPathResolver(runner: shellRunner, shell: URL(fileURLWithPath: "/bin/zsh"), environment: [:])
         let runner = FakeRunner { _ in .exited(code: 0, output: "") }
         let checker = DatabricksChecker(runner: runner, pathResolver: resolver)
-        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == nil)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .couldntCheck)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .couldntCheck)
         #expect(runner.calls.isEmpty)
     }
 }

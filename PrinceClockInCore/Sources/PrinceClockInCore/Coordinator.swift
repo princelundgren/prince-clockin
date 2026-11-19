@@ -7,6 +7,8 @@ public protocol Notifying: Sendable {
     func postWarning(logins: [Login]) async
     /// A custom login waits for the user's Done; the notification carries a "Done" action.
     func postCustomDone(login: Login) async
+    /// Saving stopped working; `reason` is the system's.
+    func postSaveFailed(reason: String) async
 }
 
 /// Reads what an AWS session's cache file shows now.
@@ -44,6 +46,31 @@ public struct BatchProgress: Equatable, Sendable {
     }
 }
 
+/// How one login of the running batch ended.
+public enum LoginOutcome: Equatable, Sendable {
+    case succeeded(id: UUID)
+    case failed(id: UUID, reason: LoginFailure)
+    /// Ended by Cancel All.
+    case cancelled(id: UUID)
+
+    /// The login that ended.
+    public var id: UUID {
+        switch self {
+        case .succeeded(let id), .failed(let id, _), .cancelled(let id): id
+        }
+    }
+
+    /// The outcome a queue event reports; `nil` for an event that ends no login.
+    init?(_ event: QueueEvent) {
+        switch event {
+        case .succeeded(let id, _): self = .succeeded(id: id)
+        case .failed(let id, .cancelled): self = .cancelled(id: id)
+        case .failed(let id, let reason): self = .failed(id: id, reason: reason)
+        case .queued, .started, .waitingForDone, .finished: return nil
+        }
+    }
+}
+
 /// The one object the app drives. It owns the model, saves every change, runs the tick and feeds
 /// the login queue. The views read it directly.
 @MainActor
@@ -53,6 +80,7 @@ public final class Coordinator {
         case enqueue([Login], timeout: TimeInterval)
         case cancel
         case done(UUID)
+        case remove(UUID)
     }
 
     public private(set) var model: LoginsModel
@@ -60,8 +88,16 @@ public final class Coordinator {
     public private(set) var now: Date
     /// Where an unreadable or newer state file was set aside at launch.
     public private(set) var loadNotice: URL?
-    /// The running batch, or `nil` when the queue is idle.
+    /// The running batch's position of its total, or `nil` when the queue is idle.
     public private(set) var batch: BatchProgress?
+    /// The login running now.
+    public private(set) var running: UUID?
+    /// The logins waiting to run, in order. Empty when a batch ends, unless a login was queued
+    /// while Cancel All was ending it: that one waits for the next batch.
+    public private(set) var queued: [UUID] = []
+    /// How each finished login of the running batch ended, in order; empty once the batch ends. A
+    /// login no longer tracked has none.
+    public private(set) var outcomes: [LoginOutcome] = []
     /// The custom login waiting for the user's Done.
     public private(set) var waitingCustomID: UUID?
     /// Custom logins held back because their command isn't approved on this Mac, in request order.
@@ -71,6 +107,24 @@ public final class Coordinator {
     public private(set) var lastFailures: [UUID: LoginFailure] = [:]
     /// Why the last save failed; `nil` once a save succeeds.
     public private(set) var saveFailure: String?
+    /// Whether a login still tracked failed, not by a cancel, since the panel was last shown.
+    public var hasUnseenFailure: Bool { !unseenFailures.isEmpty }
+    /// The menu bar's row at the last tick. A failed save shows as a failure until a save works,
+    /// whether or not the panel has been shown.
+    public var menuBarStatus: MenuBarStatus {
+        PrinceClockInCore.menuBarStatus(
+            model.state.logins, now: now, leadTime: model.state.settings.warningLeadTime, batch: batch,
+            hasFailure: hasUnseenFailure || saveFailure != nil)
+    }
+
+    /// Whether a Databricks check runs now, from the warning time or Check Now.
+    public var isCheckingDatabricks: Bool { runningChecks > 0 }
+    /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
+    /// unlike an account profile can be checked, is tracked.
+    public var canCheckDatabricksNow: Bool {
+        !isCheckingDatabricks && runningDatabricksID == nil
+            && model.state.logins.contains { $0.kind.isWorkspaceProfile }
+    }
 
     private let store: StateStore
     private let queue: LoginQueue
@@ -87,7 +141,9 @@ public final class Coordinator {
     @ObservationIgnored private var savedState: AppState
     /// The last state read of each AWS login's cache file, with its token hash, in memory only.
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
-    @ObservationIgnored private var runningDatabricksID: UUID?
+    private var runningDatabricksID: UUID?
+    private var runningChecks = 0
+    private var unseenFailures: Set<UUID> = []
     @ObservationIgnored private var isTicking = false
     @ObservationIgnored private var isStarted = false
 
@@ -139,6 +195,7 @@ public final class Coordinator {
                 case .enqueue(let logins, let timeout): await queue.enqueue(logins, timeout: timeout)
                 case .cancel: await queue.cancel()
                 case .done(let id): await queue.confirmCustomDone(id: id)
+                case .remove(let id): await queue.remove(id: id)
                 }
             }
         }
@@ -173,7 +230,7 @@ public final class Coordinator {
     public func logIn(_ ids: [UUID]) {
         var ready: [Login] = []
         for login in ids.compactMap(login) {
-            if needsApproval(login, approvals: approvals) {
+            if PrinceClockInCore.needsApproval(login, approvals: approvals) {
                 if !pendingApprovals.contains(login.id) { pendingApprovals.append(login.id) }
             } else {
                 ready.append(login)
@@ -181,6 +238,13 @@ public final class Coordinator {
         }
         guard !ready.isEmpty else { return }
         commandSink.yield(.enqueue(ready, timeout: model.state.settings.loginTimeout))
+    }
+
+    /// Whether login `id` is a custom login whose command isn't approved on this Mac, so it won't
+    /// run until the user's Run It. `false` for a login not tracked.
+    public func needsApproval(id: UUID) -> Bool {
+        guard let login = login(id) else { return false }
+        return PrinceClockInCore.needsApproval(login, approvals: approvals)
     }
 
     /// The user's "Run it" on a held-back custom login: approves its command, then logs in.
@@ -191,7 +255,8 @@ public final class Coordinator {
         logIn([id])
     }
 
-    /// The user's "Cancel" on a held-back custom login: it neither runs nor is approved.
+    /// The user's Not Now on a held-back custom login: it is skipped this time, neither run nor
+    /// approved.
     public func dismissPendingApproval(id: UUID) {
         pendingApprovals.removeAll { $0 == id }
     }
@@ -204,6 +269,11 @@ public final class Coordinator {
     /// The user's Done for the custom login waiting for it.
     public func confirmCustomDone(id: UUID) {
         commandSink.yield(.done(id))
+    }
+
+    /// The panel was shown, so the user has seen every failure so far.
+    public func markPanelShown() {
+        unseenFailures.removeAll()
     }
 
     /// The output of the login's last run, kept in memory only.
@@ -265,10 +335,15 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// Stops tracking login `id`, takes it out of every preset and forgets what is known of it in
-    /// memory.
+    /// Stops tracking login `id`, takes it out of every preset and the queue, and forgets what is
+    /// known of it in memory. A running login is cancelled, and the batch goes on.
     public func removeLogin(id: UUID) {
+        commandSink.yield(.remove(id))
         model.removeLogin(id: id)
+        queued.removeAll { $0 == id }
+        if running == id { running = nil }
+        outcomes.removeAll { $0.id == id }
+        unseenFailures.remove(id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil
@@ -308,6 +383,12 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Saves the state again, for the Save Failed banner's Try Again, even if nothing changed since
+    /// the save that failed.
+    public func retrySave() {
+        save()
+    }
+
     public func updateSettings(_ settings: Settings) {
         model.state.settings = settings
         saveIfChanged()
@@ -318,12 +399,24 @@ public final class Coordinator {
     private func handle(_ event: QueueEvent) async {
         model.apply(event)
         switch event {
+        case .queued(let ids, let total):
+            queued = ids
+            if let batch { self.batch = BatchProgress(position: batch.position, total: total) }
         case .started(let id, let position, let total):
             batch = BatchProgress(position: position, total: total)
+            running = id
+            queued.removeAll { $0 == id }
             lastFailures[id] = nil
             if let login = login(id), case .databricksProfile = login.kind { runningDatabricksID = id }
         case .succeeded(let id, _), .failed(let id, _):
-            if case .failed(_, let reason) = event, reason != .cancelled { lastFailures[id] = reason }
+            if let outcome = LoginOutcome(event), login(id) != nil {
+                outcomes.append(outcome)
+                if case .failed(_, let reason) = outcome {
+                    lastFailures[id] = reason
+                    unseenFailures.insert(id)
+                }
+            }
+            if running == id { running = nil }
             if waitingCustomID == id { waitingCustomID = nil }
             if runningDatabricksID == id { runningDatabricksID = nil }
         case .waitingForDone(let id):
@@ -331,6 +424,8 @@ public final class Coordinator {
             if let login = login(id) { await notifier.postCustomDone(login: login) }
         case .finished:
             batch = nil
+            running = nil
+            outcomes = []
             waitingCustomID = nil
             runningDatabricksID = nil
         }
@@ -368,11 +463,14 @@ public final class Coordinator {
 
     /// Checks `logins` one at a time and applies each answer. Skipped checks change nothing.
     private func check(_ logins: [Login], now: Date) async {
+        guard !logins.isEmpty else { return }
+        runningChecks += 1
+        defer { runningChecks -= 1 }
         for login in logins {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
-            let result = await checker.check(
+            let check = await checker.check(
                 profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
-            if let result { model.apply(result, login: login.id, now: now) }
+            if let result = check.result { model.apply(result, login: login.id, now: now) }
         }
         saveIfChanged()
     }
@@ -393,12 +491,25 @@ public final class Coordinator {
 
     private func saveIfChanged() {
         guard model.state != savedState else { return }
+        save()
+    }
+
+    /// Posts a notification when saving goes from working to failing, not again while it fails.
+    private func save() {
         do {
             try store.save(model.state)
             savedState = model.state
             saveFailure = nil
         } catch {
-            saveFailure = error.localizedDescription
+            let reason = error.localizedDescription
+            if saveFailure == nil { Task { [notifier] in await notifier.postSaveFailed(reason: reason) } }
+            saveFailure = reason
         }
+    }
+}
+
+private extension LoginKind {
+    var isWorkspaceProfile: Bool {
+        if case .databricksProfile(_, accountLevel: false) = self { true } else { false }
     }
 }

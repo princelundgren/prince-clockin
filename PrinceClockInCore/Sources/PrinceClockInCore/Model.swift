@@ -68,7 +68,7 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
-/// What one Databricks check that ran found. A skipped check has no result.
+/// What one Databricks check found. A skipped check has no result.
 public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case valid
     /// The CLI's no-credentials error.
@@ -77,7 +77,7 @@ public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case couldntCheck
 }
 
-/// A Databricks login's last check that ran: when, and what it found.
+/// A Databricks login's last check that wasn't skipped: when, and what it found.
 public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
     public let at: Date
     public let result: DatabricksCheckResult
@@ -115,6 +115,9 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     public var warnedForExpiry: Date?
     public var lastAWSCache: AWSCacheRecord?
     public var lastDatabricksCheck: DatabricksCheckRecord?
+    /// The last check that answered, valid or invalid; a couldn't-check result leaves it as it was.
+    /// Still valid is read from it.
+    public var lastDatabricksAnswer: DatabricksCheckRecord?
 
     /// Dates and `sessionLength` are rounded down to whole seconds.
     public init(
@@ -127,7 +130,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         invalidationReason: InvalidationReason? = nil,
         warnedForExpiry: Date? = nil,
         lastAWSCache: AWSCacheRecord? = nil,
-        lastDatabricksCheck: DatabricksCheckRecord? = nil
+        lastDatabricksCheck: DatabricksCheckRecord? = nil,
+        lastDatabricksAnswer: DatabricksCheckRecord? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -139,6 +143,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.warnedForExpiry = warnedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
         self.lastDatabricksCheck = lastDatabricksCheck
+        self.lastDatabricksAnswer = lastDatabricksAnswer
     }
 
     /// 8 hours for AWS; `nil` for every other kind, where the user sets it.
@@ -156,7 +161,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
             loginTime: loginTime, invalidatedAt: invalidatedAt, invalidationReason: invalidationReason,
             warnedForExpiry: warnedForExpiry,
             lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
-            lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
+            lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) },
+            lastDatabricksAnswer: lastDatabricksAnswer.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
     }
 }
 

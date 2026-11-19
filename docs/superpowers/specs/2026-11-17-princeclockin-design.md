@@ -170,7 +170,8 @@ Facts the timer design rests on:
 
 Each timer has a state: **ok**, **expiring** (within the warning time), **expired**, or
 **unknown** (no login time or no session length), shown as "No timer". A Databricks login whose
-timer says expired but whose last check since that expiry found it valid is **still valid**.
+timer says expired but whose last check that answered (valid or invalid) since that expiry found
+it valid is **still valid** (owner, 2026-11-19).
 
 A login is **due** when its timer is expiring or expired and it isn't still valid (owner,
 2026-11-18). An unknown timer isn't due. Due logins are the ones Log In to N Due starts, a tile
@@ -196,13 +197,14 @@ clicks Check Databricks Now in Settings → Logins.
 - A profile reported invalid moves its timer to expired, even if time remains.
 - A profile reported valid whose timer says expired is still valid (see Timers). Its tile says
   "Still valid" and offers Edit Session Length…, since the session length may be too short.
-- A check that fails (offline, VPN down) changes nothing but its result. Only the CLI's
+- A check that fails (offline, VPN down) changes nothing but its result: it is kept and shown as
+  the last check, and a still valid login stays still valid (owner, 2026-11-19). Only the CLI's
   no-credentials error counts as invalid.
 - Account profiles are offered but never checked: they run on their timer alone and say "Not
   checked", and their Settings row says the Databricks CLI can't check an account profile.
 - A check of one profile returns **valid**, **invalid**, **couldn't check** (the check failed)
-  or **skipped** (checked within the last 5 minutes, or a login running), kept apart. The core
-  keeps each profile's last check that ran, its time and one of the first three results, and
+  or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
+  apart. The core keeps each profile's last check, its time and one of the first three results, and
   publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
 - A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
   which keeps its last check, so a skip never reads as a fresh result.
@@ -252,10 +254,11 @@ depends on it being open. From top to bottom:
    1. **State set aside**: "PrinceClockIn couldn't use its saved logins (the file was unreadable
       or from a newer version), so it started empty. The old file was kept." With Show in
       Finder… and Dismiss.
-   2. **Save failed**: "Your changes couldn't be saved: <reason>. They'll be lost when
-      PrinceClockIn quits." With Try Again, which calls the core's public `retrySave()`. It
-      clears itself after a good save, and also posts a notification and puts the failure symbol
-      in the menu bar, since a popover must not be the only place a warning appears.
+   2. **Save failed**: "Your changes couldn't be saved", then the reason on its own line, then
+      "They'll be lost when PrinceClockIn quits." With Try Again, which calls the core's public
+      `retrySave()`. It clears itself after a good save, and also posts a notification and puts
+      the failure symbol in the menu bar, since a popover must not be the only place a warning
+      appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
       expires." With Open System Settings…, which opens System Settings → Notifications. It
       appears once; closing the panel after it has been shown dismisses it, and after that it
@@ -548,18 +551,13 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
-  whether the profile is account-level and the time and result of its last check, and, for AWS,
+  whether the profile is account-level, the time and result of its last check and of its last
+  answer (valid or invalid), and, for AWS,
   the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - A file that is unreadable, or from a newer version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
-  - one queued login can leave the queue, and the running one be cancelled alone;
-  - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
-    the batch's position as "1 of 2";
-  - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
-    is published;
-  - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
   - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.
 

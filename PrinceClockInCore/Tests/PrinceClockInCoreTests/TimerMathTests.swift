@@ -77,7 +77,7 @@ private func status(_ logins: [Login], batch: BatchProgress? = nil, hasFailure: 
 private func stillValid(_ name: String) -> Login {
     Login(
         displayName: name, kind: .databricksProfile(name: name, accountLevel: false), sessionLength: 3600,
-        loginTime: now.addingTimeInterval(-7200), lastDatabricksCheck: DatabricksCheckRecord(at: now, result: .valid))
+        loginTime: now.addingTimeInterval(-7200), lastDatabricksAnswer: DatabricksCheckRecord(at: now, result: .valid))
 }
 
 private let noTimer = Login(displayName: "vpn", kind: .custom(command: nil))

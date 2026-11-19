@@ -39,12 +39,17 @@ extension LoginFailure {
 /// What the queue reports, in order. A run is the logins started from an idle queue until it is
 /// empty again or cancelled; it ends with `.finished`.
 public enum QueueEvent: Equatable, Sendable {
-    /// `total` is the logins started plus queued in this run, so it grows when more are enqueued.
+    /// The logins waiting to run changed by an enqueue, a removal or a cancel, not by one
+    /// starting: `ids` are the queued logins in order, and `total` is the run's, as in `started`.
+    /// While Cancel All ends a run, `ids` are the next run's and the ending run's total stays.
+    case queued(ids: [UUID], total: Int)
+    /// `total` is the logins started plus queued in this run, so it grows when more are enqueued
+    /// and shrinks when a queued one is removed.
     case started(id: UUID, position: Int, total: Int)
     /// `at` is the injected clock's time when the login ended.
     case succeeded(id: UUID, at: Date)
-    /// The login ended without signing in. The run goes on to the next login unless `reason` is
-    /// `.cancelled`.
+    /// The login ended without signing in. The run goes on to the next login, unless the whole run
+    /// was cancelled.
     case failed(id: UUID, reason: LoginFailure)
     /// A custom login waits for `confirmCustomDone(id:)`, or its timeout.
     case waitingForDone(id: UUID)
@@ -65,6 +70,7 @@ public actor LoginQueue {
     private struct Running {
         let loginID: UUID
         let task: Task<Void, Never>
+        var isCancelled = false
     }
 
     private enum DoneOutcome {
@@ -113,20 +119,35 @@ public actor LoginQueue {
     /// Adds `logins` to the end of the queue and starts the first if none is running. A login
     /// already queued, or running and not cancelled, is skipped. `timeout` is in seconds.
     public func enqueue(_ logins: [Login], timeout: TimeInterval) {
+        let before = pending.count
         for login in logins where !isQueuedOrRunning(login.id) {
             pending.append(Pending(login: login, timeout: timeout))
         }
+        if pending.count != before { emitQueued() }
         if running == nil { startNext() }
     }
 
     /// Clears the queue and ends the running login, terminating its process or ending its wait for
     /// Done; the run then reports it cancelled and finishes. Does nothing when no login is running.
     public func cancel() {
-        guard let running else { return }
-        pending.removeAll()
+        guard running != nil else { return }
+        if !pending.isEmpty {
+            pending.removeAll()
+            emitQueued()
+        }
         isRunCancelled = true
-        running.task.cancel()
-        endWaitForDone(with: .cancelled) { _ in true }
+        cancelRunning()
+    }
+
+    /// Takes login `id` out of the run. A queued login leaves the queue, so the total shrinks. The
+    /// running login is ended as `cancel()` ends it, but alone: it reports cancelled and the run
+    /// goes on to the next login. Does nothing for a login neither queued nor running.
+    public func remove(id: UUID) {
+        let before = pending.count
+        pending.removeAll { $0.login.id == id }
+        if pending.count != before { emitQueued() }
+        guard running?.loginID == id else { return }
+        cancelRunning()
     }
 
     /// The user's Done for a custom login. Does nothing unless that login is waiting for it.
@@ -140,7 +161,13 @@ public actor LoginQueue {
     }
 
     private func isQueuedOrRunning(_ id: UUID) -> Bool {
-        pending.contains { $0.login.id == id } || (running?.loginID == id && !isRunCancelled)
+        pending.contains { $0.login.id == id } || (running?.loginID == id && running?.isCancelled == false)
+    }
+
+    private func cancelRunning() {
+        running?.isCancelled = true
+        running?.task.cancel()
+        endWaitForDone(with: .cancelled) { _ in true }
     }
 
     private func startNext() {
@@ -158,8 +185,7 @@ public actor LoginQueue {
         let result = await perform(next.login, timeout: next.timeout)
         emit(result)
         running = nil
-        let endedCancelled = result == .failed(id: id, reason: .cancelled)
-        if isRunCancelled || endedCancelled || pending.isEmpty {
+        if isRunCancelled || pending.isEmpty {
             emit(.finished)
             isRunCancelled = false
             startedInRun = 0
@@ -207,6 +233,7 @@ public actor LoginQueue {
     private func performCustom(
         id: UUID, command: String?, timeout: TimeInterval
     ) async -> QueueEvent {
+        if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
         if let command {
             do {
                 try await terminal.open(command: command)
@@ -244,6 +271,11 @@ public actor LoginQueue {
         guard let waiting = waitingForDone, matches(waiting) else { return }
         waitingForDone = nil
         waiting.continuation.resume(returning: outcome)
+    }
+
+    private func emitQueued() {
+        let total = isRunCancelled ? startedInRun : startedInRun + pending.count
+        emit(.queued(ids: pending.map(\.login.id), total: total))
     }
 
     private func emit(_ event: QueueEvent) {

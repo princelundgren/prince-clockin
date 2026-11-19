@@ -37,6 +37,7 @@ struct PanelView: View {
         }
         .padding()
         .frame(width: 360)
+        .onAppear { coordinator.markPanelShown() }
         .task { await appModel.refreshNotificationPermission() }
     }
 
@@ -72,7 +73,7 @@ struct PanelView: View {
                 Button("Check now") {
                     Task { await coordinator.checkNow() }
                 }
-                .disabled(coordinator.model.checkNowTargets().isEmpty)
+                .disabled(!coordinator.canCheckDatabricksNow)
                 .help("Ask the Databricks CLI whether each Databricks login is still valid")
             }
         }

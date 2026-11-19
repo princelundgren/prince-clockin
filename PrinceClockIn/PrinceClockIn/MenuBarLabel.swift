@@ -8,10 +8,7 @@ struct MenuBarLabel: View {
     let updater: Updater
 
     var body: some View {
-        let status = menuBarStatus(
-            coordinator.model.state.logins, now: coordinator.now,
-            leadTime: coordinator.model.state.settings.warningLeadTime, batch: coordinator.batch,
-            hasFailure: coordinator.saveFailure != nil)
+        let status = coordinator.menuBarStatus
         HStack(spacing: 4) {
             Image(systemName: Self.symbolName(for: status))
             if let text = Self.text(for: status) {
