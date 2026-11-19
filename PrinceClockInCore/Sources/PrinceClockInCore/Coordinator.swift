@@ -329,18 +329,10 @@ public final class Coordinator {
     /// files are read off the main actor; what is tracked is checked once they have been read.
     public func discoverCandidates() async -> (aws: [String], databricks: [DatabricksProfile]) {
         let found = await Self.discover(in: configPaths)
-        var trackedAWS: Set<String> = []
-        var trackedDatabricks: Set<String> = []
-        for login in model.state.logins {
-            switch login.kind {
-            case .awsSSOSession(let name): trackedAWS.insert(name)
-            case .databricksProfile(let name, _): trackedDatabricks.insert(name)
-            case .custom: break
-            }
-        }
+        let tracked = TrackedConfigNames(logins: model.state.logins)
         return (
-            found.aws.filter { !trackedAWS.contains($0) },
-            found.databricks.filter { !trackedDatabricks.contains($0.name) }
+            found.aws.filter { !tracked.aws.contains($0) },
+            found.databricks.filter { !tracked.databricks.contains($0.name) }
         )
     }
 

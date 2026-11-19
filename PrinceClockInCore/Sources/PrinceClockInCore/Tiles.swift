@@ -209,6 +209,13 @@ public func sessionLengthOptions(current: TimeInterval?) -> [SessionLengthOption
     ]
 }
 
+/// The choice a Session Length pop-up shows for a stored `length`: its own item when listed,
+/// Custom… when not, and No timer when unknown, as `sessionLengthOptions(current:)` checks them.
+public func sessionLengthChoice(for length: TimeInterval?) -> SessionLengthChoice {
+    guard let length else { return .noTimer }
+    return isListedSessionLength(length) ? .length(length) : .custom
+}
+
 private let listedSessionLengths: [TimeInterval] = [8, 12, 24, 72, 168].map { $0 * 3600 }
 
 /// Whether `length` has its own item in `sessionLengthOptions(current:)`, rather than Custom….
