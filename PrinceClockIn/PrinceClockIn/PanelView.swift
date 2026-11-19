@@ -12,6 +12,8 @@ struct PanelView: View {
     let session: PanelSession
     let openSettings: () -> Void
     let openSettingsOnLogins: () -> Void
+    /// Add Logins…: Settings on Logins, with its + menu open.
+    let addLogins: () -> Void
     @FocusState private var focus: PanelFocus?
 
     private var coordinator: Coordinator { appModel.coordinator }
@@ -51,7 +53,7 @@ struct PanelView: View {
                 BatchCardView(card: card, coordinator: coordinator, defaults: defaults)
             }
             if logins.isEmpty, let empty = session.emptyPanel {
-                EmptyPanelView(empty: empty, addLogins: openSettingsOnLogins)
+                EmptyPanelView(empty: empty, addLogins: addLogins)
             }
             tileList(tiles, defaults: defaults, keys: keys)
             if showsLogInToDue {

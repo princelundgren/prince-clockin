@@ -298,7 +298,8 @@ depends on it being open. From top to bottom:
 files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
 databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
-with its + menu open; until the Logins pane is rebuilt, it opens the pane without the menu.
+with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
+under +, since SwiftUI can't open a `Menu` programmatically.
 Discovery reads the config files again on each opening; while it runs, no earlier text shows.
 
 #### Tiles

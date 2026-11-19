@@ -6,6 +6,7 @@ import SwiftUI
 /// header, then the selected login's form, or New custom login.
 struct LoginsSettings: View {
     let appModel: AppModel
+    let request: LoginsPaneRequest
     @State private var selection: UUID?
     /// What discovery found that isn't tracked; `nil` while the config files are read.
     @State private var candidates: (aws: [String], databricks: [DatabricksProfile])?
@@ -56,6 +57,9 @@ struct LoginsSettings: View {
             if old == justAdded { justAdded = nil }
         }
         .task(id: TrackedConfigNames(logins: logins)) { await discover() }
+        .onChange(of: request.isAddMenuPending, initial: true) { openRequestedAddMenu() }
+        // A request the pane didn't get to before it went stays unanswered, never opening later.
+        .onDisappear { request.isAddMenuPending = false }
     }
 
     private var header: some View {
@@ -98,6 +102,15 @@ struct LoginsSettings: View {
         let found = await coordinator.discoverCandidates()
         guard !Task.isCancelled else { return }
         candidates = found
+        openRequestedAddMenu()
+    }
+
+    /// Opens the + menu for the panel's Add Logins… once the config files are read and the pane is
+    /// in its window, after the current update.
+    private func openRequestedAddMenu() {
+        guard request.isAddMenuPending, candidates != nil, addMenu.anchor?.window != nil else { return }
+        request.isAddMenuPending = false
+        Task { addMenu.show(addMenuItems, choose: choose) }
     }
 
     /// A found login is tracked at once and selected; Custom Login… opens New custom login.
@@ -146,6 +159,14 @@ struct LoginsSettings: View {
         coordinator.addLogin(login)
         selection = login.id
     }
+}
+
+/// What the rest of the app asks of Settings → Logins.
+@MainActor
+@Observable
+final class LoginsPaneRequest {
+    /// The panel's Add Logins… asked for the + menu, which the pane opens and then clears this.
+    var isAddMenuPending = false
 }
 
 /// A tracked login in the list: its kind's symbol, its name and its subtitle.

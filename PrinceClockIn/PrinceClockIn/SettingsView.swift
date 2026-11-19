@@ -38,6 +38,7 @@ struct SettingsView: View {
 
     let appModel: AppModel
     let updater: Updater
+    let loginsPaneRequest: LoginsPaneRequest
     @AppStorage(SettingsView.paneKey) private var pane: SettingsPane = .logins
 
     var body: some View {
@@ -47,7 +48,7 @@ struct SettingsView: View {
             }
         } detail: {
             switch pane {
-            case .logins: LoginsSettings(appModel: appModel)
+            case .logins: LoginsSettings(appModel: appModel, request: loginsPaneRequest)
             case .presets: PresetsSettings(coordinator: appModel.coordinator)
             case .warnings: WarningsSettings(coordinator: appModel.coordinator)
             case .general: GeneralSettings(appModel: appModel)
