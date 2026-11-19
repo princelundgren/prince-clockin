@@ -83,7 +83,7 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Link("Report an issue", destination: URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!)
-                Link("Website", destination: URL(string: "https://github.com/princelundgren/prince-clockin")!)
+                Link("Website", destination: URL(string: "https://princeworks.app/clockin/")!)
             }
             HStack {
                 Button("Check for Updates…") { updater.checkForUpdates() }

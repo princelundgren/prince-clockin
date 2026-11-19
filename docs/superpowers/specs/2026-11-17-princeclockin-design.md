@@ -572,10 +572,10 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
 - Report an Issue…, in the right-click menu and in Settings → About, opens the repository's
   new-issue page. Website and Third-Party Notices… are in About. Bug reports come from the user,
   never collected.
-- Until the maintainer's shared products website exists (a separate project), Website opens the
-  GitHub repository, and its README is the landing page: what the app does, how to install it,
-  support through GitHub issues, and a privacy statement saying the above (owner, 2026-11-17). A
-  later release points Website at the app's page there; older copies keep the repository link.
+- Website opens the app's page on the maintainer's products website, `https://princeworks.app/clockin/`,
+  with no `?ref=` tag, since the app reports nothing about its use. The repository's README stays a
+  landing page of its own: what the app does, how to install it, support through GitHub issues, and
+  a privacy statement saying the above (owner, 2026-11-17).
 
 ### Release
 
