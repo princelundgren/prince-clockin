@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let panelSession = PanelSession()
     private var statusItem: StatusItemController?
     private var settingsWindow: NSWindow?
+    private let loginsPaneRequest = LoginsPaneRequest()
 
     override init() {
         appModel = AppModel()
@@ -72,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let panel = PanelView(
             appModel: appModel, updater: updater, session: panelSession,
             openSettings: { [weak self] in self?.showSettings() },
-            openSettingsOnLogins: { [weak self] in self?.showSettings(on: .logins) })
+            editInSettings: { [weak self] in self?.showSettings(selecting: $0) },
+            addLogins: { [weak self] in self?.showSettingsOpeningAddMenu() })
         let hosting = PanelHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
         hosting.onCancel = { [weak self] in self?.panelCancelled() }
@@ -156,7 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let pane { UserDefaults.standard.set(pane.rawValue, forKey: SettingsView.paneKey) }
         popover.performClose(nil)
         if settingsWindow == nil {
-            let hosting = NSHostingController(rootView: SettingsView(appModel: appModel, updater: updater))
+            let hosting = NSHostingController(rootView: SettingsView(
+                appModel: appModel, updater: updater, loginsPaneRequest: loginsPaneRequest))
             // Only the minimum, so the window stays resizable and zoomable above it.
             hosting.sizingOptions = .minSize
             let window = NSWindow(contentViewController: hosting)
@@ -170,14 +173,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
+
+    /// Edit in Settings…: Settings on Logins, with the tile's login selected.
+    private func showSettings(selecting loginID: UUID) {
+        loginsPaneRequest.loginToSelect = loginID
+        showSettings(on: .logins)
+    }
+
+    /// Add Logins…: Settings on Logins, whose pane opens its + menu once it has read the config
+    /// files.
+    private func showSettingsOpeningAddMenu() {
+        loginsPaneRequest.isAddMenuPending = true
+        showSettings(on: .logins)
+    }
 }
 
 extension AppDelegate: NSWindowDelegate {
     /// Lets go of the closing Settings window, and of its autosave name, which the next window
-    /// takes, before anything can bring this one forward again.
+    /// takes, before anything can bring this one forward again. An Add Logins… it didn't get to
+    /// answer is dropped, so the next window doesn't open the + menu unasked.
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
         window.setFrameAutosaveName("")
         settingsWindow = nil
+        loginsPaneRequest.isAddMenuPending = false
     }
 }

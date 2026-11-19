@@ -153,7 +153,7 @@ public func tilePresentation(
     let due = isDue(login, now: now, leadTime: leadTime)
     let control = heldControl ?? (due && pending == nil ? .logInButton : .actionsMenu)
     let clickLogsIn = control == .logInButton && due && pending == nil
-    let kind = kindName(login.kind)
+    let kind = loginKindName(login.kind)
     var menuItems: [TileMenuItem] = [
         .logIn, .setTimer, .markLoggedInNow(opensSetTimer: login.sessionLength == nil), .sessionLength,
         .editInSettings,
@@ -209,6 +209,13 @@ public func sessionLengthOptions(current: TimeInterval?) -> [SessionLengthOption
     ]
 }
 
+/// The choice a Session Length pop-up shows for a stored `length`: its own item when listed,
+/// Custom… when not, and No timer when unknown, as `sessionLengthOptions(current:)` checks them.
+public func sessionLengthChoice(for length: TimeInterval?) -> SessionLengthChoice {
+    guard let length else { return .noTimer }
+    return isListedSessionLength(length) ? .length(length) : .custom
+}
+
 private let listedSessionLengths: [TimeInterval] = [8, 12, 24, 72, 168].map { $0 * 3600 }
 
 /// Whether `length` has its own item in `sessionLengthOptions(current:)`, rather than Custom….
@@ -224,7 +231,7 @@ public func sessionLengthText(_ length: TimeInterval) -> String {
 }
 
 /// The session length before a noun ("1-day timer").
-private func sessionLengthAdjective(_ length: TimeInterval) -> String {
+func sessionLengthAdjective(_ length: TimeInterval) -> String {
     let (count, unit) = sessionLengthUnits(length)
     return "\(count)-\(unit)"
 }
@@ -236,7 +243,8 @@ private func sessionLengthUnits(_ length: TimeInterval) -> (count: Int, unit: St
     return (minutes, "minute")
 }
 
-private func kindName(_ kind: LoginKind) -> String {
+/// The kind as the glossary names it ("AWS SSO session").
+func loginKindName(_ kind: LoginKind) -> String {
     switch kind {
     case .awsSSOSession: "AWS SSO session"
     case .databricksProfile(_, accountLevel: false): "Databricks profile"

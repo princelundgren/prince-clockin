@@ -124,14 +124,14 @@ The login time comes from:
    future", an Expires In longer than the session length with "That's longer than the session
    length", a session length over a year with "A session length can be at most a year", and one of
    zero or less with "A session length must be more than zero". Both limits hold for every session
-   length. Settings' and Edit Session Length's field stores its text on Return or when focus
-   leaves it within the panel or Settings, never while typing, and closing the panel discards
-   unsaved text. Empty text makes the session length unknown, text that isn't a positive number of
-   hours is refused with "Enter a number of hours", and one over a year with the same words as Set
-   Timer. A refused text stays in the field with the refusal under it until it changes, and
-   nothing is stored. While the session length is unknown, Set Timer asks for it in the same form,
-   so the time left is never stored as the session length, and Mark as Logged In Now opens Set
-   Timer to ask for it. The core sets a login time through `setLoginTime(id:at:)`.
+   length. The hours field of Settings' Custom… and of Edit Session Length stores its text on
+   Return or when focus leaves it within the panel or Settings, never while typing, and closing
+   the panel discards unsaved text. Empty text makes the session length unknown, text that isn't a
+   positive number of hours is refused with "Enter a number of hours", and one over a year with the
+   same words as Set Timer. A refused text stays in the field with the refusal under it until it
+   changes, and nothing is stored. While the session length is unknown, Set Timer asks for it in
+   the same form, so the time left is never stored as the session length, and Mark as Logged In
+   Now opens Set Timer to ask for it. The core sets a login time through `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
    - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
      The app compares what it last saw of the file with what it reads now, in this order:
@@ -294,14 +294,12 @@ depends on it being open. From top to bottom:
    "Update 1.0.1 installs after the logins finish", without View….
 7. **The footer**: a `gearshape` button for Settings on the left, Quit on the right.
 
-Until Settings → Logins has Check Databricks Now, the panel keeps it on its own row before the
-footer; it leaves the panel then.
-
 **Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
 files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
 databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
-with its + menu open; until the Logins pane is rebuilt, it opens the pane without the menu.
+with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
+under +, since SwiftUI can't open a `Menu` programmatically.
 Discovery reads the config files again on each opening; while it runs, no earlier text shows.
 
 #### Tiles
@@ -333,7 +331,8 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     trailing side shows that state or the timer instead of Log In.
 - **The "…" menu**, also the tile's context menu and its accessibility actions: Log In, Set
   Timer…, Mark as Logged In Now, a Session Length submenu with a checkmark on the current length,
-  and Edit in Settings…; Cancel All on a running or queued tile.
+  and Edit in Settings…, which opens Settings → Logins with that login selected; Cancel All on a
+  running or queued tile.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
     timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
@@ -358,8 +357,8 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     time and a session length. With No timer chosen the caption reads "Choose a session length";
     an empty or non-numeric field, negative hours or minutes outside 0 to 59 leave it empty.
     Custom… shows a field for a number of hours, and keeps a length the list doesn't have exactly
-    until it is edited. Until the Logins pane is rebuilt, Settings' prompt after adding a login
-    shows this form with Skip in place of Cancel.
+    until it is edited. Settings' prompt after adding a login opens this form in its place from
+    Set Timer…, with Skip in place of Cancel.
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.
@@ -373,7 +372,9 @@ Discovery reads the config files again on each opening; while it runs, no earlie
 - **The + menu** in Settings → Logins: a "Found in your config files" section with each untracked
   AWS SSO session, Databricks profile and Databricks account profile, its kind beside it, then
   Custom Login…. With nothing new: "No new AWS SSO sessions or Databricks profiles", then Custom
-  Login…. Choosing a found login tracks it at once and selects it.
+  Login…; while the pane is still reading the config files, Custom Login… alone. The pane reads
+  them when it appears and again whenever an AWS SSO session or Databricks profile is tracked or
+  removed, a new read cancelling the last. Choosing a found login tracks it at once and selects it.
 - Menus and the Settings sidebar use the system selection colour, which follows the user's accent
   colour.
 
@@ -387,22 +388,28 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
 
 - **Logins:** the tracked logins, each with a `.secondary` kind symbol (`cloud` AWS,
   `square.stack.3d.up` Databricks, `terminal` custom) and a subtitle with its kind, session
-  length and last check ("Databricks profile · 3-day session · Checked 14:02 · valid"). Check
-  Databricks Now in the pane's header. + is the + menu; − removes the selected login, says it also
-  leaves its presets, and is disabled with nothing selected. The selected login's form:
-  - every kind: Name, which is only what PrinceClockIn shows, and Session length;
+  length ("No timer" when unknown) and last check ("Databricks profile · 3-day session · Checked
+  14:02 · valid"; an account profile's ends "Not checked"). Check Databricks Now in the pane's
+  header. + is the + menu; − removes the selected login at once, or, for a login in a preset,
+  first asks "Remove vpn? It also leaves the presets Morning and Night shift." with Remove
+  (destructive) and Cancel (owner, 2026-11-19); it is disabled with nothing selected. The
+  selected login's form:
+  - every kind: Name, which is only what PrinceClockIn shows, and Session length, Set Timer's
+    pop-up of the one list, on No timer while the length is unknown; Custom… shows the hours
+    field, which stores and refuses as Timers says (owner, 2026-11-19);
   - AWS SSO session: its source ("qa in ~/.aws/config");
-  - Databricks profile: its source ("analytics-dev in ~/.databrickscfg") and its last check;
-    an account profile says "Not checked" and why;
+  - Databricks profile: its source ("analytics-dev in ~/.databrickscfg") and its last check
+    ("Not checked yet" before the first); an account profile says "Not checked" and why;
   - custom login: Command, optional, with "The command runs in Terminal and is saved as plain
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
-    Add; Return adds and Escape cancels. Without a command, the form says Log In waits for the
-    user to click Done.
+    Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
+    says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
     warn you before it expires, or skip and log in from the panel later." with Skip and Set
     Timer…, so a login the user has already done gets a known timer instead of the "Logged in
-    elsewhere?" question later.
+    elsewhere?" question later. It is asked once: selecting another login or removing this one
+    ends it.
 - **Presets:** the presets with +/−; the selected preset's Name and "Logs in to, in order", a list
   with + (a menu of the tracked logins), −, Move Up and Move Down. Drag also reorders; Move Up and
   Move Down are the keyboard and VoiceOver way.
@@ -456,7 +463,8 @@ A token has only the meanings its row lists.
   `.cancelAction` on Set Timer's Cancel, and the panel's `cancelOperation(_:)` otherwise), so
   neither needs focus: Return triggers the default from anywhere but a text field, which it
   commits instead, and Escape works from a text field too. Settings' Set Timer prompt after adding
-  a login takes Return and Escape the same way, Set the default and Escape its Skip. The rest
+  a login takes Return and Escape the same way, Set the default and Escape its Skip; before Set
+  Timer… is chosen, Escape is Skip and Return has no default. The rest
   follows the user's Keyboard Navigation setting, since buttons and menus, the tiles among them,
   take focus only with it on, as is conventional on the Mac: with it on, Tab, Space, the arrows
   and focus on the first tile work as above; with it off, Tab moves only between text fields,

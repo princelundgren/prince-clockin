@@ -393,6 +393,12 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(sessionLengthOptions(current: nil).filter(\.isSelected).map(\.title) == ["No timer"])
     }
 
+    @Test func aStoredLengthIsChosenInThePopUpAsTheOptionsCheckIt() {
+        #expect(sessionLengthChoice(for: 72 * hour) == .length(72 * hour))
+        #expect(sessionLengthChoice(for: 10 * hour) == .custom)
+        #expect(sessionLengthChoice(for: nil) == .noTimer)
+    }
+
     @Test func sessionLengthsReadInHoursOrDays() {
         #expect(sessionLengthText(8 * hour) == "8 hours")
         #expect(sessionLengthText(hour) == "1 hour")

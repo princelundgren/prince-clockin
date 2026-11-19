@@ -135,6 +135,9 @@ public final class Coordinator {
             && model.state.logins.contains { $0.kind.isWorkspaceProfile }
     }
 
+    /// Where discovery reads the AWS and Databricks config files.
+    public let configPaths: ConfigPaths
+
     private let store: StateStore
     private let queue: LoginQueue
     private let pathResolver: ShellPathResolver
@@ -142,7 +145,6 @@ public final class Coordinator {
     private let aws: AWSCacheReading
     private let notifier: Notifying
     private let approvals: ApprovalStoring
-    private let configPaths: ConfigPaths
     private let clock: () -> Date
     private let commands: AsyncStream<QueueCommand>
     private let commandSink: AsyncStream<QueueCommand>.Continuation
@@ -329,18 +331,10 @@ public final class Coordinator {
     /// files are read off the main actor; what is tracked is checked once they have been read.
     public func discoverCandidates() async -> (aws: [String], databricks: [DatabricksProfile]) {
         let found = await Self.discover(in: configPaths)
-        var trackedAWS: Set<String> = []
-        var trackedDatabricks: Set<String> = []
-        for login in model.state.logins {
-            switch login.kind {
-            case .awsSSOSession(let name): trackedAWS.insert(name)
-            case .databricksProfile(let name, _): trackedDatabricks.insert(name)
-            case .custom: break
-            }
-        }
+        let tracked = TrackedConfigNames(logins: model.state.logins)
         return (
-            found.aws.filter { !trackedAWS.contains($0) },
-            found.databricks.filter { !trackedDatabricks.contains($0.name) }
+            found.aws.filter { !tracked.aws.contains($0) },
+            found.databricks.filter { !tracked.databricks.contains($0.name) }
         )
     }
 

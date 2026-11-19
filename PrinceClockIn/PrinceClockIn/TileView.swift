@@ -15,7 +15,7 @@ struct TileView: View {
     /// The control the tile was when the pointer entered it, so a click's action can't change
     /// under the pointer. The panel keeps it, since it builds the tile from it.
     @Binding var heldControl: TileControl?
-    let openSettingsOnLogins: () -> Void
+    let editInSettings: (UUID) -> Void
     @State private var showsSessionLengthField = false
     @State private var output: String?
     @Environment(\.colorScheme) private var colorScheme
@@ -270,7 +270,7 @@ struct TileView: View {
             session.openSetTimerMarkingLoggedInNow(for: login.id, now: coordinator.now, newDraft: newSetTimerDraft)
         case .markLoggedInNow(opensSetTimer: false): coordinator.markLoggedInNow(id: login.id)
         case .sessionLength: break
-        case .editInSettings: openSettingsOnLogins()
+        case .editInSettings: editInSettings(login.id)
         case .cancelAll: coordinator.cancelBatch()
         }
     }

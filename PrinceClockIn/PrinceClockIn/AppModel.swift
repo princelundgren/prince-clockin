@@ -13,6 +13,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private static let notificationsBannerDismissedKey = "notificationsBannerDismissed"
 
     let coordinator: Coordinator
+    /// The user's home directory, which Settings abbreviates to `~` in a config file's path.
+    let homeDirectory: URL
     /// Whether the user has denied notifications, so the panel and settings can say so.
     private(set) var notificationsAreOff = false
     /// Whether the panel was closed after showing the Notifications off banner, which then shows
@@ -28,13 +30,16 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         let runner = FoundationProcessRunner()
         let pathResolver = ShellPathResolver(runner: runner, shell: Self.loginShell(), environment: environment)
         let queue = LoginQueue(runner: runner, pathResolver: pathResolver, terminal: TerminalOpener())
-        let home = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+        let home = URL(
+            filePath: environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory(),
+            directoryHint: .isDirectory)
+        homeDirectory = home
         coordinator = Coordinator(
             store: StateStore(directory: Self.stateDirectory()),
             queue: queue,
             pathResolver: pathResolver,
             checker: DatabricksChecker(runner: runner, pathResolver: pathResolver),
-            aws: AWSCacheFileReader(cacheDirectory: URL(filePath: home).appending(path: ".aws/sso/cache")),
+            aws: AWSCacheFileReader(cacheDirectory: home.appending(path: ".aws/sso/cache")),
             notifier: SystemNotifier(),
             approvals: UserDefaultsApprovals(),
             configPaths: .standard(environment: environment),

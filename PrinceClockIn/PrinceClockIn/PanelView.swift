@@ -11,7 +11,10 @@ struct PanelView: View {
     let updater: Updater
     let session: PanelSession
     let openSettings: () -> Void
-    let openSettingsOnLogins: () -> Void
+    /// Edit in Settings… on a tile: Settings on Logins, with that login selected.
+    let editInSettings: (UUID) -> Void
+    /// Add Logins…: Settings on Logins, with its + menu open.
+    let addLogins: () -> Void
     @FocusState private var focus: PanelFocus?
 
     private var coordinator: Coordinator { appModel.coordinator }
@@ -51,7 +54,7 @@ struct PanelView: View {
                 BatchCardView(card: card, coordinator: coordinator, defaults: defaults)
             }
             if logins.isEmpty, let empty = session.emptyPanel {
-                EmptyPanelView(empty: empty, addLogins: openSettingsOnLogins)
+                EmptyPanelView(empty: empty, addLogins: addLogins)
             }
             tileList(tiles, defaults: defaults, keys: keys)
             if showsLogInToDue {
@@ -75,10 +78,6 @@ struct PanelView: View {
                         Button("View…") { updater.checkForUpdates() }
                     }
                 }
-            }
-            if !logins.isEmpty {
-                Divider()
-                checkDatabricksNow
             }
             Divider()
             footer
@@ -114,7 +113,7 @@ struct PanelView: View {
                     TileView(
                         login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
                         defaults: defaults, focus: $focus, heldControl: heldControl(for: entry.login.id),
-                        openSettingsOnLogins: openSettingsOnLogins)
+                        editInSettings: editInSettings)
                 }
             }
             .onMoveCommand { move($0, keys: keys) }
@@ -159,15 +158,6 @@ struct PanelView: View {
                 coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
             }
         }
-    }
-
-    /// Here until Settings → Logins has Check Databricks Now.
-    private var checkDatabricksNow: some View {
-        Button("Check Databricks Now") {
-            Task { await coordinator.checkNow() }
-        }
-        .disabled(!coordinator.canCheckDatabricksNow)
-        .help("Ask the Databricks CLI whether each Databricks login is still valid")
     }
 
     private var presetButtons: [PresetButton] {
