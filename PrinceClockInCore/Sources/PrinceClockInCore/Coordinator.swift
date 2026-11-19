@@ -268,7 +268,6 @@ public final class Coordinator {
     public func removeLogin(id: UUID) {
         model.state.logins.removeAll { $0.id == id }
         model.possibleLogins[id] = nil
-        model.validWhileExpired.remove(id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil
@@ -279,11 +278,9 @@ public final class Coordinator {
         edit(id) { $0.displayName = displayName }
     }
 
-    /// Sets the session length, rounded down to whole seconds, which ends a "valid while expired"
-    /// mismatch: the length is what the row offered to correct.
+    /// Sets the session length, rounded down to whole seconds.
     public func setSessionLength(id: UUID, to length: TimeInterval?) {
         edit(id) { $0.sessionLength = length.map { $0.rounded(.down) } }
-        model.validWhileExpired.remove(id)
     }
 
     /// Sets a custom login's command and approves it, since the user typed it. A login held back
@@ -372,9 +369,9 @@ public final class Coordinator {
     private func check(_ logins: [Login], now: Date) async {
         for login in logins {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
-            let validity = await checker.check(
+            let result = await checker.check(
                 profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
-            if let validity { model.apply(validity, login: login.id, now: now) }
+            if let result { model.apply(result, login: login.id, now: now) }
         }
         saveIfChanged()
     }

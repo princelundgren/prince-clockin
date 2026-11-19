@@ -298,7 +298,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(timerState(for: logins.state.logins[0], now: validAt, leadTime: 0) == .ok(remaining: 24 * hour))
     }
 
-    @Test func databricksValidWhileTimerExpiredFlagsBoth() {
+    @Test func databricksValidAfterExpiryIsStillValid() {
         let now = at("2026-11-17T12:00:00Z")
         let prod = databricks("prod", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
         let dev = databricks("dev", loginTime: now.addingTimeInterval(-hour))
@@ -307,8 +307,83 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.valid, login: prod.id, now: now)
         logins.apply(.valid, login: dev.id, now: now)
 
-        #expect(logins.validWhileExpired == [prod.id])
-        #expect(logins.state == model([prod, dev]).state)
+        #expect(isStillValid(logins.state.logins[0], now: now))
+        #expect(!isStillValid(logins.state.logins[1], now: now))
+        #expect(logins.state.logins.map(\.loginTime) == [prod.loginTime, dev.loginTime])
+    }
+
+    @Test func everyCheckResultIsRecorded() {
+        let now = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", loginTime: now.addingTimeInterval(-hour))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: now)
+        #expect(logins.state.logins[0].lastDatabricksCheck == DatabricksCheckRecord(at: now, result: .valid))
+
+        logins.apply(.couldntCheck, login: prod.id, now: now.addingTimeInterval(600.5))
+        #expect(logins.state.logins[0].lastDatabricksCheck
+            == DatabricksCheckRecord(at: now.addingTimeInterval(600), result: .couldntCheck))
+        #expect(logins.state.logins[0].loginTime == prod.loginTime)
+        #expect(logins.state.logins[0].invalidatedAt == nil)
+
+        logins.apply(.invalid, login: prod.id, now: now.addingTimeInterval(1200))
+        #expect(logins.state.logins[0].lastDatabricksCheck
+            == DatabricksCheckRecord(at: now.addingTimeInterval(1200), result: .invalid))
+    }
+
+    @Test func aValidCheckBeforeTheExpiryIsNotStillValid() {
+        let checkedAt = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: checkedAt.addingTimeInterval(-hour + 60))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: checkedAt)
+
+        #expect(!isStillValid(logins.state.logins[0], now: checkedAt.addingTimeInterval(120)))
+    }
+
+    @Test func stillValidAtTheExpiryItself() {
+        let expiry = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: expiry.addingTimeInterval(-hour))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: expiry)
+
+        #expect(isStillValid(logins.state.logins[0], now: expiry))
+    }
+
+    @Test func stillValidEndsThroughTheStoredFacts() {
+        let now = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        var stillValid = model([prod])
+        stillValid.apply(.valid, login: prod.id, now: now)
+
+        var loggedIn = stillValid
+        loggedIn.markLoggedInNow(id: prod.id, now: now)
+        #expect(!isStillValid(loggedIn.state.logins[0], now: now))
+
+        var lengthened = stillValid
+        lengthened.state.logins[0].sessionLength = 3 * hour
+        #expect(!isStillValid(lengthened.state.logins[0], now: now))
+
+        var couldntCheck = stillValid
+        couldntCheck.apply(.couldntCheck, login: prod.id, now: now.addingTimeInterval(600))
+        #expect(!isStillValid(couldntCheck.state.logins[0], now: now.addingTimeInterval(600)))
+
+        var invalid = stillValid
+        invalid.apply(.invalid, login: prod.id, now: now.addingTimeInterval(600))
+        #expect(!isStillValid(invalid.state.logins[0], now: now.addingTimeInterval(600)))
+    }
+
+    @Test func onlyAWorkspaceProfileCanBeStillValid() {
+        let now = at("2026-11-17T12:00:00Z")
+        var dev = login(remaining: -hour, now: now)
+        dev.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+        var account = databricks("analytics-dev", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        account.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)
+        account.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+
+        #expect(!isStillValid(dev, now: now))
+        #expect(!isStillValid(account, now: now))
     }
 
     @Test func takeWarningsMarksAndPersists() throws {

@@ -17,9 +17,12 @@ private func sampleState() -> AppState {
         invalidationReason: .loggedOut, warnedForExpiry: at("2026-11-17T17:00:00Z"),
         lastAWSCache: AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     let databricks = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true))
+    let checked = Login(
+        displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
+        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck))
     let custom = Login(displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
     return AppState(
-        logins: [aws, databricks, custom],
+        logins: [aws, databricks, checked, custom],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
         settings: Settings(warningLeadTime: 15 * 60, loginTimeout: 120))
 }
@@ -235,5 +238,25 @@ func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, logg
             return
         }
         #expect(loaded.logins.first.flatMap(expiry(of:)) == before)
+    }
+}
+
+@Test func stillValidSurvivesSaveAndLoad() throws {
+    let now = at("2026-11-17T12:00:00Z")
+    let prod = Login(
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+        sessionLength: 3600, loginTime: now.addingTimeInterval(-7200))
+    var model = LoginsModel(state: AppState(logins: [prod]))
+    model.apply(.valid, login: prod.id, now: now)
+
+    try withTemporaryDirectory { directory in
+        let store = StateStore(directory: directory)
+        try store.save(model.state)
+        guard case .loaded(let loaded) = store.load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+        let login = try #require(loaded.logins.first)
+        #expect(isStillValid(login, now: now))
     }
 }

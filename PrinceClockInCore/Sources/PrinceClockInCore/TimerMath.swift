@@ -53,6 +53,17 @@ public func isLoggedOut(_ login: Login) -> Bool {
     }
 }
 
+/// Whether a Databricks workspace login's timer has run out while its last check, made at or after
+/// that expiry, found it valid. A new login time, a longer session or a later check that isn't
+/// valid ends it.
+public func isStillValid(_ login: Login, now: Date) -> Bool {
+    guard case .databricksProfile(_, accountLevel: false) = login.kind, !isInvalidated(login),
+          let expiry = expiry(of: login), expiry <= now,
+          let check = login.lastDatabricksCheck
+    else { return false }
+    return check.result == .valid && check.at >= expiry
+}
+
 /// Computed from absolute times only, so it is right after sleep or a clock change.
 /// An invalidated login is `.expired` until a login newer than `invalidatedAt` is recorded.
 public func timerState(for login: Login, now: Date, leadTime: TimeInterval) -> TimerState {

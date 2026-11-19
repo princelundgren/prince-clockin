@@ -552,8 +552,8 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   - a Still valid login is left out of the due list and the expired severity;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";
-  - each Databricks login stores its last check's time and result (valid, invalid, couldn't
-    check, kept apart from a skipped check), and a "checking" flag is published;
+  - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
+    is published;
   - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
   - the menu bar status carries the id of the login it is about;
   - the available update's version is kept, and its relaunch waits while a batch runs.

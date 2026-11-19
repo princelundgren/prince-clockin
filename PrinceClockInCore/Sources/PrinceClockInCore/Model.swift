@@ -68,6 +68,27 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
+/// What one Databricks check that ran found. A skipped check has no result.
+public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
+    case valid
+    /// The CLI's no-credentials error.
+    case invalid
+    /// The check failed for another reason, such as being offline.
+    case couldntCheck
+}
+
+/// A Databricks login's last check that ran: when, and what it found.
+public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
+    public let at: Date
+    public let result: DatabricksCheckResult
+
+    /// `at` is rounded down to whole seconds.
+    public init(at: Date, result: DatabricksCheckResult) {
+        self.at = at.wholeSeconds
+        self.result = result
+    }
+}
+
 /// Why a login was invalidated.
 public enum InvalidationReason: String, Codable, Hashable, Sendable {
     /// Its AWS cache file disappeared, as `aws sso logout` does.
@@ -93,6 +114,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// longer session changes the expiry and so re-arms the warning.
     public var warnedForExpiry: Date?
     public var lastAWSCache: AWSCacheRecord?
+    public var lastDatabricksCheck: DatabricksCheckRecord?
 
     /// Dates and `sessionLength` are rounded down to whole seconds.
     public init(
@@ -104,7 +126,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         invalidatedAt: Date? = nil,
         invalidationReason: InvalidationReason? = nil,
         warnedForExpiry: Date? = nil,
-        lastAWSCache: AWSCacheRecord? = nil
+        lastAWSCache: AWSCacheRecord? = nil,
+        lastDatabricksCheck: DatabricksCheckRecord? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -115,6 +138,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.invalidationReason = invalidationReason
         self.warnedForExpiry = warnedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
+        self.lastDatabricksCheck = lastDatabricksCheck
     }
 
     /// 8 hours for AWS; `nil` for every other kind, where the user sets it.
@@ -131,7 +155,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
             id: id, displayName: displayName, kind: kind, sessionLength: sessionLength,
             loginTime: loginTime, invalidatedAt: invalidatedAt, invalidationReason: invalidationReason,
             warnedForExpiry: warnedForExpiry,
-            lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) })
+            lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
+            lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
     }
 }
 

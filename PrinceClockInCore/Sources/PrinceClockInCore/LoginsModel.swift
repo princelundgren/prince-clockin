@@ -4,9 +4,6 @@ import Foundation
 /// It does no I/O and reads no clock: every time comes in with its event.
 public struct LoginsModel: Equatable, Sendable {
     public var state: AppState
-    /// Databricks logins the CLI reports valid while their timer says expired. The row shows both
-    /// facts and offers to correct the session length.
-    public var validWhileExpired: Set<UUID> = []
     /// AWS logins whose cache rewrite could be a login or a renewal, with the rewrite's time. The
     /// row asks "Logged in at <time>?".
     public var possibleLogins: [UUID: Date] = [:]
@@ -42,21 +39,20 @@ public struct LoginsModel: Equatable, Sendable {
         setLoginTime(id: id, at: time)
     }
 
-    /// Records a Databricks check of login `id` made at `now`. Valid after being found invalid is a
-    /// login at `now`, the best time the app knows. Valid while the timer says expired is flagged
-    /// in `validWhileExpired`.
-    public mutating func apply(_ validity: DatabricksValidity, login id: UUID, now: Date) {
+    /// Records a Databricks check of login `id` made at `now`, whatever it found. Invalid
+    /// invalidates the login. Valid after being found invalid is a login at `now`, the best time
+    /// the app knows.
+    public mutating func apply(_ result: DatabricksCheckResult, login id: UUID, now: Date) {
         guard let index = index(of: id) else { return }
-        let login = state.logins[index]
-        switch validity {
+        switch result {
         case .invalid:
             invalidate(id, at: now, reason: .foundInvalid)
-        case .valid where isInvalidated(login):
+        case .valid where isInvalidated(state.logins[index]):
             changeLoginTime(of: id) { $0.loginTime = now.wholeSeconds }
-        case .valid:
-            let timer = timerState(for: login, now: now, leadTime: state.settings.warningLeadTime)
-            if timer == .expired { validWhileExpired.insert(id) }
+        case .valid, .couldntCheck:
+            break
         }
+        state.logins[index].lastDatabricksCheck = DatabricksCheckRecord(at: now, result: result)
     }
 
     /// The logins due a warning at `now`, in stored order, each marked as warned for its current
@@ -146,19 +142,17 @@ public struct LoginsModel: Equatable, Sendable {
     }
 
     /// Every write of a login time goes through here. A new login time answers the "Logged in
-    /// at?" question and ends any "valid while expired" mismatch, whatever time it sets.
+    /// at?" question, whatever time it sets.
     private mutating func changeLoginTime(of id: UUID, _ change: (inout Login) -> Void) {
         guard let index = index(of: id) else { return }
         change(&state.logins[index])
         possibleLogins[id] = nil
-        validWhileExpired.remove(id)
     }
 
     private mutating func invalidate(_ id: UUID, at now: Date, reason: InvalidationReason) {
         guard let index = index(of: id) else { return }
         state.logins[index].invalidatedAt = now.wholeSeconds
         state.logins[index].invalidationReason = reason
-        validWhileExpired.remove(id)
     }
 
     private func index(of id: UUID) -> Int? {
