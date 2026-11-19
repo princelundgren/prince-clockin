@@ -330,6 +330,17 @@ private final class GatedLogins: Sendable {
         #expect(coordinator.model.state.logins.isEmpty)
     }
 
+    @Test func dismissingTheNoticeClearsIt() throws {
+        let fixture = try Fixture()
+        try "not json".write(to: fixture.directory.appending(path: "state.json"), atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator()
+        _ = try #require(coordinator.loadNotice)
+
+        coordinator.dismissLoadNotice()
+
+        #expect(coordinator.loadNotice == nil)
+    }
+
     // MARK: Ticks
 
     @Test func tickAdvancesNow() async throws {

@@ -273,6 +273,11 @@ public final class Coordinator {
         commandSink.yield(.done(id))
     }
 
+    /// The user's Dismiss on the State set aside banner; the set-aside file stays where it is.
+    public func dismissLoadNotice() {
+        loadNotice = nil
+    }
+
     /// The panel was shown, so the user has seen every failure so far.
     public func markPanelShown() {
         unseenFailures.removeAll()

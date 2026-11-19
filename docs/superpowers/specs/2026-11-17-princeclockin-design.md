@@ -261,7 +261,8 @@ depends on it being open. From top to bottom:
       appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
       expires." With Open System Settings…, which opens System Settings → Notifications. It
-      appears once; closing the panel after it has been shown dismisses it, and after that it
+      appears once each time notifications are turned off (owner, 2026-11-19): closing the panel
+      after it has been shown dismisses it until notifications are on again, and meanwhile it
       lives in Settings → Warnings.
 2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login that
    becomes due mid-batch joins the queue from its tile's Log In:
@@ -535,6 +536,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   in a copied file, or is changed in it, isn't: the core answers `needsApproval(id:)`, its tile
   says "Not yet approved" and shows the command, and it doesn't run until the user clicks Run It.
   Not Now skips it this time.
+- The Notifications off banner's dismissal is also kept in the app's user defaults
+  (`notificationsBannerDismissed`), and cleared once notifications are found on again.
 - A custom command opens in Terminal through a `do script` Apple event, never a file Terminal
   executes. The command is passed as the parameter of a handler in a constant, compiled script, so
   it is never quoted into script source. The app launches Terminal first, then asks for the

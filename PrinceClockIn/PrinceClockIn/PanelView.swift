@@ -1,7 +1,7 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// The menu bar panel: notices, the running batch, one tile per login, the log-in actions and the
+/// The menu bar panel: banners, the running batch, one tile per login, the log-in actions and the
 /// footer.
 struct PanelView: View {
     /// Past this height the tiles scroll.
@@ -34,7 +34,9 @@ struct PanelView: View {
         let prominent = prominentAction(
             tiles: tiles.map(\.tile), showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
         VStack(alignment: .leading, spacing: 10) {
-            notices
+            ForEach(appModel.panelBanners, id: \.self) { banner in
+                BannerView(banner: banner) { perform($0, on: banner) }
+            }
             if let batch = coordinator.batch {
                 BatchSection(batch: batch, coordinator: coordinator)
             }
@@ -69,6 +71,7 @@ struct PanelView: View {
         }
         .padding()
         .frame(width: 320)
+        .onChange(of: appModel.panelBanners) { _, banners in session.show(banners) }
     }
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
@@ -91,15 +94,13 @@ struct PanelView: View {
         Binding(get: { session.heldControls[id] }, set: { session.heldControls[id] = $0 })
     }
 
-    @ViewBuilder private var notices: some View {
-        if let backup = coordinator.loadNotice {
-            Notice("The settings file couldn't be read, so it was set aside as \(backup.lastPathComponent) and the app started empty.")
-        }
-        if appModel.notificationsAreOff {
-            Notice("Notifications are off, so only the menu bar warns before a login expires. Turn them on in System Settings → Notifications.")
-        }
-        if let saveFailure = coordinator.saveFailure {
-            Notice("Changes couldn't be saved: \(saveFailure)")
+    private func perform(_ action: BannerAction, on banner: Banner) {
+        switch action {
+        case .showInFinder:
+            if case .stateSetAside(let backup) = banner { NSWorkspace.shared.activateFileViewerSelecting([backup]) }
+        case .dismiss: coordinator.dismissLoadNotice()
+        case .tryAgain: coordinator.retrySave()
+        case .openNotificationSettings: NSWorkspace.shared.open(AppLinks.notificationSettings)
         }
     }
 
@@ -138,37 +139,66 @@ struct PanelView: View {
     }
 }
 
-/// What the panel keeps for one opening: its tiles' order, taken as it opens, and the control each
-/// tile held when the pointer entered it. Closing the panel clears it and counts the closing, which
-/// gives the tiles new state for the next opening.
+/// What the panel keeps for one opening: its tiles' order, taken as it opens, the control each
+/// tile held when the pointer entered it, and whether the Notifications off banner was on screen.
+/// Closing the panel clears it and counts the closing, which gives the tiles new state for the
+/// next opening.
 @MainActor
 @Observable
 final class PanelSession {
     private(set) var order: [UUID] = []
     var heldControls: [UUID: TileControl] = [:]
     private(set) var closings = 0
+    @ObservationIgnored private var notificationsBanner = NotificationsBannerSighting()
 
     func open(order: [UUID]) {
         self.order = order
+        notificationsBanner.panelOpened()
     }
 
-    func close() {
+    /// This opening read the notification permission, and the panel shows `banners`.
+    func permissionRefreshed(showing banners: [Banner]) {
+        notificationsBanner.permissionRefreshed(showing: banners)
+    }
+
+    /// The panel's banners changed to `banners`.
+    func show(_ banners: [Banner]) {
+        notificationsBanner.panelShows(banners)
+    }
+
+    /// Returns whether the Notifications off banner was on screen during this opening, once its
+    /// permission was read.
+    func close() -> Bool {
         heldControls = [:]
         closings += 1
+        return notificationsBanner.panelClosed()
     }
 }
 
-private struct Notice: View {
-    let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
+private struct BannerView: View {
+    let banner: Banner
+    let perform: (BannerAction) -> Void
 
     var body: some View {
-        Label(text, systemImage: "exclamationmark.triangle")
-            .font(.callout)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 6) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(banner.lines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            HStack {
+                Spacer()
+                ForEach(banner.actions, id: \.self) { action in
+                    Button(action.title) { perform(action) }
+                }
+            }
+        }
+        .font(.callout)
     }
 }
 
