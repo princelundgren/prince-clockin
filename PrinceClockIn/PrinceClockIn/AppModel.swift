@@ -10,10 +10,15 @@ import UserNotifications
 final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private static let tickInterval: TimeInterval = 30
     private static let tickTolerance: TimeInterval = 5
+    private static let notificationsBannerDismissedKey = "notificationsBannerDismissed"
 
     let coordinator: Coordinator
     /// Whether the user has denied notifications, so the panel and settings can say so.
     private(set) var notificationsAreOff = false
+    /// Whether the panel was closed after showing the Notifications off banner, which then shows
+    /// no more until notifications are on again; Settings still says they are off.
+    private(set) var isNotificationsBannerDismissed =
+        UserDefaults.standard.bool(forKey: AppModel.notificationsBannerDismissedKey)
 
     /// Held for the app's life, so App Nap doesn't coalesce the tick timer of a windowless app.
     @ObservationIgnored private let activity: NSObjectProtocol
@@ -53,9 +58,27 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// Reads the notification permission again, since the user can change it in System Settings.
+    /// Notifications found on again end the banner's dismissal, so a later turn-off shows it again.
     func refreshNotificationPermission() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         notificationsAreOff = settings.authorizationStatus == .denied
+        if !notificationsBannerStaysDismissed(isNotificationsBannerDismissed, notificationsAreOff: notificationsAreOff) {
+            isNotificationsBannerDismissed = false
+            UserDefaults.standard.removeObject(forKey: Self.notificationsBannerDismissedKey)
+        }
+    }
+
+    /// The panel's banners now, highest first.
+    var panelBanners: [Banner] {
+        PrinceClockInCore.panelBanners(
+            setAsideFile: coordinator.loadNotice, saveFailure: coordinator.saveFailure,
+            notificationsAreOff: notificationsAreOff, isNotificationsBannerDismissed: isNotificationsBannerDismissed)
+    }
+
+    /// The panel closed after showing the Notifications off banner, so it shows no more.
+    func dismissNotificationsBanner() {
+        isNotificationsBannerDismissed = true
+        UserDefaults.standard.set(true, forKey: Self.notificationsBannerDismissedKey)
     }
 
     // MARK: UNUserNotificationCenterDelegate

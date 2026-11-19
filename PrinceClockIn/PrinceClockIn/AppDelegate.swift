@@ -85,10 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NotificationCenter.default.addObserver(
             forName: NSPopover.didCloseNotification, object: popover, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.statusItem?.button?.highlight(false)
-                self?.panelSession.close()
-            }
+            Task { @MainActor in self?.panelDidClose() }
         }
     }
 
@@ -100,9 +97,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     /// The panel's content is built once, so what it shows from the system is read on each showing.
+    /// Its banners count as seen only from this reading of the notification permission on.
     private func panelDidShow() {
         appModel.coordinator.markPanelShown()
-        Task { await appModel.refreshNotificationPermission() }
+        Task {
+            await appModel.refreshNotificationPermission()
+            panelSession.permissionRefreshed(showing: appModel.panelBanners)
+        }
+    }
+
+    private func panelDidClose() {
+        statusItem?.button?.highlight(false)
+        if panelSession.close() { appModel.dismissNotificationsBanner() }
     }
 
     private func togglePanel() {

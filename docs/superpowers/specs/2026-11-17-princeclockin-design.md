@@ -261,7 +261,8 @@ depends on it being open. From top to bottom:
       appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
       expires." With Open System Settings…, which opens System Settings → Notifications. It
-      appears once; closing the panel after it has been shown dismisses it, and after that it
+      appears once each time notifications are turned off (owner, 2026-11-19): closing the panel
+      after it has been shown dismisses it until notifications are on again, and meanwhile it
       lives in Settings → Warnings.
 2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login that
    becomes due mid-batch joins the queue from its tile's Log In:
@@ -286,11 +287,14 @@ depends on it being open. From top to bottom:
    "Update 1.0.1 installs after the logins finish", without View….
 7. **The footer**: a `gearshape` button for Settings on the left, Quit on the right.
 
+Until Settings → Logins has Check Databricks Now, the panel keeps it on its own row before the
+footer; it leaves the panel then.
+
 **Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
 files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
 databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
-with its + menu open.
+with its + menu open; until the Logins pane is rebuilt, it opens the pane without the menu.
 
 #### Tiles
 
@@ -535,6 +539,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   in a copied file, or is changed in it, isn't: the core answers `needsApproval(id:)`, its tile
   says "Not yet approved" and shows the command, and it doesn't run until the user clicks Run It.
   Not Now skips it this time.
+- The Notifications off banner's dismissal is also kept in the app's user defaults
+  (`notificationsBannerDismissed`), and cleared once notifications are found on again.
 - A custom command opens in Terminal through a `do script` Apple event, never a file Terminal
   executes. The command is passed as the parameter of a handler in a constant, compiled script, so
   it is never quoted into script source. The app launches Terminal first, then asks for the

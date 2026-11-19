@@ -117,10 +117,19 @@ public final class Coordinator {
             hasFailure: hasUnseenFailure || saveFailure != nil)
     }
 
-    /// Whether a Databricks check runs now, from the warning time or Check Now.
+    /// The panel's card for the running batch, or `nil` when the queue is idle.
+    public var batchCard: BatchCard? {
+        batch.map {
+            PrinceClockInCore.batchCard(
+                batch: $0, running: running.flatMap(login), next: queued.lazy.compactMap(login).first,
+                outcomes: outcomes, waitingForDone: waitingCustomID.flatMap(login))
+        }
+    }
+
+    /// Whether a Databricks check runs now, from the warning time or Check Databricks Now.
     public var isCheckingDatabricks: Bool { runningChecks > 0 }
-    /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
-    /// unlike an account profile can be checked, is tracked.
+    /// Whether Check Databricks Now can run: no check or Databricks login runs, and a workspace
+    /// profile, which unlike an account profile can be checked, is tracked.
     public var canCheckDatabricksNow: Bool {
         !isCheckingDatabricks && runningDatabricksID == nil
             && model.state.logins.contains { $0.kind.isWorkspaceProfile }
@@ -222,7 +231,7 @@ public final class Coordinator {
         if !warned.isEmpty { await notifier.postWarning(logins: warned) }
     }
 
-    /// Checks every tracked Databricks login, for the panel's "Check now".
+    /// Checks every tracked Databricks login, for Check Databricks Now.
     public func checkNow() async {
         await check(model.checkNowTargets(), now: clock())
     }
@@ -273,6 +282,11 @@ public final class Coordinator {
         commandSink.yield(.done(id))
     }
 
+    /// The user's Dismiss on the State set aside banner; the set-aside file stays where it is.
+    public func dismissLoadNotice() {
+        loadNotice = nil
+    }
+
     /// The panel was shown, so the user has seen every failure so far.
     public func markPanelShown() {
         unseenFailures.removeAll()
@@ -311,8 +325,10 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// The AWS sessions and Databricks profiles in the config files that aren't tracked yet.
-    public func discoverCandidates() -> (aws: [String], databricks: [DatabricksProfile]) {
+    /// The AWS sessions and Databricks profiles in the config files that aren't tracked yet. The
+    /// files are read off the main actor; what is tracked is checked once they have been read.
+    public func discoverCandidates() async -> (aws: [String], databricks: [DatabricksProfile]) {
+        let found = await Self.discover(in: configPaths)
         var trackedAWS: Set<String> = []
         var trackedDatabricks: Set<String> = []
         for login in model.state.logins {
@@ -322,12 +338,20 @@ public final class Coordinator {
             case .custom: break
             }
         }
-        let awsText = try? String(contentsOf: configPaths.awsConfig, encoding: .utf8)
-        let databricksText = try? String(contentsOf: configPaths.databricksConfig, encoding: .utf8)
         return (
-            discoverAWSSessions(configText: awsText).filter { !trackedAWS.contains($0) },
-            discoverDatabricksProfiles(configText: databricksText).filter { !trackedDatabricks.contains($0.name) }
+            found.aws.filter { !trackedAWS.contains($0) },
+            found.databricks.filter { !trackedDatabricks.contains($0.name) }
         )
+    }
+
+    /// Every AWS session and Databricks profile in the config files at `paths`.
+    @concurrent
+    private nonisolated static func discover(
+        in paths: ConfigPaths
+    ) async -> (aws: [String], databricks: [DatabricksProfile]) {
+        let awsText = try? String(contentsOf: paths.awsConfig, encoding: .utf8)
+        let databricksText = try? String(contentsOf: paths.databricksConfig, encoding: .utf8)
+        return (discoverAWSSessions(configText: awsText), discoverDatabricksProfiles(configText: databricksText))
     }
 
     // MARK: Edits from the views; each saves.

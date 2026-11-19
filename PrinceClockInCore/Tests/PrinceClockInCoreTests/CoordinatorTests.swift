@@ -330,6 +330,17 @@ private final class GatedLogins: Sendable {
         #expect(coordinator.model.state.logins.isEmpty)
     }
 
+    @Test func dismissingTheNoticeClearsIt() throws {
+        let fixture = try Fixture()
+        try "not json".write(to: fixture.directory.appending(path: "state.json"), atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator()
+        _ = try #require(coordinator.loadNotice)
+
+        coordinator.dismissLoadNotice()
+
+        #expect(coordinator.loadNotice == nil)
+    }
+
     // MARK: Ticks
 
     @Test func tickAdvancesNow() async throws {
@@ -656,6 +667,42 @@ private final class GatedLogins: Sendable {
         coordinator.cancelBatch()
 
         #expect(await eventually { coordinator.batch == nil && coordinator.waitingCustomID == nil })
+    }
+
+    @Test func batchCardNamesTheRunningLoginAndTheNextQueued() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        #expect(coordinator.batchCard == .running(
+            title: "Logging in to dev", progress: "1 of 2", instruction: "Finish in your browser. Next: prod",
+            failures: nil))
+        await logins.release("dev")
+        await logins.release("prod")
+        #expect(await eventually { coordinator.batch == nil })
+    }
+
+    @Test func batchCardAsksForTheWaitingCustomLoginsDone() async throws {
+        let vpn = custom(command: nil)
+        let prod = aws("prod")
+        let fixture = try Fixture(logins: [vpn, prod], loginRunner: GatedLogins(["prod"]).runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([vpn.id, prod.id])
+        #expect(await eventually { coordinator.waitingCustomID == vpn.id })
+
+        #expect(coordinator.batchCard == .waitingForDone(
+            id: vpn.id, title: "vpn is waiting for you", instruction: "Log in your own way, then click Done."))
+        coordinator.cancelBatch()
+        #expect(await eventually { coordinator.batch == nil })
     }
 
     @Test func failureIsKeptUntilTheNextRunOfThatLogin() async throws {
@@ -1250,7 +1297,7 @@ private final class GatedLogins: Sendable {
             """.write(to: fixture.configPaths.databricksConfig, atomically: true, encoding: .utf8)
         let coordinator = fixture.makeCoordinator()
 
-        let candidates = coordinator.discoverCandidates()
+        let candidates = await coordinator.discoverCandidates()
 
         #expect(candidates.aws == ["prod"])
         #expect(candidates.databricks == [DatabricksProfile(name: "analytics-prod", accountLevel: false)])
