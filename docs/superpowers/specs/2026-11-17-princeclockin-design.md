@@ -456,16 +456,17 @@ title case for buttons and menu items.
 | Login timeout · Cancel All (stops a batch) · Check Databricks Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now |
 | Notification actions: Log In · Done | Log in |
 
-The copy is in English. Durations and times follow the user's locale and 12- or 24-hour setting,
-so a sentence can hold "5 h 13 m"; session lengths are English copy.
+The copy is in English, the app's only localization. Durations and times use the app's language
+with the user's region settings (the 12- or 24-hour clock and so on), so on a Mac set to Swedish
+they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are English copy.
 
-| What | API | en_GB | sv_SE |
+| What | API | English, UK region (en_GB) | English, Swedish region (en_SE) |
 |---|---|---|---|
-| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5 h 13 m · 14 h 5 m · 2 d 17 h |
+| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5h 13m · 14h 5m · 2d 17h |
 | Time left under a minute (owner, 2026-11-19) | one form everywhere, instead of the "0m" the format style gives | <1m | <1m |
-| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide; under a minute, "less than a minute" | 5 hours, 13 minutes | 5 timmar, 13 minuter |
+| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide; under a minute, "less than a minute" | 5 hours, 13 minutes | 5 hours, 13 minutes |
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
-| A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | imorgon 03:55 |
+| A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | tomorrow at 03:55 |
 | Batch progress | one form everywhere | 1 of 2 | 1 of 2 |
 | Session length | hours or days | 8 hours · 3 days | 8 hours · 3 days |
 
@@ -656,6 +657,7 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - Sparkle can postpone an update's relaunch until a batch ends, through its updater delegate.
-  - At 320 pt, in sv_SE as well as English, no tile's state or time is cut off.
+  - At 320 pt, with a 24-hour region (Swedish) as well as a 12-hour one (US), no tile's state or
+    time is cut off.
   - Text meets 4.5:1 on the real popover material and tile tints, in light, dark and Increase
     Contrast.
