@@ -315,16 +315,20 @@ with its + menu open.
     Log In, and the item's own buttons below it (Try Again, Run It, Mark as Logged In at <time>)
     are how it is answered;
   - a running or queued tile opens its actions, which include Cancel All;
-  - the click action never changes while the pointer is on the tile.
+  - the kind of control never changes while the pointer is on the tile, so a click never opens a
+    menu where it was a button; a Log In held that way does nothing once the tile is no longer due
+    or something is pending (it runs, is queued, failed, waits for approval or asks), and the
+    trailing side shows that state or the timer instead of Log In.
 - **The "…" menu**, also the tile's context menu and its accessibility actions: Log In, Set
   Timer…, Mark as Logged In Now, a Session Length submenu with a checkmark on the current length,
   and Edit in Settings…; Cancel All on a running or queued tile.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
     timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
-  - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?" (on waking: "…at 07:48,
-    while this Mac slept."), with Mark as Logged In at 14:02 and Set Timer…. After a sleep, each
-    login asks on its own tile.
+  - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
+    at 14:02 and Set Timer…. A question the first check after the Mac wakes raises says "…at 07:48,
+    while this Mac slept.", 07:48 being the file's change time, for as long as it asks (owner,
+    2026-11-19). After a sleep, each login asks on its own tile.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
     session length may be too short." with Edit Session Length…. Its subtitle carries the check:
     "Checked 22:30 · valid".
@@ -431,8 +435,10 @@ A token has only the meanings its row lists.
   shows none.
 - **VoiceOver:** every tile follows one template, a label of "name, kind, state, time" ("prod, AWS
   SSO session, expiring, 19 minutes left") and the action as its hint ("Logs in" or "Shows
-  actions"). Each "…" is "Actions for <name>". VoiceOver reads durations in the wide style and "No
-  timer" for an unknown one.
+  actions"). A pending item's word (logging in, queued, failed, not yet approved, logged in
+  elsewhere?) is the state, in place of the timer's, and the time stays: "qa, AWS SSO session,
+  failed, 40 minutes ago" (owner, 2026-11-19). Each "…" is "Actions for <name>". VoiceOver reads
+  durations in the wide style and "No timer" for an unknown one.
 
 #### Wording and formats
 
