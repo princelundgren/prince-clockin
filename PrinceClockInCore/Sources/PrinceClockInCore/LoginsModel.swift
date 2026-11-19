@@ -96,6 +96,15 @@ public struct LoginsModel: Equatable, Sendable {
             .map(\.login)
     }
 
+    /// The tracked logins in the order `ids` gives, which the panel took when it opened, so its
+    /// tiles hold still while it is open. A login removed since is left out; one added since
+    /// follows, in stored order.
+    public func logins(inOrder ids: [UUID]) -> [Login] {
+        let ordered = trackedLogins(ids)
+        let placed = Set(ids)
+        return ordered + state.logins.filter { !placed.contains($0.id) }
+    }
+
     /// The preset's logins in its order, skipping any no longer tracked.
     public func logins(in preset: Preset) -> [Login] {
         trackedLogins(preset.loginIDs)

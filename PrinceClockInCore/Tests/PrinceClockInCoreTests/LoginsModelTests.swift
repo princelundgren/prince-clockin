@@ -466,6 +466,33 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(order.map(\.id) == [first.id, second.id, noTimerFirst.id, noTimerSecond.id])
     }
 
+    @Test func aTakenOrderHoldsAsTimersChange() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 2 * hour, now: now, name: "dev")
+        let prod = login(remaining: 5 * hour, now: now, name: "prod")
+        var logins = model([dev, prod])
+        let order = logins.panelOrder(now: now).map(\.id)
+
+        logins.setLoginTime(id: prod.id, at: now.addingTimeInterval(-8 * hour + 10 * 60))
+
+        #expect(logins.panelOrder(now: now).map(\.id) == [prod.id, dev.id])
+        #expect(logins.logins(inOrder: order).map(\.id) == [dev.id, prod.id])
+    }
+
+    @Test func aTakenOrderDropsRemovedLoginsAndAppendsNewOnes() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 2 * hour, now: now, name: "dev")
+        let prod = login(remaining: 5 * hour, now: now, name: "prod")
+        let qa = login(remaining: hour, now: now, name: "qa")
+        var logins = model([dev, prod])
+        let order = [prod.id, dev.id]
+
+        logins.removeLogin(id: dev.id)
+        logins.state.logins.append(qa)
+
+        #expect(logins.logins(inOrder: order).map(\.id) == [prod.id, qa.id])
+    }
+
     @Test func removeLoginStripsItFromEveryPreset() {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: hour, now: now, name: "dev")
