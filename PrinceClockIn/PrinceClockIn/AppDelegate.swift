@@ -73,8 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             appModel: appModel, updater: updater, session: panelSession,
             openSettings: { [weak self] in self?.showSettings() },
             openSettingsOnLogins: { [weak self] in self?.showSettings(on: .logins) })
-        let hosting = NSHostingController(rootView: panel)
+        let hosting = PanelHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
+        hosting.onCancel = { [weak self] in self?.panelCancelled() }
         popover.contentViewController = hosting
         popover.delegate = self
         NotificationCenter.default.addObserver(
@@ -100,9 +101,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     /// Its banners count as seen only from this reading of the notification permission on.
     private func panelDidShow() {
         appModel.coordinator.markPanelShown()
+        panelSession.didShow()
         Task {
             await appModel.refreshNotificationPermission()
             panelSession.permissionRefreshed(showing: appModel.panelBanners)
+        }
+    }
+
+    /// Escape that no control in the panel took: it cancels an open Set Timer, else closes the panel.
+    private func panelCancelled() {
+        let tiles = appModel.coordinator.model.logins(inOrder: panelSession.order).map(\.id)
+        switch escapeResponse(openSetTimer: panelSession.openSetTimer, tiles: tiles) {
+        case .cancelSetTimer(let id): panelSession.closeSetTimer(for: id)
+        case .closePanel: popover.performClose(nil)
         }
     }
 

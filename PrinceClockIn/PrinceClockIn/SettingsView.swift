@@ -154,13 +154,14 @@ private struct LoginsSettings: View {
     }
 }
 
-/// Set Timer for a login just added, with Skip in place of Cancel; `onClose` runs after Skip or
-/// Set.
+/// Set Timer for a login just added, with Skip in place of Cancel and the panel's Return and
+/// Escape; `onClose` runs after Skip or Set.
 private struct JustAddedSetTimer: View {
     let login: Login
     let coordinator: Coordinator
     let onClose: () -> Void
     @State private var draft: SetTimerDraft
+    @FocusState private var focus: PanelFocus?
 
     init(login: Login, coordinator: Coordinator, onClose: @escaping () -> Void) {
         self.login = login
@@ -171,14 +172,17 @@ private struct JustAddedSetTimer: View {
 
     var body: some View {
         SetTimerForm(
-            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip", isSetProminent: false,
-            onCancel: onClose, onSet: onClose)
+            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip",
+            defaults: PanelDefaults(keys: .setTimerAlone(id: login.id, isEditingText: focus?.isTextField ?? false)),
+            focus: $focus, onClose: onClose)
     }
 }
 
 private struct LoginSettingsRow: View {
     let login: Login
     let coordinator: Coordinator
+    @FocusState private var focus: PanelFocus?
+    @State private var sessionLengthDraft: SessionLengthFieldDraft?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -193,7 +197,7 @@ private struct LoginSettingsRow: View {
             Text(kindDescription)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            SessionLengthField(login: login, coordinator: coordinator)
+            SessionLengthField(login: login, coordinator: coordinator, focus: $focus, draft: $sessionLengthDraft)
             if case .custom(let command) = login.kind {
                 CommitField("Command (optional)", text: command ?? "") { command in
                     coordinator.setCommand(id: login.id, to: command.isEmpty ? nil : command)

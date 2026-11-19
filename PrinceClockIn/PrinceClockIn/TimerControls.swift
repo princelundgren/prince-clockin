@@ -2,18 +2,19 @@ import PrinceClockInCore
 import SwiftUI
 
 /// Set Timer for one login: Expires In or Logged In At, a Session Length pop-up, a caption that
-/// says when the login would expire or why Set refuses, then `cancelTitle` and Set. Shown inline, never as
-/// a sheet, since a sheet in the popover loses focus with it. The draft belongs to the caller, so
-/// it outlives the form's redraws; `note`, when given, is a line on how long it is kept.
+/// says when the login would expire or why Set refuses, then `cancelTitle` and Set. Shown inline,
+/// never as a sheet, since a sheet in the popover loses focus with it. The draft belongs to the
+/// caller, so it outlives the form's redraws; `note`, when given, is a line on how long it is
+/// kept. `onClose` runs after Cancel or Set.
 struct SetTimerForm: View {
     let id: UUID
     @Binding var draft: SetTimerDraft
     let coordinator: Coordinator
     let note: String?
     let cancelTitle: String
-    let isSetProminent: Bool
-    let onCancel: () -> Void
-    let onSet: () -> Void
+    let defaults: PanelDefaults
+    let focus: FocusState<PanelFocus?>.Binding
+    let onClose: () -> Void
     /// What Set was refused with, when the clock moved past what the caption checked.
     @State private var refusal: TimerError?
 
@@ -30,8 +31,10 @@ struct SetTimerForm: View {
             case .expiresIn:
                 HStack(spacing: 4) {
                     NumberField(label: "Hours", text: $draft.hours)
+                        .focused(focus, equals: .textField(id, .hours))
                     Text("hours")
                     NumberField(label: "Minutes", text: $draft.minutes)
+                        .focused(focus, equals: .textField(id, .minutes))
                         .padding(.leading, 4)
                     Text("minutes")
                 }
@@ -39,6 +42,7 @@ struct SetTimerForm: View {
                 DatePicker("Logged in at", selection: $draft.loggedInAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.field)
                     .labelsHidden()
+                    .focused(focus, equals: .textField(id, .loggedInAt))
             }
             Picker("Session length", selection: $draft.sessionLength) {
                 ForEach(sessionLengthOptions(current: nil), id: \.choice) { option in
@@ -50,6 +54,7 @@ struct SetTimerForm: View {
             if draft.sessionLength == .custom {
                 HStack(spacing: 4) {
                     NumberField(label: "Session length in hours", text: $draft.customHours)
+                        .focused(focus, equals: .textField(id, .customHours))
                     Text("hours")
                 }
             }
@@ -65,9 +70,11 @@ struct SetTimerForm: View {
             }
             HStack {
                 Spacer()
-                Button(cancelTitle, action: onCancel)
+                Button(cancelTitle, action: onClose)
+                    .escapeKey(defaults.cancelledByEscape == id)
                 Button("Set") { set() }
-                    .prominent(isSetProminent)
+                    .prominent(defaults.prominent == .set(id: id))
+                    .returnKey(defaults.onReturn == .set(id: id))
                     .disabled(!check.isReady)
             }
             .buttonStyle(.bordered)
@@ -80,7 +87,7 @@ struct SetTimerForm: View {
         guard let entry = draft.entry(locale: .current) else { return }
         do throws(TimerError) {
             try coordinator.setTimer(id: id, entry)
-            onSet()
+            onClose()
         } catch {
             refusal = error
         }
@@ -106,42 +113,60 @@ private struct NumberField: View {
     }
 }
 
-/// A login's session length in hours, saved when the field is submitted. Empty means unknown; a
-/// length over the cap isn't saved, and the field says why.
+/// A login's session length in hours. The text is a draft its caller keeps, stored on Return or
+/// when focus leaves the field, never while typing, since `TextField(value:format:)` writes its
+/// value as the user types. Empty text makes the length unknown; text the core refuses stays, with
+/// the refusal under it, and nothing is stored.
 struct SessionLengthField: View {
-    private static let secondsPerHour: Double = 3600
-
     let login: Login
     let coordinator: Coordinator
-    @State private var refusal: TimerError?
+    let focus: FocusState<PanelFocus?>.Binding
+    /// What was typed since the last store, or `nil` to show the stored length.
+    @Binding var draft: SessionLengthFieldDraft?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             LabeledContent("Session length") {
                 HStack(spacing: 4) {
-                    TextField("Unknown", value: hours, format: .number)
+                    TextField("Unknown", text: text)
+                        .focused(focus, equals: fieldFocus)
+                        .onSubmit(store)
                         .frame(width: 70)
                     Text("hours")
                 }
             }
-            if let refusal {
+            if let refusal = draft?.refusal {
                 Text(refusal.message)
             }
         }
         .font(.callout)
+        .onChange(of: focus.wrappedValue) { old, new in
+            if old == fieldFocus, new != fieldFocus { store() }
+        }
     }
 
-    private var hours: Binding<Double?> {
+    private var fieldFocus: PanelFocus { .textField(login.id, .sessionLength) }
+
+    private var text: Binding<String> {
         Binding(
-            get: { login.sessionLength.map { $0 / Self.secondsPerHour } },
-            set: { hours in
-                let length = hours.flatMap { $0 > 0 ? $0 * Self.secondsPerHour : nil }
-                do throws(TimerError) {
-                    try coordinator.setSessionLength(id: login.id, to: length)
-                    refusal = nil
-                } catch {
-                    refusal = error
-                }
-            })
+            get: { draft?.text ?? sessionLengthHoursText(login.sessionLength, locale: .current) },
+            set: { draft = SessionLengthFieldDraft(text: $0) })
     }
+
+    private func store() {
+        guard let text = draft?.text else { return }
+        do throws(SessionLengthRefusal) {
+            try coordinator.setSessionLength(id: login.id, fieldText: text, locale: .current)
+            draft = nil
+        } catch {
+            draft?.refusal = error
+        }
+    }
+}
+
+/// The session length field's text while it differs from the stored length, and why storing it
+/// was refused, kept outside the field so a redrawn tile doesn't lose it.
+struct SessionLengthFieldDraft {
+    let text: String
+    var refusal: SessionLengthRefusal?
 }

@@ -12,6 +12,7 @@ struct PanelView: View {
     let session: PanelSession
     let openSettings: () -> Void
     let openSettingsOnLogins: () -> Void
+    @FocusState private var focus: PanelFocus?
 
     private var coordinator: Coordinator { appModel.coordinator }
     private var logins: [Login] { coordinator.model.state.logins }
@@ -38,22 +39,27 @@ struct PanelView: View {
         let prominent = prominentAction(
             openSetTimer: session.openSetTimer, waitingForDone: waitingForDone, tiles: tiles.map(\.tile),
             showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
+        let keys = PanelKeyContext(
+            prominent: prominent, openSetTimer: session.openSetTimer, isEditingText: focus?.isTextField ?? false,
+            tiles: tiles.map(\.tile.id), focusedTile: focus?.tile)
+        let defaults = PanelDefaults(keys: keys)
         VStack(alignment: .leading, spacing: 10) {
             ForEach(appModel.panelBanners, id: \.self) { banner in
                 BannerView(banner: banner) { perform($0, on: banner) }
             }
             if let card = coordinator.batchCard {
-                BatchCardView(card: card, coordinator: coordinator, prominent: prominent)
+                BatchCardView(card: card, coordinator: coordinator, defaults: defaults)
             }
             if logins.isEmpty, let empty = session.emptyPanel {
                 EmptyPanelView(empty: empty, addLogins: openSettingsOnLogins)
             }
-            tileList(tiles, prominent: prominent)
+            tileList(tiles, defaults: defaults, keys: keys)
             if showsLogInToDue {
                 Button("Log In to \(dueCount) Due") {
                     coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
                 }
-                .prominent(prominent == .logInToDue)
+                .prominent(defaults.prominent == .logInToDue)
+                .returnKey(defaults.onReturn == .logInToDue)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
             if !logins.isEmpty, !coordinator.model.state.presets.isEmpty {
@@ -80,6 +86,7 @@ struct PanelView: View {
         .padding()
         .frame(width: 320)
         .onChange(of: appModel.panelBanners) { _, banners in session.show(banners) }
+        .onChange(of: session.showings) { focus = tiles.first.map { .tile($0.tile.id) } }
         .task(id: EmptyPanelTrigger(opening: session.openings, hasNoLogins: logins.isEmpty)) {
             await discoverForEmptyPanel()
         }
@@ -97,20 +104,34 @@ struct PanelView: View {
     }
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
-    private func tileList(_ tiles: [(login: Login, tile: TilePresentation)], prominent: ProminentAction?) -> some View {
+    private func tileList(
+        _ tiles: [(login: Login, tile: TilePresentation)], defaults: PanelDefaults, keys: PanelKeyContext
+    ) -> some View {
         ScrollView {
             VStack(spacing: 6) {
                 ForEach(tiles, id: \.tile.id) { entry in
                     TileView(
                         login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
-                        prominent: prominent, heldControl: heldControl(for: entry.login.id),
+                        defaults: defaults, focus: $focus, heldControl: heldControl(for: entry.login.id),
                         openSettingsOnLogins: openSettingsOnLogins)
                 }
             }
+            .onMoveCommand { move($0, keys: keys) }
         }
         .id(session.closings)
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxHeight: Self.tilesMaximumHeight)
+    }
+
+    /// The up and down arrows move focus between the tiles.
+    private func move(_ direction: MoveCommandDirection, keys: PanelKeyContext) {
+        let key: PanelKey
+        switch direction {
+        case .up: key = .moveUp
+        case .down: key = .moveDown
+        default: return
+        }
+        if case .focusTile(let id) = panelKeyResponse(to: key, in: keys) { focus = .tile(id) }
     }
 
     private func heldControl(for id: UUID) -> Binding<TileControl?> {
@@ -168,7 +189,8 @@ struct PanelView: View {
 /// What the panel keeps for one opening: its tiles' order, taken as it opens, what discovery found
 /// while no login is tracked, the control each tile held when the pointer entered it, the open Set
 /// Timer and its drafts, and whether the Notifications off banner was on screen. Closing the panel
-/// clears it and counts the closing, which gives the tiles new state for the next opening.
+/// clears it and counts the closing, which gives the tiles new state for the next opening; each
+/// showing is counted too, for the focus it starts with.
 @MainActor
 @Observable
 final class PanelSession {
@@ -183,7 +205,10 @@ final class PanelSession {
     /// Each login's Set Timer draft. Opening another login's form keeps this one's draft, so a
     /// click elsewhere in the panel loses nothing; only Cancel, Set and closing the panel discard it.
     var setTimerDrafts: [UUID: SetTimerDraft] = [:]
+    /// Each login's session length field text while it is edited, until the panel closes.
+    var sessionLengthDrafts: [UUID: SessionLengthFieldDraft] = [:]
     private(set) var openings = 0
+    private(set) var showings = 0
     private(set) var closings = 0
     @ObservationIgnored private var notificationsBanner = NotificationsBannerSighting()
 
@@ -191,6 +216,11 @@ final class PanelSession {
         self.order = order
         openings += 1
         notificationsBanner.panelOpened()
+    }
+
+    /// The panel is on screen and its window key.
+    func didShow() {
+        showings += 1
     }
 
     /// Discovery's answer for the empty panel, which arrives after the panel opens; one for an
@@ -235,6 +265,7 @@ final class PanelSession {
         heldControls = [:]
         openSetTimer = nil
         setTimerDrafts = [:]
+        sessionLengthDrafts = [:]
         emptyPanel = nil
         closings += 1
         return notificationsBanner.panelClosed()
@@ -330,7 +361,7 @@ private struct FlowButtons: View {
 private struct BatchCardView: View {
     let card: BatchCard
     let coordinator: Coordinator
-    let prominent: ProminentAction?
+    let defaults: PanelDefaults
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -373,7 +404,8 @@ private struct BatchCardView: View {
             Button("Cancel All") { coordinator.cancelBatch() }
             if let done {
                 Button("Done") { coordinator.confirmCustomDone(id: done) }
-                    .prominent(prominent == .done(id: done))
+                    .prominent(defaults.prominent == .done(id: done))
+                    .returnKey(defaults.onReturn == .done(id: done))
             }
         }
         .buttonStyle(.bordered)
