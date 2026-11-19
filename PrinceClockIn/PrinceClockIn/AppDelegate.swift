@@ -6,6 +6,8 @@ import SwiftUI
 /// hidden main menu.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+    private static let settingsFrameName = "Settings"
+
     // Created with the delegate, before launch finishes, so a notification button that launched
     // the app finds its handler, and the timers run before the panel is first opened.
     private let appModel = AppModel()
@@ -109,13 +111,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return false
     }
 
-    /// Shows the Settings window, the same one each time, in front of other apps.
+    /// Shows the Settings window in front of other apps: the open one if it is open, else a new
+    /// one, so its panes read the config files and the system again. It opens where and at the
+    /// size the user last left it, else centred at its ideal size, on the pane last chosen.
     private func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
-            settingsWindow = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(appModel: appModel)))
+            let hosting = NSHostingController(rootView: SettingsView(appModel: appModel, updater: updater))
+            // Only the minimum, so the window stays resizable and zoomable above it.
+            hosting.sizingOptions = .minSize
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "PrinceClockIn Settings"
+            window.setContentSize(SettingsView.idealSize)
+            if !window.setFrameUsingName(Self.settingsFrameName) { window.center() }
+            window.setFrameAutosaveName(Self.settingsFrameName)
+            window.delegate = self
+            settingsWindow = window
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    /// Lets go of the closing Settings window, and of its autosave name, which the next window
+    /// takes, before anything can bring this one forward again.
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
+        window.setFrameAutosaveName("")
+        settingsWindow = nil
     }
 }
