@@ -1,16 +1,18 @@
+import AppKit
 import PrinceClockInCore
 import SwiftUI
 
-/// Settings → Logins: the tracked logins with − below them and Check Databricks Now in the
-/// header, then the selected login's form.
+/// Settings → Logins: the tracked logins with + and − below them and Check Databricks Now in the
+/// header, then the selected login's form, or New custom login.
 struct LoginsSettings: View {
     let appModel: AppModel
     @State private var selection: UUID?
-    @State private var candidates: (aws: [String], databricks: [DatabricksProfile]) = ([], [])
+    /// What discovery found that isn't tracked; `nil` while the config files are read.
+    @State private var candidates: (aws: [String], databricks: [DatabricksProfile])?
     /// The login just added from the config files, which shows its Set Timer form.
     @State private var justAdded: UUID?
-    @State private var customName = ""
-    @State private var customCommand = ""
+    @State private var isAddingCustomLogin = false
+    @State private var addMenu = AddMenuPresenter()
     /// What − asks before removing a login that is in a preset, while it asks.
     @State private var removal: RemoveLoginConfirmation?
 
@@ -32,33 +34,13 @@ struct LoginsSettings: View {
             } header: {
                 header
             }
-            if let selected {
+            if isAddingCustomLogin {
+                NewCustomLoginForm(onClose: closeNewCustomLogin)
+            } else if let selected {
                 LoginForm(login: selected, appModel: appModel, isJustAdded: selected.id == justAdded) {
                     justAdded = nil
                 }
                 .id(selected.id)
-            }
-            Section("Found in your config files") {
-                if candidates.aws.isEmpty && candidates.databricks.isEmpty {
-                    Text("No untracked AWS SSO sessions or Databricks profiles.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(candidates.aws, id: \.self) { session in
-                    candidateRow("AWS SSO session \(session)") { add(.awsSSOSession(name: session)) }
-                }
-                ForEach(candidates.databricks, id: \.name) { profile in
-                    candidateRow("Databricks profile \(profile.name)") { add(.databricksProfile(profile)) }
-                }
-            }
-            Section("Custom login") {
-                TextField("Name", text: $customName)
-                TextField("Command (optional)", text: $customCommand)
-                    .font(.body.monospaced())
-                Text("The command opens in Terminal. It is stored as plain text, so don't put a secret in it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("Add custom login") { addCustom() }
-                    .disabled(customName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .formStyle(.grouped)
@@ -68,11 +50,12 @@ struct LoginsSettings: View {
         } message: { removal in
             Text(removal.message)
         }
-        .onChange(of: selection) { old, _ in
+        .onChange(of: selection) { old, new in
+            if new != nil { isAddingCustomLogin = false }
             // The prompt after adding is asked once: moving off the login ends it.
             if old == justAdded { justAdded = nil }
         }
-        .onAppear(perform: refreshCandidates)
+        .task(id: TrackedConfigNames(logins: logins)) { await discover() }
     }
 
     private var header: some View {
@@ -89,7 +72,11 @@ struct LoginsSettings: View {
     }
 
     private var listButtons: some View {
-        HStack {
+        HStack(spacing: 4) {
+            Button("Add Login", systemImage: "plus") { addMenu.show(addMenuItems, choose: choose) }
+                .labelStyle(.iconOnly)
+                .background(AddMenuAnchor(presenter: addMenu))
+                .help("Add a login")
             Button("Remove Login", systemImage: "minus", action: removeSelected)
                 .labelStyle(.iconOnly)
                 .disabled(selected == nil)
@@ -97,6 +84,36 @@ struct LoginsSettings: View {
             Spacer()
         }
         .buttonStyle(.borderless)
+    }
+
+    private var addMenuItems: [AddMenuItem] {
+        PrinceClockInCore.addMenu(found: candidates)
+    }
+
+    /// Reads the config files for the + menu when the pane appears and whenever a tracked AWS SSO
+    /// session or Databricks profile is added or removed, a new read cancelling the one before; a
+    /// cancelled read's answer is dropped.
+    private func discover() async {
+        candidates = nil
+        let found = await coordinator.discoverCandidates()
+        guard !Task.isCancelled else { return }
+        candidates = found
+    }
+
+    /// A found login is tracked at once and selected; Custom Login… opens New custom login.
+    private func choose(_ item: AddMenuItem) {
+        switch item {
+        case .found(let candidate):
+            let login = candidate.login()
+            coordinator.addLogin(login)
+            selection = login.id
+            justAdded = login.id
+        case .customLogin:
+            selection = nil
+            isAddingCustomLogin = true
+        case .header, .note:
+            break
+        }
     }
 
     /// Removes a login in no preset at once, and asks first for one in a preset.
@@ -120,33 +137,14 @@ struct LoginsSettings: View {
         Binding(get: { removal != nil }, set: { if !$0 { removal = nil } })
     }
 
-    private func candidateRow(_ title: String, add: @escaping () -> Void) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Button("Add", action: add)
-        }
-    }
-
-    private func add(_ candidate: AddLoginCandidate) {
-        let login = candidate.login()
+    /// Add hands over the new login, Cancel `nil`. Return can reach Add twice, from a field and as
+    /// Add's key equivalent, so only the first closes the form.
+    private func closeNewCustomLogin(adding login: Login?) {
+        guard isAddingCustomLogin else { return }
+        isAddingCustomLogin = false
+        guard let login else { return }
         coordinator.addLogin(login)
         selection = login.id
-        justAdded = login.id
-        refreshCandidates()
-    }
-
-    private func addCustom() {
-        let command = customCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-        coordinator.addLogin(Login(
-            displayName: customName.trimmingCharacters(in: .whitespaces),
-            kind: .custom(command: command.isEmpty ? nil : command)))
-        customName = ""
-        customCommand = ""
-    }
-
-    private func refreshCandidates() {
-        Task { candidates = await coordinator.discoverCandidates() }
     }
 }
 
@@ -267,6 +265,144 @@ private struct LoginForm: View {
             if isStored, login.sessionLength == nil { isCustomChosen = false }
         }
     }
+}
+
+/// New custom login: Name, Command (optional) and Session length, with Cancel and Add. It opens
+/// with Name focused; Return adds from anywhere in the form and Escape cancels; a Custom… length
+/// the core refuses stays, with the refusal under it, until it changes.
+private struct NewCustomLoginForm: View {
+    let onClose: (_ adding: Login?) -> Void
+    @State private var draft = NewCustomLoginDraft()
+    @State private var refusal: SessionLengthRefusal?
+    @FocusState private var isNameFocused: Bool
+
+    var body: some View {
+        Section("New custom login") {
+            TextField("Name", text: $draft.name)
+                .focused($isNameFocused)
+                .onSubmit(add)
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Command", text: $draft.command, prompt: Text("Optional"))
+                    .font(.body.monospaced())
+                    .onSubmit(add)
+                SettingsNote(customCommandNote)
+                if let noCommandNote = draft.noCommandNote {
+                    SettingsNote(noCommandNote)
+                }
+            }
+            SessionLengthPopUp(selection: $draft.sessionLength)
+            if draft.sessionLength == .custom {
+                VStack(alignment: .leading, spacing: 2) {
+                    LabeledContent("Custom length") {
+                        HStack(spacing: 4) {
+                            NumberField(label: "Session length in hours", text: $draft.customHours, prompt: "Hours")
+                                .onSubmit(add)
+                            Text("hours")
+                        }
+                    }
+                    if let refusal {
+                        Text(refusal.message)
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { onClose(nil) }
+                    .keyboardShortcut(.cancelAction)
+                Button("Add", action: add)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.check(locale: .current) == .needsName)
+            }
+        }
+        .onChange(of: draft.customHours) { refusal = nil }
+        .onChange(of: draft.sessionLength) { refusal = nil }
+        // The window has already appeared, so `defaultFocus` wouldn't apply; setting the focus
+        // state moves focus.
+        .onAppear { isNameFocused = true }
+    }
+
+    private func add() {
+        switch draft.check(locale: .current) {
+        case .needsName: break
+        case .refused(let refusal): self.refusal = refusal
+        case .ready(let login): onClose(login)
+        }
+    }
+}
+
+/// Pops up the + menu below the view it is anchored to. It is an AppKit menu, since SwiftUI's
+/// `Menu` can't be opened from code.
+@MainActor
+final class AddMenuPresenter: NSObject {
+    /// The + button's frame, as an AppKit view.
+    weak var anchor: NSView?
+    private var items: [AddMenuItem] = []
+    private var choose: (AddMenuItem) -> Void = { _ in }
+
+    /// Shows `items`, a section header and a note as lines that can't be chosen and a found login
+    /// with its kind beside it; `choose` gets the item chosen. Both are let go once the menu is
+    /// done with them, since `choose` holds the pane's state, which holds this presenter.
+    func show(_ items: [AddMenuItem], choose: @escaping (AddMenuItem) -> Void) {
+        guard let anchor else { return }
+        self.items = items
+        self.choose = choose
+        let menu = NSMenu()
+        for (index, item) in items.enumerated() {
+            if item == .customLogin, index > 0 { menu.addItem(.separator()) }
+            menu.addItem(menuItem(for: item, tag: index))
+        }
+        let bottom = anchor.isFlipped ? anchor.bounds.maxY : anchor.bounds.minY
+        if !menu.popUp(positioning: nil, at: NSPoint(x: anchor.bounds.minX, y: bottom), in: anchor) {
+            release()
+        }
+    }
+
+    private func release() {
+        items = []
+        choose = { _ in }
+    }
+
+    private func menuItem(for item: AddMenuItem, tag: Int) -> NSMenuItem {
+        switch item {
+        case .header(let title):
+            return .sectionHeader(title: title)
+        case .note(let title):
+            // With no action, the menu disables it.
+            return NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        case .found, .customLogin:
+            let menuItem = NSMenuItem(title: item.title, action: #selector(chosen), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.tag = tag
+            if let kind = item.kind {
+                let font = NSFont.menuFont(ofSize: 0)
+                let title = NSMutableAttributedString(string: item.title, attributes: [.font: font])
+                title.append(NSAttributedString(
+                    string: "  \(kind)", attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor]))
+                menuItem.attributedTitle = title
+            }
+            return menuItem
+        }
+    }
+
+    @objc private func chosen(_ sender: NSMenuItem) {
+        let choose = choose
+        let item = items[sender.tag]
+        release()
+        choose(item)
+    }
+}
+
+/// Puts the + button's frame in AppKit, for the + menu to pop up from.
+private struct AddMenuAnchor: NSViewRepresentable {
+    let presenter: AddMenuPresenter
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        presenter.anchor = view
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 
 /// A secondary caption under a field.

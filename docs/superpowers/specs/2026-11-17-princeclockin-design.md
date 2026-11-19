@@ -370,7 +370,9 @@ Discovery reads the config files again on each opening; while it runs, no earlie
 - **The + menu** in Settings → Logins: a "Found in your config files" section with each untracked
   AWS SSO session, Databricks profile and Databricks account profile, its kind beside it, then
   Custom Login…. With nothing new: "No new AWS SSO sessions or Databricks profiles", then Custom
-  Login…. Choosing a found login tracks it at once and selects it.
+  Login…; while the pane is still reading the config files, Custom Login… alone. The pane reads
+  them when it appears and again whenever an AWS SSO session or Databricks profile is tracked or
+  removed, a new read cancelling the last. Choosing a found login tracks it at once and selects it.
 - Menus and the Settings sidebar use the system selection colour, which follows the user's accent
   colour.
 
@@ -399,8 +401,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   - custom login: Command, optional, with "The command runs in Terminal and is saved as plain
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
-    Add; Return adds and Escape cancels. Without a command, the form says Log In waits for the
-    user to click Done.
+    Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
+    says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
     warn you before it expires, or skip and log in from the panel later." with Skip and Set
     Timer…, so a login the user has already done gets a known timer instead of the "Logged in
