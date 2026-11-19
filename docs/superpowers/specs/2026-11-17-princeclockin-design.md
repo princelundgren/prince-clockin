@@ -355,8 +355,8 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     time and a session length. With No timer chosen the caption reads "Choose a session length";
     an empty or non-numeric field, negative hours or minutes outside 0 to 59 leave it empty.
     Custom… shows a field for a number of hours, and keeps a length the list doesn't have exactly
-    until it is edited. Until the Logins pane is rebuilt, Settings' prompt after adding a login
-    shows this form with Skip in place of Cancel.
+    until it is edited. Settings' prompt after adding a login opens this form in its place from
+    Set Timer…, with Skip in place of Cancel.
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.
@@ -461,7 +461,8 @@ A token has only the meanings its row lists.
   `.cancelAction` on Set Timer's Cancel, and the panel's `cancelOperation(_:)` otherwise), so
   neither needs focus: Return triggers the default from anywhere but a text field, which it
   commits instead, and Escape works from a text field too. Settings' Set Timer prompt after adding
-  a login takes Return and Escape the same way, Set the default and Escape its Skip. The rest
+  a login takes Return and Escape the same way, Set the default and Escape its Skip; before Set
+  Timer… is chosen, Escape is Skip and Return has no default. The rest
   follows the user's Keyboard Navigation setting, since buttons and menus, the tiles among them,
   take focus only with it on, as is conventional on the Mac: with it on, Tab, Space, the arrows
   and focus on the first tile work as above; with it off, Tab moves only between text fields,

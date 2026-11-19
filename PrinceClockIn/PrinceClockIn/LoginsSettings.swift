@@ -216,10 +216,7 @@ private struct LoginForm: View {
             for: login, paths: coordinator.configPaths, home: appModel.homeDirectory, now: coordinator.now,
             locale: .current, calendar: .current)
         if isJustAdded {
-            Section {
-                Text("Already logged in? Set its timer now, or skip.")
-                JustAddedSetTimer(login: login, coordinator: coordinator, onClose: closePrompt)
-            }
+            AddedLoginPrompt(login: login, coordinator: coordinator, onClose: closePrompt)
         }
         Section(login.displayName) {
             VStack(alignment: .leading, spacing: 4) {
@@ -418,6 +415,33 @@ private struct SettingsNote: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The prompt right after a login found in the config files is added: whether the user is already
+/// logged in, with Skip and Set Timer…, which opens Set Timer in its place. Escape skips, at
+/// either step; `onClose` runs after Skip or Set.
+private struct AddedLoginPrompt: View {
+    let login: Login
+    let coordinator: Coordinator
+    let onClose: () -> Void
+    @State private var isSettingTimer = false
+
+    var body: some View {
+        Section {
+            if isSettingTimer {
+                JustAddedSetTimer(login: login, coordinator: coordinator, onClose: onClose)
+            } else {
+                Text(addedLoginPrompt(name: login.displayName))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Skip", action: onClose)
+                        .keyboardShortcut(.cancelAction)
+                    Button("Set Timer…") { isSettingTimer = true }
+                }
+            }
+        }
     }
 }
 
