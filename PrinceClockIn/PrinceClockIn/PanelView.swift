@@ -24,9 +24,15 @@ struct PanelView: View {
             ).map { (login, $0) }
         }
     }
+    private var dueCount: Int { coordinator.model.dueLogins(now: coordinator.now).count }
+    private var showsLogInToDue: Bool {
+        PrinceClockInCore.showsLogInToDue(dueCount: dueCount, isBatchRunning: coordinator.batch != nil)
+    }
 
     var body: some View {
         let tiles = tilePresentations
+        let prominent = prominentAction(
+            tiles: tiles.map(\.tile), showsLogInToDue: showsLogInToDue, isBatchRunning: coordinator.batch != nil)
         VStack(alignment: .leading, spacing: 10) {
             notices
             if let batch = coordinator.batch {
@@ -36,7 +42,14 @@ struct PanelView: View {
                 Text("No logins tracked yet. Add them in Settings.")
                     .foregroundStyle(.secondary)
             }
-            tileList(tiles)
+            tileList(tiles, prominent: prominent)
+            if showsLogInToDue {
+                Button("Log In to \(dueCount) Due") {
+                    coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
+                }
+                .prominent(prominent == .logInToDue)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
             if !logins.isEmpty {
                 Divider()
                 actions
@@ -59,12 +72,12 @@ struct PanelView: View {
     }
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
-    private func tileList(_ tiles: [(login: Login, tile: TilePresentation)]) -> some View {
+    private func tileList(_ tiles: [(login: Login, tile: TilePresentation)], prominent: ProminentAction?) -> some View {
         ScrollView {
             VStack(spacing: 6) {
                 ForEach(tiles, id: \.tile.id) { entry in
                     TileView(
-                        login: entry.login, tile: entry.tile, coordinator: coordinator, prominent: nil,
+                        login: entry.login, tile: entry.tile, coordinator: coordinator, prominent: prominent,
                         heldControl: heldControl(for: entry.login.id), openSettingsOnLogins: openSettingsOnLogins)
                 }
             }
@@ -98,10 +111,6 @@ struct PanelView: View {
                 }
             }
             HStack {
-                Button("Log in to expiring") {
-                    coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
-                }
-                .disabled(coordinator.model.dueLogins(now: coordinator.now).isEmpty)
                 Button("Check now") {
                     Task { await coordinator.checkNow() }
                 }
