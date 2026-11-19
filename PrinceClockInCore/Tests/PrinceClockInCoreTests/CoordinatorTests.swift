@@ -460,6 +460,70 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev", "analytics-prod"])
     }
 
+    @Test func checkNowIsPublishedWhileItRuns() async throws {
+        let gate = Gate()
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+
+        let check = Task { await coordinator.checkNow() }
+        #expect(await eventually { fixture.checkRunner.calls.count == 1 })
+        #expect(coordinator.isCheckingDatabricks && !coordinator.canCheckDatabricksNow)
+
+        await gate.open()
+        await check.value
+        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+    }
+
+    @Test func theWarningTimeCheckIsPublishedWhileItRuns() async throws {
+        let gate = Gate()
+        let expiring = databricks("analytics-dev", remaining: 600)
+        let fixture = try Fixture(logins: [expiring], checkRunner: ArgumentRunner { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        let tick = Task { await coordinator.tick() }
+        #expect(await eventually { fixture.checkRunner.calls.count == 1 })
+        #expect(coordinator.isCheckingDatabricks)
+
+        await gate.open()
+        await tick.value
+        #expect(!coordinator.isCheckingDatabricks)
+    }
+
+    @Test func checkNowNeedsAWorkspaceProfile() async throws {
+        let account = Login(
+            displayName: "analytics-account", kind: .databricksProfile(name: "analytics-account", accountLevel: true))
+        let fixture = try Fixture(logins: [aws("dev"), account])
+        let coordinator = fixture.makeCoordinator()
+        #expect(!coordinator.canCheckDatabricksNow)
+
+        coordinator.addLogin(databricks("analytics-dev", remaining: 5 * hour))
+
+        #expect(coordinator.canCheckDatabricksNow)
+    }
+
+    @Test func checkNowWaitsForADatabricksLogin() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { !coordinator.canCheckDatabricksNow })
+
+        coordinator.cancelBatch()
+        #expect(await eventually { coordinator.canCheckDatabricksNow })
+    }
+
     @Test func checkNowStoresCouldntCheck() async throws {
         let dev = databricks("analytics-dev", remaining: 5 * hour)
         let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in .timedOut(output: "") })

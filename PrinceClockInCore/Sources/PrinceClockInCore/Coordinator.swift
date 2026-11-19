@@ -105,6 +105,14 @@ public final class Coordinator {
     public private(set) var lastFailures: [UUID: LoginFailure] = [:]
     /// Why the last save failed; `nil` once a save succeeds.
     public private(set) var saveFailure: String?
+    /// Whether a Databricks check runs now, from the warning time or Check Now.
+    public var isCheckingDatabricks: Bool { runningChecks > 0 }
+    /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
+    /// unlike an account profile can be checked, is tracked.
+    public var canCheckDatabricksNow: Bool {
+        !isCheckingDatabricks && runningDatabricksID == nil
+            && model.state.logins.contains { $0.kind.isWorkspaceProfile }
+    }
 
     private let store: StateStore
     private let queue: LoginQueue
@@ -121,7 +129,8 @@ public final class Coordinator {
     @ObservationIgnored private var savedState: AppState
     /// The last state read of each AWS login's cache file, with its token hash, in memory only.
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
-    @ObservationIgnored private var runningDatabricksID: UUID?
+    private var runningDatabricksID: UUID?
+    private var runningChecks = 0
     @ObservationIgnored private var isTicking = false
     @ObservationIgnored private var isStarted = false
 
@@ -418,6 +427,9 @@ public final class Coordinator {
 
     /// Checks `logins` one at a time and applies each answer. Skipped checks change nothing.
     private func check(_ logins: [Login], now: Date) async {
+        guard !logins.isEmpty else { return }
+        runningChecks += 1
+        defer { runningChecks -= 1 }
         for login in logins {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
             let check = await checker.check(
@@ -450,5 +462,11 @@ public final class Coordinator {
         } catch {
             saveFailure = error.localizedDescription
         }
+    }
+}
+
+private extension LoginKind {
+    var isWorkspaceProfile: Bool {
+        if case .databricksProfile(_, accountLevel: false) = self { true } else { false }
     }
 }
