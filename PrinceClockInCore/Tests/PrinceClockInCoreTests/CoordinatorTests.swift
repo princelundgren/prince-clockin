@@ -503,6 +503,21 @@ private extension Coordinator {
         #expect(await eventually { coordinator.lastFailures[dev.id] == nil && coordinator.login(dev.id)?.loginTime != nil })
     }
 
+    @Test func removingALoginTakesItOutOfItsPresetsAndSaves() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let preset = Preset(name: "Morning", loginIDs: [dev.id, prod.id])
+        let fixture = try Fixture()
+        let coordinator = fixture.makeCoordinator()
+        coordinator.addLogin(dev)
+        coordinator.addLogin(prod)
+        coordinator.savePreset(preset)
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(fixture.stored?.presets.map(\.loginIDs) == [[prod.id]])
+    }
+
     @Test func removingALoginForgetsItsFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in .exited(code: 1, output: "") })

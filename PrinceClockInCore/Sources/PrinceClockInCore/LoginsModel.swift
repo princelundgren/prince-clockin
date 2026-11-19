@@ -91,6 +91,16 @@ public struct LoginsModel: Equatable, Sendable {
         trackedLogins(preset.loginIDs)
     }
 
+    /// Stops tracking login `id` and takes it out of every preset. A preset left with no logins
+    /// stays.
+    public mutating func removeLogin(id: UUID) {
+        state.logins.removeAll { $0.id == id }
+        for index in state.presets.indices {
+            state.presets[index].loginIDs.removeAll { $0 == id }
+        }
+        possibleLogins[id] = nil
+    }
+
     /// The user stating when login `id` logged in: sets its login time, rounded down to whole
     /// seconds, and clears any invalidation, since the user is saying the login is valid.
     public mutating func setLoginTime(id: UUID, at time: Date) {

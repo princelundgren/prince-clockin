@@ -265,9 +265,10 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Stops tracking login `id`, takes it out of every preset and forgets what is known of it in
+    /// memory.
     public func removeLogin(id: UUID) {
-        model.state.logins.removeAll { $0.id == id }
-        model.possibleLogins[id] = nil
+        model.removeLogin(id: id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil

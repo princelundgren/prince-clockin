@@ -410,6 +410,22 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(selected.map(\.id) == [expiring.id, expired.id])
     }
 
+    @Test func removeLoginStripsItFromEveryPreset() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now, name: "dev")
+        let prod = databricks("prod")
+        let both = Preset(name: "dev + prod", loginIDs: [dev.id, prod.id])
+        let devOnly = Preset(name: "Night shift", loginIDs: [dev.id])
+        var logins = model([dev, prod], presets: [both, devOnly])
+
+        logins.removeLogin(id: dev.id)
+
+        #expect(logins.state.logins.map(\.id) == [prod.id])
+        #expect(logins.state.presets.map(\.loginIDs) == [[prod.id], []])
+        #expect(logins.state.presets.map(\.name) == ["dev + prod", "Night shift"])
+        #expect(logins.logins(in: logins.state.presets[1]).isEmpty)
+    }
+
     @Test func presetSkipsDeletedLogins() {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: hour, now: now, name: "dev")
