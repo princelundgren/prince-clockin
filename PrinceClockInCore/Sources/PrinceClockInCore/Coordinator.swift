@@ -126,10 +126,10 @@ public final class Coordinator {
         }
     }
 
-    /// Whether a Databricks check runs now, from the warning time or Check Now.
+    /// Whether a Databricks check runs now, from the warning time or Check Databricks Now.
     public var isCheckingDatabricks: Bool { runningChecks > 0 }
-    /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
-    /// unlike an account profile can be checked, is tracked.
+    /// Whether Check Databricks Now can run: no check or Databricks login runs, and a workspace
+    /// profile, which unlike an account profile can be checked, is tracked.
     public var canCheckDatabricksNow: Bool {
         !isCheckingDatabricks && runningDatabricksID == nil
             && model.state.logins.contains { $0.kind.isWorkspaceProfile }
@@ -231,7 +231,7 @@ public final class Coordinator {
         if !warned.isEmpty { await notifier.postWarning(logins: warned) }
     }
 
-    /// Checks every tracked Databricks login, for the panel's "Check now".
+    /// Checks every tracked Databricks login, for Check Databricks Now.
     public func checkNow() async {
         await check(model.checkNowTargets(), now: clock())
     }

@@ -52,9 +52,9 @@ struct PanelView: View {
                 .prominent(prominent == .logInToDue)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            if !logins.isEmpty {
+            if !logins.isEmpty, !coordinator.model.state.presets.isEmpty {
                 Divider()
-                actions
+                presets
             }
             if let line = updater.status.line {
                 Divider()
@@ -65,6 +65,10 @@ struct PanelView: View {
                         Button("View…") { updater.checkForUpdates() }
                     }
                 }
+            }
+            if !logins.isEmpty {
+                Divider()
+                checkDatabricksNow
             }
             Divider()
             footer
@@ -104,38 +108,41 @@ struct PanelView: View {
         }
     }
 
-    private var actions: some View {
+    private var presets: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !coordinator.model.state.presets.isEmpty {
-                FlowButtons(presets: coordinator.model.state.presets) { preset in
-                    coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
-                }
-            }
-            HStack {
-                Button("Check now") {
-                    Task { await coordinator.checkNow() }
-                }
-                .disabled(!coordinator.canCheckDatabricksNow)
-                .help("Ask the Databricks CLI whether each Databricks login is still valid")
+            Text("Presets")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            FlowButtons(buttons: presetButtons) { id in
+                guard let preset = coordinator.model.state.presets.first(where: { $0.id == id }) else { return }
+                coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
             }
         }
     }
 
-    /// Two rows, since one doesn't fit the panel's width.
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Link("Report an issue", destination: AppLinks.reportIssue)
-                Link("Website", destination: AppLinks.website)
-            }
-            HStack {
-                Button("Check for Updates…") { updater.checkForUpdates() }
-                Spacer()
-                Button("Settings…", action: openSettings)
-                Button("Quit") { NSApplication.shared.terminate(nil) }
-            }
+    /// Here until Settings → Logins has Check Databricks Now.
+    private var checkDatabricksNow: some View {
+        Button("Check Databricks Now") {
+            Task { await coordinator.checkNow() }
         }
-        .font(.callout)
+        .disabled(!coordinator.canCheckDatabricksNow)
+        .help("Ask the Databricks CLI whether each Databricks login is still valid")
+    }
+
+    private var presetButtons: [PresetButton] {
+        coordinator.model.state.presets.map { preset in
+            presetButton(for: preset, logins: coordinator.model.logins(in: preset), locale: .current)
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Button("Settings…", systemImage: "gearshape", action: openSettings)
+                .labelStyle(.iconOnly)
+                .help("Settings…")
+            Spacer()
+            Button("Quit") { NSApplication.shared.terminate(nil) }
+        }
     }
 }
 
@@ -202,21 +209,34 @@ private struct BannerView: View {
     }
 }
 
-/// One button per preset, wrapping onto as many lines as they need.
+/// One button per preset, in a row if they fit, else one per line; a name too long for the panel
+/// is truncated at the end, and its note after it never is.
 private struct FlowButtons: View {
-    let presets: [Preset]
-    let action: (Preset) -> Void
+    let buttons: [PresetButton]
+    let action: (UUID) -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack { buttons }
-            VStack(alignment: .leading) { buttons }
+            HStack { buttonViews }
+            VStack(alignment: .leading) { buttonViews }
         }
     }
 
-    private var buttons: some View {
-        ForEach(presets) { preset in
-            Button(preset.name) { action(preset) }
+    private var buttonViews: some View {
+        ForEach(buttons) { button in
+            Button { action(button.id) } label: {
+                HStack(spacing: 0) {
+                    Text(button.title)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if let note = button.note {
+                        Text(" · \(note)")
+                            .fixedSize()
+                    }
+                }
+            }
+            .disabled(!button.isEnabled)
+            .help(button.helpTag)
         }
     }
 }

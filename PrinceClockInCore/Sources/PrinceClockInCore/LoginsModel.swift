@@ -77,7 +77,7 @@ public struct LoginsModel: Equatable, Sendable {
         trackedLogins(ids).filter(isDatabricks)
     }
 
-    /// Every tracked Databricks login, for "Check now".
+    /// Every tracked Databricks login, for Check Databricks Now.
     public func checkNowTargets() -> [Login] {
         state.logins.filter(isDatabricks)
     }

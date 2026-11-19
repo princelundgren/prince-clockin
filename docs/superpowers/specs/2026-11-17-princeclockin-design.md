@@ -287,6 +287,9 @@ depends on it being open. From top to bottom:
    "Update 1.0.1 installs after the logins finish", without View….
 7. **The footer**: a `gearshape` button for Settings on the left, Quit on the right.
 
+Until Settings → Logins has Check Databricks Now, the panel keeps it on its own row before the
+footer; it leaves the panel then.
+
 **Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
 files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
