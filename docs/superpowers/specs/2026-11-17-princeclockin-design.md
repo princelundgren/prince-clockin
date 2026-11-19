@@ -252,10 +252,11 @@ depends on it being open. From top to bottom:
    1. **State set aside**: "PrinceClockIn couldn't use its saved logins (the file was unreadable
       or from a newer version), so it started empty. The old file was kept." With Show in
       Finder… and Dismiss.
-   2. **Save failed**: "Your changes couldn't be saved: <reason>. They'll be lost when
-      PrinceClockIn quits." With Try Again, which calls the core's public `retrySave()`. It
-      clears itself after a good save, and also posts a notification and puts the failure symbol
-      in the menu bar, since a popover must not be the only place a warning appears.
+   2. **Save failed**: "Your changes couldn't be saved", then the reason on its own line, then
+      "They'll be lost when PrinceClockIn quits." With Try Again, which calls the core's public
+      `retrySave()`. It clears itself after a good save, and also posts a notification and puts
+      the failure symbol in the menu bar, since a popover must not be the only place a warning
+      appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
       expires." With Open System Settings…, which opens System Settings → Notifications. It
       appears once; closing the panel after it has been shown dismisses it, and after that it

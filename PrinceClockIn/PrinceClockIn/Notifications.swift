@@ -9,6 +9,7 @@ struct SystemNotifier: Notifying {
     static let loginIDsKey = "loginIDs"
     private static let expiringCategory = "EXPIRING"
     private static let customDoneCategory = "CUSTOM_DONE"
+    private static let saveFailedCategory = "SAVE_FAILED"
 
     /// Registers the "Log In" and "Done" buttons. Call before the first notification is posted.
     static func registerCategories() {
@@ -36,6 +37,13 @@ struct SystemNotifier: Notifying {
             title: "\(login.displayName) is waiting in Terminal",
             body: "Finish the login there, then click Done.",
             category: Self.customDoneCategory, ids: [login.id])
+    }
+
+    func postSaveFailed(reason: String) async {
+        await post(
+            title: "Your changes couldn't be saved",
+            body: "\(reason)\nThey'll be lost when PrinceClockIn quits.",
+            category: Self.saveFailedCategory, ids: [])
     }
 
     /// A notification that can't be posted, such as when permission is denied, is dropped: the

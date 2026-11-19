@@ -7,6 +7,8 @@ public protocol Notifying: Sendable {
     func postWarning(logins: [Login]) async
     /// A custom login waits for the user's Done; the notification carries a "Done" action.
     func postCustomDone(login: Login) async
+    /// Saving stopped working; `reason` is the system's.
+    func postSaveFailed(reason: String) async
 }
 
 /// Reads what an AWS session's cache file shows now.
@@ -464,13 +466,16 @@ public final class Coordinator {
         save()
     }
 
+    /// Posts a notification when saving goes from working to failing, not again while it fails.
     private func save() {
         do {
             try store.save(model.state)
             savedState = model.state
             saveFailure = nil
         } catch {
-            saveFailure = error.localizedDescription
+            let reason = error.localizedDescription
+            if saveFailure == nil { Task { [notifier] in await notifier.postSaveFailed(reason: reason) } }
+            saveFailure = reason
         }
     }
 }

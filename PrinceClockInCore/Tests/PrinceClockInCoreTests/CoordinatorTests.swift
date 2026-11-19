@@ -83,12 +83,20 @@ private final class FakeNotifier: Notifying, @unchecked Sendable {
     private let lock = NSLock()
     private var postedWarnings: [[Login]] = []
     private var postedDone: [Login] = []
+    /// Each save-failed post's reason, as it is posted.
+    let saveFailures: AsyncStream<String>
+    private let saveFailureSink: AsyncStream<String>.Continuation
+
+    init() {
+        (saveFailures, saveFailureSink) = AsyncStream.makeStream(of: String.self)
+    }
 
     var warnings: [[Login]] { lock.withLock { postedWarnings } }
     var customDone: [Login] { lock.withLock { postedDone } }
 
     func postWarning(logins: [Login]) async { lock.withLock { postedWarnings.append(logins) } }
     func postCustomDone(login: Login) async { lock.withLock { postedDone.append(login) } }
+    func postSaveFailed(reason: String) async { saveFailureSink.yield(reason) }
 }
 
 private final class FakeApprovals: ApprovalStoring, @unchecked Sendable {
@@ -982,6 +990,33 @@ private final class GatedLogins: Sendable {
         coordinator.addLogin(aws("dev"))
 
         #expect(coordinator.saveFailure != nil)
+    }
+
+    @Test func aFailingSaveNotifiesOnceUntilASaveWorks() async throws {
+        let fixture = try Fixture()
+        let storeDirectory = fixture.directory.appending(path: "store")
+        let stateFile = storeDirectory.appending(path: "state.json")
+        try "".write(to: storeDirectory, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: storeDirectory))
+        var posts = fixture.notifier.saveFailures.makeAsyncIterator()
+
+        coordinator.addLogin(aws("dev"))
+        let noDirectory = try #require(coordinator.saveFailure)
+        #expect(await posts.next() == noDirectory)
+
+        coordinator.addLogin(aws("prod"))
+        try FileManager.default.removeItem(at: storeDirectory)
+        coordinator.retrySave()
+        #expect(coordinator.saveFailure == nil)
+        try FileManager.default.removeItem(at: stateFile)
+        try FileManager.default.createDirectory(at: stateFile, withIntermediateDirectories: false)
+        coordinator.addLogin(aws("staging"))
+        let fileIsADirectory = try #require(coordinator.saveFailure)
+
+        // Assumes the coordinator's posts arrive in the order it starts them: a post for the
+        // repeated failure would come before this one.
+        #expect(fileIsADirectory != noDirectory)
+        #expect(await posts.next() == fileIsADirectory)
     }
 
     @Test func retrySaveSavesTheUnchangedState() async throws {
