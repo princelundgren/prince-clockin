@@ -135,6 +135,9 @@ public final class Coordinator {
             && model.state.logins.contains { $0.kind.isWorkspaceProfile }
     }
 
+    /// Where discovery reads the AWS and Databricks config files.
+    public let configPaths: ConfigPaths
+
     private let store: StateStore
     private let queue: LoginQueue
     private let pathResolver: ShellPathResolver
@@ -142,7 +145,6 @@ public final class Coordinator {
     private let aws: AWSCacheReading
     private let notifier: Notifying
     private let approvals: ApprovalStoring
-    private let configPaths: ConfigPaths
     private let clock: () -> Date
     private let commands: AsyncStream<QueueCommand>
     private let commandSink: AsyncStream<QueueCommand>.Continuation

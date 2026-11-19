@@ -44,16 +44,11 @@ struct SetTimerForm: View {
                     .labelsHidden()
                     .focused(focus, equals: .textField(id, .loggedInAt))
             }
-            Picker("Session length", selection: $draft.sessionLength) {
-                ForEach(sessionLengthOptions(current: nil), id: \.choice) { option in
-                    Text(option.title).tag(option.choice)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
+            SessionLengthPopUp(selection: $draft.sessionLength)
+                .fixedSize()
             if draft.sessionLength == .custom {
                 HStack(spacing: 4) {
-                    NumberField(label: "Session length in hours", text: $draft.customHours)
+                    NumberField(label: "Session length in hours", text: $draft.customHours, prompt: "Hours")
                         .focused(focus, equals: .textField(id, .customHours))
                     Text("hours")
                 }
@@ -100,13 +95,30 @@ private extension SetTimerCheck {
     }
 }
 
-/// A short field for a number typed as text, which the core parses.
-private struct NumberField: View {
-    let label: String
-    @Binding var text: String
+/// The one list of session lengths as a pop-up, for Set Timer and Settings: 8 hours to 7 days,
+/// Custom… and No timer.
+struct SessionLengthPopUp: View {
+    @Binding var selection: SessionLengthChoice
 
     var body: some View {
-        TextField(label, text: $text)
+        Picker("Session length", selection: $selection) {
+            ForEach(sessionLengthOptions(current: nil), id: \.choice) { option in
+                Text(option.title).tag(option.choice)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+}
+
+/// A short field for a number typed as text, which the core parses; `prompt`, when given, is its
+/// empty placeholder.
+struct NumberField: View {
+    let label: String
+    @Binding var text: String
+    var prompt: String?
+
+    var body: some View {
+        TextField(label, text: $text, prompt: prompt.map { Text($0) })
             .labelsHidden()
             .multilineTextAlignment(.trailing)
             .frame(width: 44)
@@ -123,12 +135,15 @@ struct SessionLengthField: View {
     let focus: FocusState<PanelFocus?>.Binding
     /// What was typed since the last store, or `nil` to show the stored length.
     @Binding var draft: SessionLengthFieldDraft?
+    /// The field's label, which Settings' Custom… row names apart from the pop-up beside it.
+    var title = "Session length"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            LabeledContent("Session length") {
+            LabeledContent(title) {
                 HStack(spacing: 4) {
-                    TextField("Unknown", text: text)
+                    TextField("Session length in hours", text: text, prompt: Text("Hours"))
+                        .labelsHidden()
                         .focused(focus, equals: fieldFocus)
                         .onSubmit(store)
                         .frame(width: 70)

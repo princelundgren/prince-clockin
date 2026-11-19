@@ -76,10 +76,6 @@ struct PanelView: View {
                     }
                 }
             }
-            if !logins.isEmpty {
-                Divider()
-                checkDatabricksNow
-            }
             Divider()
             footer
         }
@@ -159,15 +155,6 @@ struct PanelView: View {
                 coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
             }
         }
-    }
-
-    /// Here until Settings → Logins has Check Databricks Now.
-    private var checkDatabricksNow: some View {
-        Button("Check Databricks Now") {
-            Task { await coordinator.checkNow() }
-        }
-        .disabled(!coordinator.canCheckDatabricksNow)
-        .help("Ask the Databricks CLI whether each Databricks login is still valid")
     }
 
     private var presetButtons: [PresetButton] {
