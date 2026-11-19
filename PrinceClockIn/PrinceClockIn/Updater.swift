@@ -8,16 +8,15 @@ import Sparkle
 @MainActor
 @Observable
 final class Updater: NSObject {
-    /// The version of the update a scheduled check found, or of one installed whose relaunch
-    /// waits, until its update session ends; `nil` when none waits.
-    private(set) var updateVersion: String?
-    /// Whether the user chose to install the update and its relaunch waits for the batch to end.
-    var isRelaunchPostponed: Bool { postponedRelaunch != nil }
+    /// The waiting update and whether its relaunch is postponed; Sparkle's events drive it.
+    private(set) var status = UpdateStatus()
+    var updateVersion: String? { status.waitingVersion }
+    var isRelaunchPostponed: Bool { status.isRelaunchPostponed }
 
     @ObservationIgnored private let coordinator: Coordinator
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
     /// Sparkle's go-ahead for a relaunch held back while a batch runs.
-    private var postponedRelaunch: (() -> Void)?
+    @ObservationIgnored private var postponedRelaunch: (() -> Void)?
     /// Waits for the batch to end, to give that go-ahead; at most one at a time.
     @ObservationIgnored private var batchWait: Task<Void, Never>?
 
@@ -37,12 +36,12 @@ final class Updater: NSObject {
     private func relaunchWhenTheBatchEnds() {
         batchWait?.cancel()
         batchWait = Task { [weak self, coordinator] in
-            let mustWait = Observations { relaunchMustWait(batch: coordinator.batch) }
-            for await waits in mustWait where !waits {
+            let isBatchRunning = Observations { coordinator.batch != nil }
+            for await running in isBatchRunning where !running {
                 guard !Task.isCancelled, let self else { return }
                 let relaunch = postponedRelaunch
                 endPostponement()
-                relaunch?()
+                if status.batchEnded() { relaunch?() }
                 return
             }
         }
@@ -60,19 +59,16 @@ extension Updater: SPUUpdaterDelegate {
         _ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem,
         untilInvokingBlock installHandler: @escaping () -> Void
     ) -> Bool {
-        guard relaunchMustWait(batch: coordinator.batch) else { return false }
-        updateVersion = item.displayVersionString
+        guard status.relaunchRequested(version: item.displayVersionString, isBatchRunning: coordinator.batch != nil)
+        else { return false }
         postponedRelaunch = installHandler
         relaunchWhenTheBatchEnds()
         return true
     }
 
-    /// The update cycle that postponed a relaunch stays open until the relaunch goes ahead, so its
-    /// end, after an aborted or cancelled install, means the postponement no longer holds.
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        guard isRelaunchPostponed else { return }
+        status.updateCycleFinished()
         endPostponement()
-        updateVersion = nil
     }
 }
 
@@ -88,13 +84,10 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
     ) {
-        if !state.userInitiated {
-            updateVersion = update.displayVersionString
-        }
+        status.foundUpdate(version: update.displayVersionString, isUserInitiated: state.userInitiated)
     }
 
-    /// Keeps the version while a relaunch waits, so the panel can say the update installs later.
     func standardUserDriverWillFinishUpdateSession() {
-        if postponedRelaunch == nil { updateVersion = nil }
+        status.updateSessionFinished()
     }
 }

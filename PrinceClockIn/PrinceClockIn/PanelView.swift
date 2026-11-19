@@ -54,12 +54,12 @@ struct PanelView: View {
                 Divider()
                 actions
             }
-            if let version = updater.updateVersion {
+            if let line = updater.status.line {
                 Divider()
                 HStack {
-                    Text(updateLineText(version: version, isRelaunchPostponed: updater.isRelaunchPostponed))
+                    Text(line.text)
                     Spacer()
-                    if !updater.isRelaunchPostponed {
+                    if line.showsView {
                         Button("View…") { updater.checkForUpdates() }
                     }
                 }
