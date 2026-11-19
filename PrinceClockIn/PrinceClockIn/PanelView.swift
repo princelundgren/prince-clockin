@@ -97,6 +97,7 @@ struct PanelView: View {
     private func discoverForEmptyPanel() async {
         guard logins.isEmpty else { return }
         let opening = session.openings
+        session.emptyPanelReadStarted()
         let found = await coordinator.discoverCandidates()
         guard !Task.isCancelled else { return }
         session.showEmptyPanel(
@@ -221,6 +222,11 @@ final class PanelSession {
     /// The panel is on screen and its window key.
     func didShow() {
         showings += 1
+    }
+
+    /// A new discovery read for the empty panel started, so no earlier answer shows while it runs.
+    func emptyPanelReadStarted() {
+        emptyPanel = nil
     }
 
     /// Discovery's answer for the empty panel, which arrives after the panel opens; one for an
