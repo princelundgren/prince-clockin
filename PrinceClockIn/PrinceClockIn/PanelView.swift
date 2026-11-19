@@ -6,8 +6,8 @@ import SwiftUI
 struct PanelView: View {
     let appModel: AppModel
     let updater: Updater
+    let openSettings: () -> Void
     @State private var selection: Set<UUID> = []
-    @Environment(\.openSettings) private var openSettings
 
     private var coordinator: Coordinator { appModel.coordinator }
     private var logins: [Login] { coordinator.model.state.logins }
@@ -44,9 +44,7 @@ struct PanelView: View {
             footer
         }
         .padding()
-        .frame(width: 360)
-        .onAppear { coordinator.markPanelShown() }
-        .task { await appModel.refreshNotificationPermission() }
+        .frame(width: 320)
     }
 
     @ViewBuilder private var notices: some View {
@@ -97,10 +95,7 @@ struct PanelView: View {
             HStack {
                 Button("Check for Updates…") { updater.checkForUpdates() }
                 Spacer()
-                Button("Settings…") {
-                    NSApplication.shared.activate()
-                    openSettings()
-                }
+                Button("Settings…", action: openSettings)
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
         }
