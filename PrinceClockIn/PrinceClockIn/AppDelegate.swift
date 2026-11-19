@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = StatusItemController(
             coordinator: appModel.coordinator, updater: updater,
-            togglePanel: { [weak self] in self?.togglePanel() })
+            togglePanel: { [weak self] in self?.togglePanel() }, openSettings: { [weak self] in self?.showSettings() })
         setUpPopover()
     }
 

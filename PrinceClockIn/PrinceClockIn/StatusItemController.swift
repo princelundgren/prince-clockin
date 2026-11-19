@@ -4,26 +4,40 @@ import PrinceClockInCore
 
 /// The menu bar item: a template image of the state's symbol, the time left or the batch's
 /// progress, and a dot when an update waits, redrawn whenever the core's label changes. A click
-/// toggles the panel.
+/// toggles the panel; a right click, or a Control-click, opens the right-click menu.
 @MainActor
 final class StatusItemController: NSObject {
     private static let spacing: CGFloat = 4
     private static let dotDiameter: CGFloat = 5
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let coordinator: Coordinator
+    private let updater: Updater
     private let togglePanel: () -> Void
+    private let openSettings: () -> Void
+    /// The open right-click menu's items, which its menu items' tags index.
+    private var menuItems: [RightClickMenuItem] = []
+    /// The due logins the open menu's Log In to N Due counts, so a click starts the ones it named.
+    private var menuDueIDs: [UUID] = []
     private let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
 
     var button: NSStatusBarButton? { statusItem.button }
 
-    init(coordinator: Coordinator, updater: Updater, togglePanel: @escaping () -> Void) {
+    init(
+        coordinator: Coordinator, updater: Updater, togglePanel: @escaping () -> Void,
+        openSettings: @escaping () -> Void
+    ) {
+        self.coordinator = coordinator
+        self.updater = updater
         self.togglePanel = togglePanel
+        self.openSettings = openSettings
         super.init()
         statusItem.behavior = .terminationOnRemoval
         // Shown at every launch, so opening the app again after its item was removed brings it back.
         statusItem.isVisible = true
         statusItem.button?.target = self
         statusItem.button?.action = #selector(buttonClicked)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         Task { [weak self] in
             let labels = Observations {
                 menuBarLabel(
@@ -38,7 +52,52 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func buttonClicked() {
-        togglePanel()
+        // A Control-click arrives as a left mouse-up with Control held.
+        let event = NSApp.currentEvent
+        let isSecondaryClick = event?.type == .rightMouseUp
+            || (event?.type == .leftMouseUp && event?.modifierFlags.contains(.control) == true)
+        if isSecondaryClick {
+            showMenu()
+        } else {
+            togglePanel()
+        }
+    }
+
+    /// Opens the right-click menu, built for the state at this moment.
+    private func showMenu() {
+        statusItem.menu = makeMenu()
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    private func makeMenu() -> NSMenu {
+        menuDueIDs = coordinator.model.dueLogins(now: coordinator.now).map(\.id)
+        menuItems = rightClickMenu(
+            dueCount: menuDueIDs.count, isBatchRunning: coordinator.batch != nil,
+            updateVersion: updater.updateVersion)
+        let menu = NSMenu()
+        for (index, item) in menuItems.enumerated() {
+            if item == .separator {
+                menu.addItem(.separator())
+                continue
+            }
+            let menuItem = NSMenuItem(title: item.title, action: #selector(menuItemChosen), keyEquivalent: item.keyEquivalent)
+            menuItem.target = self
+            menuItem.tag = index
+            menu.addItem(menuItem)
+        }
+        return menu
+    }
+
+    @objc private func menuItemChosen(_ sender: NSMenuItem) {
+        switch menuItems[sender.tag] {
+        case .logInToDue: coordinator.logIn(menuDueIDs)
+        case .installUpdate, .checkForUpdates: updater.checkForUpdates()
+        case .settings: openSettings()
+        case .reportIssue: NSWorkspace.shared.open(AppLinks.reportIssue)
+        case .quit: NSApp.terminate(nil)
+        case .separator: break
+        }
     }
 
     private func show(_ label: MenuBarLabel) {

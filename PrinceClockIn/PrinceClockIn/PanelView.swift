@@ -89,8 +89,8 @@ struct PanelView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Link("Report an issue", destination: URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!)
-                Link("Website", destination: URL(string: "https://princeworks.app/clockin/")!)
+                Link("Report an issue", destination: AppLinks.reportIssue)
+                Link("Website", destination: AppLinks.website)
             }
             HStack {
                 Button("Check for Updates…") { updater.checkForUpdates() }
