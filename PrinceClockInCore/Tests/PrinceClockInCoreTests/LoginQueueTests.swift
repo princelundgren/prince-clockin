@@ -575,6 +575,175 @@ private final class StepLog: @unchecked Sendable {
         ])
     }
 
+    @Test func removingAQueuedLoginShrinksTheTotal() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let release = Gate()
+        let runner = FakeRunner { index in
+            if index == 0 {
+                await entered.open()
+                await release.wait()
+            }
+            return .exited(code: 0, output: "")
+        }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+        let prod = awsLogin("prod")
+        let analytics = databricksLogin("analytics-dev")
+
+        await queue.enqueue([dev, prod, analytics], timeout: timeout)
+        await entered.wait()
+        await queue.remove(id: prod.id)
+        await release.open()
+
+        #expect(await events.throughFinished() == [
+            .started(id: dev.id, position: 1, total: 3), .succeeded(id: dev.id, at: now),
+            .started(id: analytics.id, position: 2, total: 2), .succeeded(id: analytics.id, at: now),
+            .finished,
+        ])
+        #expect(runner.calls.map(\.arguments) == [
+            ["sso", "login", "--sso-session=dev"], ["auth", "login", "--profile=analytics-dev"],
+        ])
+    }
+
+    @Test func removingTheRunningLoginCancelsItAndGoesOn() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let runner = FakeRunner { index in
+            guard index == 0 else { return .exited(code: 0, output: "") }
+            await entered.open()
+            await waitUntilCancelled()
+            return .cancelled
+        }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+        let prod = awsLogin("prod")
+
+        await queue.enqueue([dev, prod], timeout: timeout)
+        await entered.wait()
+        await queue.remove(id: dev.id)
+
+        #expect(await events.throughFinished() == [
+            .started(id: dev.id, position: 1, total: 2), .failed(id: dev.id, reason: .cancelled),
+            .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
+            .finished,
+        ])
+    }
+
+    @Test func removingTheLoginWaitingForDoneGoesOn() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = makeQueue(runner: succeedingRunner(), path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: nil)
+        let dev = awsLogin("dev")
+
+        await queue.enqueue([custom, dev], timeout: timeout)
+        #expect(await events.next(2) == [
+            .started(id: custom.id, position: 1, total: 2), .waitingForDone(id: custom.id),
+        ])
+        await queue.remove(id: custom.id)
+
+        #expect(await events.throughFinished() == [
+            .failed(id: custom.id, reason: .cancelled),
+            .started(id: dev.id, position: 2, total: 2), .succeeded(id: dev.id, at: now),
+            .finished,
+        ])
+    }
+
+    @Test func aRemovedRunningLoginCanBeQueuedAgain() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let stopped = Gate()
+        let runner = FakeRunner { index in
+            guard index == 0 else { return .exited(code: 0, output: "") }
+            await entered.open()
+            await waitUntilCancelled()
+            await stopped.wait()
+            return .cancelled
+        }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+
+        await queue.enqueue([dev], timeout: timeout)
+        await entered.wait()
+        await queue.remove(id: dev.id)
+        await queue.enqueue([dev], timeout: timeout)
+        await stopped.open()
+
+        #expect(await events.throughFinished() == [
+            .started(id: dev.id, position: 1, total: 1), .failed(id: dev.id, reason: .cancelled),
+            .started(id: dev.id, position: 2, total: 2), .succeeded(id: dev.id, at: now),
+            .finished,
+        ])
+    }
+
+    @Test func removingAnUnknownLoginDoesNothing() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let release = Gate()
+        let runner = FakeRunner { index in
+            if index == 0 {
+                await entered.open()
+                await release.wait()
+            }
+            return .exited(code: 0, output: "")
+        }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+        let prod = awsLogin("prod")
+
+        await queue.remove(id: dev.id)
+        await queue.enqueue([dev, prod], timeout: timeout)
+        await entered.wait()
+        await queue.remove(id: UUID())
+        await release.open()
+
+        #expect(await events.throughFinished() == [
+            .started(id: dev.id, position: 1, total: 2), .succeeded(id: dev.id, at: now),
+            .started(id: prod.id, position: 2, total: 2), .succeeded(id: prod.id, at: now),
+            .finished,
+        ])
+    }
+
+    @Test func removingTheRunningLoginAfterCancelAllStillEndsTheRun() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let runner = FakeRunner { index in
+            guard index == 0 else { return .exited(code: 0, output: "") }
+            await entered.open()
+            await waitUntilCancelled()
+            return .cancelled
+        }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+        let prod = awsLogin("prod")
+        let later = awsLogin("later")
+
+        await queue.enqueue([dev, prod], timeout: timeout)
+        await entered.wait()
+        await queue.cancel()
+        await queue.remove(id: dev.id)
+        let cancelledRun = await events.throughFinished()
+        await queue.enqueue([later], timeout: timeout)
+        let nextRun = await events.throughFinished()
+
+        #expect(cancelledRun.contains(.failed(id: dev.id, reason: .cancelled)))
+        #expect(!cancelledRun.contains { if case .started(prod.id, _, _) = $0 { true } else { false } })
+        #expect(nextRun.contains(.started(id: later.id, position: 1, total: 1)))
+        #expect(runner.calls.count == 2)
+    }
+
     @Test func eventsEndWhenQueueIsReleased() async throws {
         let directory = try makeCLIDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

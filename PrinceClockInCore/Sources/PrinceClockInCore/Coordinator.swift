@@ -53,6 +53,7 @@ public final class Coordinator {
         case enqueue([Login], timeout: TimeInterval)
         case cancel
         case done(UUID)
+        case remove(UUID)
     }
 
     public private(set) var model: LoginsModel
@@ -139,6 +140,7 @@ public final class Coordinator {
                 case .enqueue(let logins, let timeout): await queue.enqueue(logins, timeout: timeout)
                 case .cancel: await queue.cancel()
                 case .done(let id): await queue.confirmCustomDone(id: id)
+                case .remove(let id): await queue.remove(id: id)
                 }
             }
         }
@@ -265,9 +267,10 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// Stops tracking login `id`, takes it out of every preset and forgets what is known of it in
-    /// memory.
+    /// Stops tracking login `id`, takes it out of every preset and the queue, and forgets what is
+    /// known of it in memory. A running login is cancelled, and the batch goes on.
     public func removeLogin(id: UUID) {
+        commandSink.yield(.remove(id))
         model.removeLogin(id: id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil

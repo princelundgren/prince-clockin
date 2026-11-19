@@ -531,6 +531,24 @@ private extension Coordinator {
         #expect(coordinator.lastFailures[dev.id] == nil)
     }
 
+    @Test func removingTheRunningLoginCancelsItAndRunsTheNext() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let fixture = try Fixture(
+            logins: [dev, prod],
+            loginRunner: ArgumentRunner { arguments in
+                arguments.last == "--sso-session=dev" ? await hangUntilCancelled() : .exited(code: 0, output: "")
+            })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        #expect(await eventually { fixture.loginRunner.calls.count == 1 })
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(await eventually { coordinator.login(prod.id)?.loginTime == launch })
+    }
+
     @Test func cancellingALoginIsNotAFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
