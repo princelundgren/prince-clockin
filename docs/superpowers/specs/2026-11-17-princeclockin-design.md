@@ -331,7 +331,8 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     trailing side shows that state or the timer instead of Log In.
 - **The "…" menu**, also the tile's context menu and its accessibility actions: Log In, Set
   Timer…, Mark as Logged In Now, a Session Length submenu with a checkmark on the current length,
-  and Edit in Settings…; Cancel All on a running or queued tile.
+  and Edit in Settings…, which opens Settings → Logins with that login selected; Cancel All on a
+  running or queued tile.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
     timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.

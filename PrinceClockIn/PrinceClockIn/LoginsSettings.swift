@@ -58,6 +58,11 @@ struct LoginsSettings: View {
         }
         .task(id: TrackedConfigNames(logins: logins)) { await discover() }
         .onChange(of: request.isAddMenuPending, initial: true) { openRequestedAddMenu() }
+        .onChange(of: request.loginToSelect, initial: true) { _, id in
+            guard let id else { return }
+            selection = id
+            request.loginToSelect = nil
+        }
         // A request the pane didn't get to before it went stays unanswered, never opening later.
         .onDisappear { request.isAddMenuPending = false }
     }
@@ -167,6 +172,8 @@ struct LoginsSettings: View {
 final class LoginsPaneRequest {
     /// The panel's Add Logins… asked for the + menu, which the pane opens and then clears this.
     var isAddMenuPending = false
+    /// A tile's Edit in Settings… asked for its login, which the pane selects and then clears this.
+    var loginToSelect: UUID?
 }
 
 /// A tracked login in the list: its kind's symbol, its name and its subtitle.

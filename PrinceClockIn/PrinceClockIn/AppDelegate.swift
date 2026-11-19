@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let panel = PanelView(
             appModel: appModel, updater: updater, session: panelSession,
             openSettings: { [weak self] in self?.showSettings() },
-            openSettingsOnLogins: { [weak self] in self?.showSettings(on: .logins) },
+            editInSettings: { [weak self] in self?.showSettings(selecting: $0) },
             addLogins: { [weak self] in self?.showSettingsOpeningAddMenu() })
         let hosting = PanelHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
@@ -172,6 +172,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+
+    /// Edit in Settings…: Settings on Logins, with the tile's login selected.
+    private func showSettings(selecting loginID: UUID) {
+        loginsPaneRequest.loginToSelect = loginID
+        showSettings(on: .logins)
     }
 
     /// Add Logins…: Settings on Logins, whose pane opens its + menu once it has read the config

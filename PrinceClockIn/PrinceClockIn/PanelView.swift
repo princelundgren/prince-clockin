@@ -11,7 +11,8 @@ struct PanelView: View {
     let updater: Updater
     let session: PanelSession
     let openSettings: () -> Void
-    let openSettingsOnLogins: () -> Void
+    /// Edit in Settings… on a tile: Settings on Logins, with that login selected.
+    let editInSettings: (UUID) -> Void
     /// Add Logins…: Settings on Logins, with its + menu open.
     let addLogins: () -> Void
     @FocusState private var focus: PanelFocus?
@@ -112,7 +113,7 @@ struct PanelView: View {
                     TileView(
                         login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
                         defaults: defaults, focus: $focus, heldControl: heldControl(for: entry.login.id),
-                        openSettingsOnLogins: openSettingsOnLogins)
+                        editInSettings: editInSettings)
                 }
             }
             .onMoveCommand { move($0, keys: keys) }
