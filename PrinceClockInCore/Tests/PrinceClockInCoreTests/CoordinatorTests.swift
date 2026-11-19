@@ -460,6 +460,33 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev", "analytics-prod"])
     }
 
+    @Test func checkNowStoresCouldntCheck() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in .timedOut(output: "") })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        let couldntCheck = DatabricksCheckRecord(at: launch, result: .couldntCheck)
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == couldntCheck)
+        #expect(fixture.stored?.logins.first?.lastDatabricksCheck == couldntCheck)
+    }
+
+    @Test func aSkippedCheckKeepsTheLastCheck() async throws {
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        await coordinator.checkNow()
+
+        fixture.clock.advance(by: 60)
+        await coordinator.checkNow()
+
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == DatabricksCheckRecord(at: launch, result: .valid))
+        #expect(fixture.checkRunner.calls.count == 1)
+    }
+
     // MARK: Logging in
 
     @Test func logInKeepsOrder() async throws {

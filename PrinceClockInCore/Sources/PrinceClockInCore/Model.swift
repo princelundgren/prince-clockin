@@ -68,7 +68,7 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
-/// What one Databricks check that ran found. A skipped check has no result.
+/// What one Databricks check found. A skipped check has no result.
 public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case valid
     /// The CLI's no-credentials error.
@@ -77,7 +77,7 @@ public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case couldntCheck
 }
 
-/// A Databricks login's last check that ran: when, and what it found.
+/// A Databricks login's last check that wasn't skipped: when, and what it found.
 public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
     public let at: Date
     public let result: DatabricksCheckResult

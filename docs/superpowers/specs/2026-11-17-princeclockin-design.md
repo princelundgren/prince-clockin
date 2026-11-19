@@ -201,8 +201,8 @@ clicks Check Databricks Now in Settings → Logins.
 - Account profiles are offered but never checked: they run on their timer alone and say "Not
   checked", and their Settings row says the Databricks CLI can't check an account profile.
 - A check of one profile returns **valid**, **invalid**, **couldn't check** (the check failed)
-  or **skipped** (checked within the last 5 minutes, or a login running), kept apart. The core
-  keeps each profile's last check that ran, its time and one of the first three results, and
+  or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
+  apart. The core keeps each profile's last check, its time and one of the first three results, and
   publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
 - A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
   which keeps its last check, so a skip never reads as a fresh result.
@@ -554,8 +554,7 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
-  - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
-    is published;
+  - a "checking" flag for the Databricks check is published;
   - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
   - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.

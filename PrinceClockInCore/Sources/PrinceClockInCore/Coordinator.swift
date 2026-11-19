@@ -420,9 +420,9 @@ public final class Coordinator {
     private func check(_ logins: [Login], now: Date) async {
         for login in logins {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
-            let result = await checker.check(
+            let check = await checker.check(
                 profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
-            if let result { model.apply(result, login: login.id, now: now) }
+            if let result = check.result { model.apply(result, login: login.id, now: now) }
         }
         saveIfChanged()
     }
