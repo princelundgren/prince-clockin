@@ -325,8 +325,10 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// The AWS sessions and Databricks profiles in the config files that aren't tracked yet.
-    public func discoverCandidates() -> (aws: [String], databricks: [DatabricksProfile]) {
+    /// The AWS sessions and Databricks profiles in the config files that aren't tracked yet. The
+    /// files are read off the main actor; what is tracked is checked once they have been read.
+    public func discoverCandidates() async -> (aws: [String], databricks: [DatabricksProfile]) {
+        let found = await Self.discover(in: configPaths)
         var trackedAWS: Set<String> = []
         var trackedDatabricks: Set<String> = []
         for login in model.state.logins {
@@ -336,12 +338,20 @@ public final class Coordinator {
             case .custom: break
             }
         }
-        let awsText = try? String(contentsOf: configPaths.awsConfig, encoding: .utf8)
-        let databricksText = try? String(contentsOf: configPaths.databricksConfig, encoding: .utf8)
         return (
-            discoverAWSSessions(configText: awsText).filter { !trackedAWS.contains($0) },
-            discoverDatabricksProfiles(configText: databricksText).filter { !trackedDatabricks.contains($0.name) }
+            found.aws.filter { !trackedAWS.contains($0) },
+            found.databricks.filter { !trackedDatabricks.contains($0.name) }
         )
+    }
+
+    /// Every AWS session and Databricks profile in the config files at `paths`.
+    @concurrent
+    private nonisolated static func discover(
+        in paths: ConfigPaths
+    ) async -> (aws: [String], databricks: [DatabricksProfile]) {
+        let awsText = try? String(contentsOf: paths.awsConfig, encoding: .utf8)
+        let databricksText = try? String(contentsOf: paths.databricksConfig, encoding: .utf8)
+        return (discoverAWSSessions(configText: awsText), discoverDatabricksProfiles(configText: databricksText))
     }
 
     // MARK: Edits from the views; each saves.

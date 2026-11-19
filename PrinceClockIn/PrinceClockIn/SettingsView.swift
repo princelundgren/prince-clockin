@@ -151,7 +151,7 @@ private struct LoginsSettings: View {
     }
 
     private func refreshCandidates() {
-        candidates = coordinator.discoverCandidates()
+        Task { candidates = await coordinator.discoverCandidates() }
     }
 }
 

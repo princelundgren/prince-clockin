@@ -40,9 +40,8 @@ struct PanelView: View {
             if let card = coordinator.batchCard {
                 BatchCardView(card: card, coordinator: coordinator)
             }
-            if logins.isEmpty {
-                Text("No logins tracked yet. Add them in Settings.")
-                    .foregroundStyle(.secondary)
+            if logins.isEmpty, let empty = session.emptyPanel {
+                EmptyPanelView(empty: empty, addLogins: openSettingsOnLogins)
             }
             tileList(tiles, prominent: prominent)
             if showsLogInToDue {
@@ -76,6 +75,20 @@ struct PanelView: View {
         .padding()
         .frame(width: 320)
         .onChange(of: appModel.panelBanners) { _, banners in session.show(banners) }
+        .task(id: EmptyPanelTrigger(opening: session.openings, hasNoLogins: logins.isEmpty)) {
+            await discoverForEmptyPanel()
+        }
+    }
+
+    /// With no login tracked, what discovery finds in the config files, read again for each
+    /// opening and whenever the last login goes.
+    private func discoverForEmptyPanel() async {
+        guard logins.isEmpty else { return }
+        let opening = session.openings
+        let found = await coordinator.discoverCandidates()
+        guard !Task.isCancelled else { return }
+        session.showEmptyPanel(
+            emptyPanel(aws: found.aws, databricks: found.databricks, locale: .current), forOpening: opening)
     }
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
@@ -146,21 +159,31 @@ struct PanelView: View {
     }
 }
 
-/// What the panel keeps for one opening: its tiles' order, taken as it opens, the control each
-/// tile held when the pointer entered it, and whether the Notifications off banner was on screen.
-/// Closing the panel clears it and counts the closing, which gives the tiles new state for the
-/// next opening.
+/// What the panel keeps for one opening: its tiles' order, taken as it opens, what discovery found
+/// while no login is tracked, the control each tile held when the pointer entered it, and whether
+/// the Notifications off banner was on screen. Closing the panel clears it and counts the closing,
+/// which gives the tiles new state for the next opening.
 @MainActor
 @Observable
 final class PanelSession {
     private(set) var order: [UUID] = []
+    private(set) var emptyPanel: EmptyPanel?
     var heldControls: [UUID: TileControl] = [:]
+    private(set) var openings = 0
     private(set) var closings = 0
     @ObservationIgnored private var notificationsBanner = NotificationsBannerSighting()
 
     func open(order: [UUID]) {
         self.order = order
+        openings += 1
         notificationsBanner.panelOpened()
+    }
+
+    /// Discovery's answer for the empty panel, which arrives after the panel opens; one for an
+    /// earlier opening, or arriving after the panel closed, is dropped.
+    func showEmptyPanel(_ emptyPanel: EmptyPanel, forOpening opening: Int) {
+        guard opening == openings, closings < openings else { return }
+        self.emptyPanel = emptyPanel
     }
 
     /// This opening read the notification permission, and the panel shows `banners`.
@@ -177,8 +200,35 @@ final class PanelSession {
     /// permission was read.
     func close() -> Bool {
         heldControls = [:]
+        emptyPanel = nil
         closings += 1
         return notificationsBanner.panelClosed()
+    }
+}
+
+/// When the panel discovers logins for its empty state: once per opening, and again when the last
+/// login goes while it is open.
+private struct EmptyPanelTrigger: Equatable {
+    let opening: Int
+    let hasNoLogins: Bool
+}
+
+/// No login tracked: what discovery found, and Add Logins….
+private struct EmptyPanelView: View {
+    let empty: EmptyPanel
+    let addLogins: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let title = empty.title {
+                Text(title)
+                    .font(.headline)
+            }
+            Text(empty.message)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Add Logins…", action: addLogins)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 }
 

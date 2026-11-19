@@ -1297,7 +1297,7 @@ private final class GatedLogins: Sendable {
             """.write(to: fixture.configPaths.databricksConfig, atomically: true, encoding: .utf8)
         let coordinator = fixture.makeCoordinator()
 
-        let candidates = coordinator.discoverCandidates()
+        let candidates = await coordinator.discoverCandidates()
 
         #expect(candidates.aws == ["prod"])
         #expect(candidates.databricks == [DatabricksProfile(name: "analytics-prod", accountLevel: false)])
