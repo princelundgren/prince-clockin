@@ -824,6 +824,63 @@ private final class GatedLogins: Sendable {
         #expect(fixture.loginRunner.calls.count == 1)
     }
 
+    // MARK: The menu bar
+
+    @Test func aFailureIsUnseenUntilThePanelIsShown() async throws {
+        let dev = aws("dev")
+        let logins = GatedLogins(["dev"], outcomes: ["dev": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id])
+        #expect(await eventually { coordinator.batch != nil })
+        #expect(coordinator.menuBarStatus == .loggingIn(BatchProgress(position: 1, total: 1)))
+
+        await logins.release("dev")
+        #expect(await eventually { coordinator.batch == nil })
+        #expect(coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .failure)
+
+        coordinator.markPanelShown()
+        #expect(!coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
+    @Test func removingTheFailedLoginClearsItsUnseenFailure() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"], outcomes: ["dev": .exited(code: 1, output: ""), "prod": .exited(code: 1, output: "")])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.logIn([dev.id, prod.id])
+        await logins.release("dev")
+        await logins.release("prod")
+        #expect(await eventually { coordinator.lastFailures.count == 2 && coordinator.batch == nil })
+
+        coordinator.removeLogin(id: dev.id)
+        #expect(coordinator.menuBarStatus == .failure)
+
+        coordinator.removeLogin(id: prod.id)
+        #expect(!coordinator.hasUnseenFailure)
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
+    @Test func aFailedSaveKeepsTheFailureSymbolUntilASaveWorks() async throws {
+        let fixture = try Fixture()
+        let blocker = fixture.directory.appending(path: "not-a-directory")
+        try "".write(to: blocker, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator(store: StateStore(directory: blocker))
+        coordinator.addLogin(aws("dev"))
+
+        coordinator.markPanelShown()
+        #expect(coordinator.menuBarStatus == .failure)
+
+        try FileManager.default.removeItem(at: blocker)
+        coordinator.retrySave()
+        #expect(coordinator.menuBarStatus == .noTimer)
+    }
+
     @Test func cancellingALoginIsNotAFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
@@ -836,6 +893,7 @@ private final class GatedLogins: Sendable {
 
         #expect(await eventually { coordinator.batch == nil })
         #expect(coordinator.lastFailures[dev.id] == nil)
+        #expect(!coordinator.hasUnseenFailure)
     }
 
     @Test func logInHoldsBackUnapprovedImportedCommand() async throws {

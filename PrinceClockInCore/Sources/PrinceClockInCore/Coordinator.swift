@@ -107,6 +107,16 @@ public final class Coordinator {
     public private(set) var lastFailures: [UUID: LoginFailure] = [:]
     /// Why the last save failed; `nil` once a save succeeds.
     public private(set) var saveFailure: String?
+    /// Whether a login still tracked failed, not by a cancel, since the panel was last shown.
+    public var hasUnseenFailure: Bool { !unseenFailures.isEmpty }
+    /// The menu bar's row at the last tick. A failed save shows as a failure until a save works,
+    /// whether or not the panel has been shown.
+    public var menuBarStatus: MenuBarStatus {
+        PrinceClockInCore.menuBarStatus(
+            model.state.logins, now: now, leadTime: model.state.settings.warningLeadTime, batch: batch,
+            hasFailure: hasUnseenFailure || saveFailure != nil)
+    }
+
     /// Whether a Databricks check runs now, from the warning time or Check Now.
     public var isCheckingDatabricks: Bool { runningChecks > 0 }
     /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
@@ -133,6 +143,7 @@ public final class Coordinator {
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
     private var runningDatabricksID: UUID?
     private var runningChecks = 0
+    private var unseenFailures: Set<UUID> = []
     @ObservationIgnored private var isTicking = false
     @ObservationIgnored private var isStarted = false
 
@@ -260,6 +271,11 @@ public final class Coordinator {
         commandSink.yield(.done(id))
     }
 
+    /// The panel was shown, so the user has seen every failure so far.
+    public func markPanelShown() {
+        unseenFailures.removeAll()
+    }
+
     /// The output of the login's last run, kept in memory only.
     public func output(for id: UUID) async -> String? {
         await queue.lastOutput(id: id)
@@ -327,6 +343,7 @@ public final class Coordinator {
         queued.removeAll { $0 == id }
         if running == id { running = nil }
         outcomes.removeAll { $0.id == id }
+        unseenFailures.remove(id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil
@@ -394,7 +411,10 @@ public final class Coordinator {
         case .succeeded(let id, _), .failed(let id, _):
             if let outcome = LoginOutcome(event), login(id) != nil {
                 outcomes.append(outcome)
-                if case .failed(_, let reason) = outcome { lastFailures[id] = reason }
+                if case .failed(_, let reason) = outcome {
+                    lastFailures[id] = reason
+                    unseenFailures.insert(id)
+                }
             }
             if running == id { running = nil }
             if waitingCustomID == id { waitingCustomID = nil }

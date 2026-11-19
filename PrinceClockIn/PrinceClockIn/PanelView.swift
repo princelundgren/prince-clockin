@@ -37,6 +37,7 @@ struct PanelView: View {
         }
         .padding()
         .frame(width: 360)
+        .onAppear { coordinator.markPanelShown() }
         .task { await appModel.refreshNotificationPermission() }
     }
 
