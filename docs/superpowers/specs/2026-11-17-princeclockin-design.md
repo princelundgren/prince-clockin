@@ -223,13 +223,17 @@ to the login the badge is about.
 |---|---|---|
 | Logging in | `clock.arrow.circlepath` | the batch's progress, "1 of 2" |
 | A failure not yet seen, or a failed save | `exclamationmark.triangle` | none |
-| Any login expired (a Still valid login doesn't count) | `clock.badge.xmark` | none |
+| Any login expired | `clock.badge.xmark` | none |
 | A login expiring | `clock.badge.exclamationmark` | the soonest-expiring login's time left, "19m" |
-| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" (Still valid skipped) |
+| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" |
 | No timer at all | `clock` | none |
 
 - When several apply, the highest row wins. A dot after the label means an update is waiting (see
   Release), in any state.
+- Still valid logins are skipped in every row, so Still valid and no-timer logins alone show the
+  No timer at all row.
+- With several expired, the label is about the one that expired first, an invalidated login
+  counting from when it was invalidated if that came first; a tie goes to the first stored.
 - A failure is seen once the panel has been shown after it (`NSPopover`'s did-show notification).
   A failed save keeps its symbol until a save succeeds.
 - VoiceOver reads one label, such as "PrinceClockIn, prod expiring in 19 minutes".
@@ -265,8 +269,9 @@ depends on it being open. From top to bottom:
      Terminal, then click Done." (without a command: "Log in your own way, then click Done."), with
      Done and Cancel All. The waiting login's notification also has Done.
    - No progress within a single login.
-3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left, no
-   timer last. The order holds still while the panel is open, so nothing moves under the pointer.
+3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left (an
+   expired login by when it expired, earliest first), then Still valid, then No timer last. The
+   order holds still while the panel is open, so nothing moves under the pointer.
    Past about 420 pt the list scrolls with the system scroller.
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
@@ -403,8 +408,9 @@ lists.
 
 - Expiring is the house Warning colour, not system orange. Expired, Running and Link are new to
   this app. The Accent passes 4.5:1 under white text.
-- Tokens colour symbols, tile tints and links. Text uses `.primary` and `.secondary` and meets
-  4.5:1 in light, dark and Increase Contrast.
+- Tokens colour symbols, tile tints and links. Text uses `.primary` and `.secondary`, only
+  `.primary` on a light-appearance tile tint (see Tiles), and meets 4.5:1 in light, dark and
+  Increase Contrast.
 
 #### Controls and keyboard
 
@@ -447,8 +453,9 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
 
 | What | API | en_GB | sv_SE |
 |---|---|---|---|
-| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units | 5h 13m · 14h 5m · 2d 17h | 5 h 13 m · 14 h 5 m · 2 d 17 h |
-| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide | 5 hours, 13 minutes | 5 timmar, 13 minuter |
+| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5 h 13 m · 14 h 5 m · 2 d 17 h |
+| Time left under a minute (owner, 2026-11-19) | one form everywhere, instead of the "0m" the format style gives | <1m | <1m |
+| Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide; under a minute, "less than a minute" | 5 hours, 13 minutes | 5 timmar, 13 minuter |
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
 | A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | imorgon 03:55 |
 | Batch progress | one form everywhere | 1 of 2 | 1 of 2 |
@@ -539,26 +546,20 @@ so a sentence can hold "5 h 13 m"; session lengths are English copy.
   reads `SMAppService.mainApp.status`, since the user can change it in System Settings.
 - Settings, logins, presets and timers are stored as JSON in
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
-  login time, session length, the time it was last found invalid, the expiry the last warning was
-  for (so a relaunch doesn't warn twice), for Databricks, whether the profile is account-level and
-  the time and result of its last check, and, for AWS, the cache file's last-seen modified and
-  `expiresAt` times. Fingerprints are never stored.
+  login time, session length, the time it was last invalidated and whether by a logout or a
+  check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
+  whether the profile is account-level and the time and result of its last check, and, for AWS,
+  the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - A file that is unreadable, or from a newer version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Rules above that today's core doesn't yet follow, and must:
-  - removing a login removes it from its presets; one queued login can leave the queue, and the
-    running one be cancelled alone;
-  - an AWS logout is kept apart from other invalidation, for "Logged out";
-  - Set Timer never stores the time left as the session length, and `setLoginTime(id:at:)` sets a
-    login time directly;
-  - a Still valid login is left out of the due list and the expired severity;
+  - one queued login can leave the queue, and the running one be cancelled alone;
   - the coordinator publishes the running login, the queued logins and this batch's outcomes, and
     the batch's position as "1 of 2";
-  - each Databricks login stores its last check's time and result (valid, invalid, couldn't
-    check, kept apart from a skipped check), and a "checking" flag is published;
+  - the Databricks check reports couldn't check apart from a skipped check, and a "checking" flag
+    is published;
   - `retrySave()`, and `needsApproval(id:)` against the stored approvals;
-  - the menu bar status carries the id of the login it is about;
   - the available update's version is kept, and its relaunch waits while a batch runs.
 - Bundle ID `com.princelundgren.princeclockin`.
 

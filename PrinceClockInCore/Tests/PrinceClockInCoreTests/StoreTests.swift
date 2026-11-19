@@ -14,12 +14,15 @@ private func sampleState() -> AppState {
     let aws = Login(
         displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: 8 * 3600,
         loginTime: at("2026-11-17T09:00:00Z"), invalidatedAt: at("2026-11-17T08:00:00Z"),
-        warnedForExpiry: at("2026-11-17T17:00:00Z"),
+        invalidationReason: .loggedOut, warnedForExpiry: at("2026-11-17T17:00:00Z"),
         lastAWSCache: AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     let databricks = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true))
+    let checked = Login(
+        displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
+        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck))
     let custom = Login(displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
     return AppState(
-        logins: [aws, databricks, custom],
+        logins: [aws, databricks, checked, custom],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
         settings: Settings(warningLeadTime: 15 * 60, loginTimeout: 120))
 }
@@ -162,6 +165,33 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
         #expect(text.contains(#""version" : 1"#))
         #expect(text.contains(#""loginTime" : "2026-11-17T09:00:00Z""#))
         #expect(!text.contains("fingerprint"))
+        #expect(text.contains(#""invalidationReason" : "loggedOut""#))
+    }
+}
+
+@Test(arguments: [
+    (#"{"type": "awsSSOSession", "name": "dev"}"#, true),
+    (#"{"type": "databricksProfile", "name": "dev", "accountLevel": false}"#, false),
+])
+func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, loggedOut: Bool) throws {
+    try withTemporaryDirectory { directory in
+        let json = """
+        {"version": 1, "presets": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300},
+         "logins": [{"id": "00000000-0000-0000-0000-000000000001", "displayName": "dev",
+           "kind": \(kind), "sessionLength": 28800,
+           "loginTime": "2026-11-17T09:00:00Z", "invalidatedAt": "2026-11-17T10:00:00Z"}]}
+        """
+        try Data(json.utf8).write(to: directory.appending(path: "state.json"))
+
+        guard case .loaded(let state) = StateStore(directory: directory).load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+
+        let login = try #require(state.logins.first)
+        #expect(login.invalidationReason == nil)
+        #expect(isLoggedOut(login) == loggedOut)
+        #expect(timerState(for: login, now: at("2026-11-17T11:00:00Z"), leadTime: 0) == .expired)
     }
 }
 
@@ -191,30 +221,42 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
     }
 }
 
-// Fixture assumption: both instants carry a fraction, so the unrounded value differs from its
-// stored form. The save and load step is what proves in-memory equals on-disk.
-private func expiryAfterStoreRoundTrip(sessionLength: TimeInterval?) throws -> (before: Date?, after: Date?) {
+// Fixture assumption: `now` and the length carry a fraction, so the unrounded values differ from
+// their stored form. The save and load step is what proves in-memory equals on-disk.
+@Test func setTimerWithFractionalTimesSurvivesStore() throws {
     let now = Date(timeIntervalSince1970: 1_800_000_000.7)
-    let expiresAt = Date(timeIntervalSince1970: 1_800_010_000.3)
-    var login = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: sessionLength)
-    try setExpiry(&login, expiresAt: expiresAt, now: now)
-    #expect(login.loginTime == login.loginTime?.wholeSeconds)
-    #expect(login.sessionLength == login.sessionLength?.rounded(.down))
+    let dev = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"))
+    var model = LoginsModel(state: AppState(logins: [dev]))
+    try model.setTimer(id: dev.id, expiresIn: 9_999.6, sessionLength: 8 * 3600 + 0.4, now: now)
+    let before = try #require(model.state.logins.first.flatMap(expiry(of:)))
 
-    return try withTemporaryDirectory { directory in
+    try withTemporaryDirectory { directory in
         let store = StateStore(directory: directory)
-        try store.save(AppState(logins: [login]))
-        guard case .loaded(let loaded) = store.load() else { return (expiry(of: login), nil) }
-        return (expiry(of: login), loaded.logins.first.flatMap(expiry(of:)))
+        try store.save(model.state)
+        guard case .loaded(let loaded) = store.load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+        #expect(loaded.logins.first.flatMap(expiry(of:)) == before)
     }
 }
 
-@Test func setExpiryWithFractionalTimesSurvivesStore() throws {
-    let withoutLength = try expiryAfterStoreRoundTrip(sessionLength: nil)
-    #expect(withoutLength.before != nil)
-    #expect(withoutLength.after == withoutLength.before)
+@Test func stillValidSurvivesSaveAndLoad() throws {
+    let now = at("2026-11-17T12:00:00Z")
+    let prod = Login(
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+        sessionLength: 3600, loginTime: now.addingTimeInterval(-7200))
+    var model = LoginsModel(state: AppState(logins: [prod]))
+    model.apply(.valid, login: prod.id, now: now)
 
-    let withLength = try expiryAfterStoreRoundTrip(sessionLength: 8 * 3600)
-    #expect(withLength.before != nil)
-    #expect(withLength.after == withLength.before)
+    try withTemporaryDirectory { directory in
+        let store = StateStore(directory: directory)
+        try store.save(model.state)
+        guard case .loaded(let loaded) = store.load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+        let login = try #require(loaded.logins.first)
+        #expect(isStillValid(login, now: now))
+    }
 }

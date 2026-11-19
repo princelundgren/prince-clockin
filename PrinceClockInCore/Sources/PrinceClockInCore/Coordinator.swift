@@ -3,7 +3,7 @@ import Observation
 
 /// Posts the app's notifications.
 public protocol Notifying: Sendable {
-    /// One grouped notification for logins that entered their warning time, with a "Log in" action.
+    /// One grouped notification for logins that entered their warning time, with a "Log In" action.
     func postWarning(logins: [Login]) async
     /// A custom login waits for the user's Done; the notification carries a "Done" action.
     func postCustomDone(login: Login) async
@@ -238,9 +238,17 @@ public final class Coordinator {
 
     // MARK: Edits from the views; each saves.
 
-    /// - Throws: `TimerError.expiryInPast`, leaving the login unchanged.
-    public func setExpiry(id: UUID, expiresAt: Date) throws {
-        try model.setExpiry(id: id, expiresAt: expiresAt, now: clock())
+    /// Set Timer with Expires In; see `LoginsModel.setTimer(id:expiresIn:sessionLength:now:)`.
+    /// - Throws: a `TimerError`, leaving the login unchanged.
+    public func setTimer(id: UUID, expiresIn: TimeInterval, sessionLength: TimeInterval) throws(TimerError) {
+        try model.setTimer(id: id, expiresIn: expiresIn, sessionLength: sessionLength, now: clock())
+        saveIfChanged()
+    }
+
+    /// Set Timer with Logged In At; see `LoginsModel.setTimer(id:loggedInAt:sessionLength:now:)`.
+    /// - Throws: a `TimerError`, leaving the login unchanged.
+    public func setTimer(id: UUID, loggedInAt: Date, sessionLength: TimeInterval) throws(TimerError) {
+        try model.setTimer(id: id, loggedInAt: loggedInAt, sessionLength: sessionLength, now: clock())
         saveIfChanged()
     }
 
@@ -257,10 +265,10 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Stops tracking login `id`, takes it out of every preset and forgets what is known of it in
+    /// memory.
     public func removeLogin(id: UUID) {
-        model.state.logins.removeAll { $0.id == id }
-        model.possibleLogins[id] = nil
-        model.validWhileExpired.remove(id)
+        model.removeLogin(id: id)
         pendingApprovals.removeAll { $0 == id }
         lastFailures[id] = nil
         awsStates[id] = nil
@@ -271,11 +279,9 @@ public final class Coordinator {
         edit(id) { $0.displayName = displayName }
     }
 
-    /// Sets the session length, rounded down to whole seconds, which ends a "valid while expired"
-    /// mismatch: the length is what the row offered to correct.
+    /// Sets the session length, rounded down to whole seconds.
     public func setSessionLength(id: UUID, to length: TimeInterval?) {
         edit(id) { $0.sessionLength = length.map { $0.rounded(.down) } }
-        model.validWhileExpired.remove(id)
     }
 
     /// Sets a custom login's command and approves it, since the user typed it. A login held back
@@ -364,9 +370,9 @@ public final class Coordinator {
     private func check(_ logins: [Login], now: Date) async {
         for login in logins {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
-            let validity = await checker.check(
+            let result = await checker.check(
                 profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
-            if let validity { model.apply(validity, login: login.id, now: now) }
+            if let result { model.apply(result, login: login.id, now: now) }
         }
         saveIfChanged()
     }

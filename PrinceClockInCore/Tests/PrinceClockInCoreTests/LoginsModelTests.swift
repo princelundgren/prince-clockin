@@ -54,7 +54,32 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.loggedOut, login: dev.id, now: now)
 
         #expect(logins.state.logins[0].invalidatedAt == now)
+        #expect(logins.state.logins[0].invalidationReason == .loggedOut)
+        #expect(isLoggedOut(logins.state.logins[0]))
         #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .expired)
+    }
+
+    @Test func loggedOutEndsWithANewerLogin() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 4 * hour, now: now)
+        var logins = model([dev])
+        logins.apply(.loggedOut, login: dev.id, now: now)
+
+        logins.apply(.newLogin(at: now.addingTimeInterval(60)), login: dev.id, now: now.addingTimeInterval(60))
+
+        #expect(!isLoggedOut(logins.state.logins[0]))
+    }
+
+    @Test func setLoginTimeClearsTheInvalidationReason() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: 4 * hour, now: now)
+        var logins = model([dev])
+        logins.apply(.loggedOut, login: dev.id, now: now)
+
+        logins.setLoginTime(id: dev.id, at: now.addingTimeInterval(-hour))
+
+        #expect(logins.state.logins[0].invalidationReason == nil)
+        #expect(!isLoggedOut(logins.state.logins[0]))
     }
 
     @Test func possibleLoginAsksAndConfirmSetsLoginTime() {
@@ -79,10 +104,15 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var asked = model([dev])
         asked.apply(.possibleLogin(at: rewrite), login: dev.id, now: now)
 
-        var bySetTimer = asked
-        try bySetTimer.setExpiry(id: dev.id, expiresAt: at("2026-11-17T16:00:00Z"), now: now)
-        #expect(bySetTimer.state.logins[0].loginTime == at("2026-11-17T08:00:00Z"))
-        #expect(bySetTimer.possibleLogins.isEmpty)
+        var byExpiresIn = asked
+        try byExpiresIn.setTimer(id: dev.id, expiresIn: 4 * hour, sessionLength: 8 * hour, now: now)
+        #expect(byExpiresIn.state.logins[0].loginTime == at("2026-11-17T08:00:00Z"))
+        #expect(byExpiresIn.possibleLogins.isEmpty)
+
+        var byLoggedInAt = asked
+        try byLoggedInAt.setTimer(id: dev.id, loggedInAt: at("2026-11-17T10:00:00Z"), sessionLength: 8 * hour, now: now)
+        #expect(byLoggedInAt.state.logins[0].loginTime == at("2026-11-17T10:00:00Z"))
+        #expect(byLoggedInAt.possibleLogins.isEmpty)
 
         var byLoggedInNow = asked
         byLoggedInNow.markLoggedInNow(id: dev.id, now: now)
@@ -94,17 +124,152 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(bySucceeded.possibleLogins.isEmpty)
     }
 
-    @Test func setExpiryInPastIsRefusedAndKeepsQuestion() {
+    @Test func setLoginTimeRoundsDownAndClearsInvalidation() {
         let now = at("2026-11-17T12:00:00Z")
-        let dev = login(remaining: 10 * 60, now: now)
+        var dev = login(remaining: hour, now: now)
+        dev.invalidatedAt = now
+        var logins = model([dev])
+        logins.apply(.possibleLogin(at: now), login: dev.id, now: now)
+
+        logins.setLoginTime(id: dev.id, at: now.addingTimeInterval(-hour + 0.9))
+
+        #expect(logins.state.logins[0].loginTime == now.addingTimeInterval(-hour))
+        #expect(logins.state.logins[0].invalidatedAt == nil)
+        #expect(logins.possibleLogins.isEmpty)
+        #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .ok(remaining: 7 * hour))
+    }
+
+    @Test func expiresInStoresTheSessionLengthNotTheTimeLeft() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        let vpn = Login(displayName: "vpn", kind: .custom(command: nil))
+        var logins = model([vpn])
+
+        try logins.setTimer(id: vpn.id, expiresIn: 4.5 * hour, sessionLength: 8 * hour, now: now)
+
+        #expect(logins.state.logins[0].sessionLength == 8 * hour)
+        #expect(logins.state.logins[0].loginTime == at("2026-11-17T08:30:00Z"))
+        #expect(expiry(of: logins.state.logins[0]) == at("2026-11-17T16:30:00Z"))
+    }
+
+    @Test func loggedInAtStoresTheSessionLength() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: nil)
+        var logins = model([prod])
+
+        try logins.setTimer(id: prod.id, loggedInAt: at("2026-11-17T09:00:00Z"), sessionLength: 72 * hour, now: now)
+
+        #expect(logins.state.logins[0].sessionLength == 72 * hour)
+        #expect(logins.state.logins[0].loginTime == at("2026-11-17T09:00:00Z"))
+    }
+
+    @Test func setTimerClearsInvalidation() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        var dev = login(remaining: hour, now: now)
+        dev.invalidatedAt = now
+        var logins = model([dev])
+
+        try logins.setTimer(id: dev.id, loggedInAt: at("2026-11-17T09:00:00Z"), sessionLength: 8 * hour, now: now)
+
+        #expect(logins.state.logins[0].invalidatedAt == nil)
+        #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .ok(remaining: 5 * hour))
+    }
+
+    @Test func expiresInRefusalsAtTheirBoundaries() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now)
+        var logins = model([dev])
+
+        #expect(throws: TimerError.wouldAlreadyBeExpired) {
+            try logins.setTimer(id: dev.id, expiresIn: 0, sessionLength: 8 * hour, now: now)
+        }
+        #expect(throws: TimerError.longerThanSessionLength) {
+            try logins.setTimer(id: dev.id, expiresIn: 8 * hour + 1, sessionLength: 8 * hour, now: now)
+        }
+        try logins.setTimer(id: dev.id, expiresIn: 1, sessionLength: 8 * hour, now: now)
+        #expect(expiry(of: logins.state.logins[0]) == now.addingTimeInterval(1))
+        try logins.setTimer(id: dev.id, expiresIn: 8 * hour, sessionLength: 8 * hour, now: now)
+        #expect(logins.state.logins[0].loginTime == now)
+    }
+
+    @Test func loggedInAtRefusalsAtTheirBoundaries() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now)
+        var logins = model([dev])
+
+        #expect(throws: TimerError.inFuture) {
+            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(1), sessionLength: 8 * hour, now: now)
+        }
+        #expect(throws: TimerError.wouldAlreadyBeExpired) {
+            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-8 * hour), sessionLength: 8 * hour, now: now)
+        }
+        try logins.setTimer(id: dev.id, loggedInAt: now, sessionLength: 8 * hour, now: now)
+        #expect(logins.state.logins[0].loginTime == now)
+        try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-8 * hour + 1), sessionLength: 8 * hour, now: now)
+        #expect(expiry(of: logins.state.logins[0]) == now.addingTimeInterval(1))
+    }
+
+    @Test func refusedSetTimerLeavesModelAndQuestion() {
+        let now = at("2026-11-17T12:00:00Z")
+        var dev = login(remaining: 10 * 60, now: now)
+        dev.invalidatedAt = now
         var logins = model([dev])
         logins.apply(.possibleLogin(at: now), login: dev.id, now: now)
         let before = logins
 
-        #expect(throws: TimerError.expiryInPast) {
-            try logins.setExpiry(id: dev.id, expiresAt: now.addingTimeInterval(-60), now: now)
+        #expect(throws: TimerError.wouldAlreadyBeExpired) {
+            try logins.setTimer(id: dev.id, expiresIn: -60, sessionLength: 4 * hour, now: now)
+        }
+        #expect(throws: TimerError.longerThanSessionLength) {
+            try logins.setTimer(id: dev.id, expiresIn: 5 * hour, sessionLength: 4 * hour, now: now)
+        }
+        #expect(throws: TimerError.inFuture) {
+            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(60), sessionLength: 4 * hour, now: now)
         }
         #expect(logins == before)
+    }
+
+    @Test func expiresInEqualToAFractionalSessionLengthIsAccepted() throws {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now)
+        var logins = model([dev])
+
+        // 1.1 * 3600 is 3960.0000000000005, so only rounding both down makes them equal.
+        try logins.setTimer(id: dev.id, expiresIn: 1.1 * hour, sessionLength: 1.1 * hour, now: now)
+
+        #expect(logins.state.logins[0].loginTime == now)
+        #expect(logins.state.logins[0].sessionLength == 3960)
+    }
+
+    @Test func loggedInAtIsRoundedBeforeItIsChecked() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now)
+        var logins = model([dev])
+
+        #expect(throws: TimerError.wouldAlreadyBeExpired) {
+            try logins.setTimer(id: dev.id, loggedInAt: now.addingTimeInterval(-hour + 0.5), sessionLength: hour, now: now)
+        }
+        #expect(logins == model([dev]))
+    }
+
+    @Test func setTimerRoundsDownToWholeSeconds() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000.7)
+        let dev = login(remaining: hour, now: now)
+        var logins = model([dev])
+
+        try logins.setTimer(id: dev.id, expiresIn: hour, sessionLength: 8 * hour + 0.5, now: now)
+        #expect(logins.state.logins[0].sessionLength == 8 * hour)
+        #expect(logins.state.logins[0].loginTime == Date(timeIntervalSince1970: 1_800_000_000 - 7 * hour))
+
+        try logins.setTimer(
+            id: dev.id, loggedInAt: Date(timeIntervalSince1970: 1_799_999_000.9), sessionLength: 2 * hour + 0.5, now: now)
+        #expect(logins.state.logins[0].sessionLength == 2 * hour)
+        #expect(logins.state.logins[0].loginTime == Date(timeIntervalSince1970: 1_799_999_000))
+    }
+
+    @Test func timerErrorsCarryTheSpecsCopy() {
+        #expect(TimerError.wouldAlreadyBeExpired.message == "That login would already have expired")
+        #expect(TimerError.inFuture.message == "That time is in the future")
+        #expect(TimerError.longerThanSessionLength.message == "That's longer than the session length")
     }
 
     @Test func databricksInvalidExpires() {
@@ -115,6 +280,8 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.invalid, login: prod.id, now: now)
 
         #expect(logins.state.logins[0].invalidatedAt == now)
+        #expect(logins.state.logins[0].invalidationReason == .foundInvalid)
+        #expect(!isLoggedOut(logins.state.logins[0]))
         #expect(timerState(for: logins.state.logins[0], now: now, leadTime: 0) == .expired)
     }
 
@@ -131,7 +298,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(timerState(for: logins.state.logins[0], now: validAt, leadTime: 0) == .ok(remaining: 24 * hour))
     }
 
-    @Test func databricksValidWhileTimerExpiredFlagsBoth() {
+    @Test func databricksValidAfterExpiryIsStillValid() {
         let now = at("2026-11-17T12:00:00Z")
         let prod = databricks("prod", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
         let dev = databricks("dev", loginTime: now.addingTimeInterval(-hour))
@@ -140,8 +307,83 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         logins.apply(.valid, login: prod.id, now: now)
         logins.apply(.valid, login: dev.id, now: now)
 
-        #expect(logins.validWhileExpired == [prod.id])
-        #expect(logins.state == model([prod, dev]).state)
+        #expect(isStillValid(logins.state.logins[0], now: now))
+        #expect(!isStillValid(logins.state.logins[1], now: now))
+        #expect(logins.state.logins.map(\.loginTime) == [prod.loginTime, dev.loginTime])
+    }
+
+    @Test func everyCheckResultIsRecorded() {
+        let now = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", loginTime: now.addingTimeInterval(-hour))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: now)
+        #expect(logins.state.logins[0].lastDatabricksCheck == DatabricksCheckRecord(at: now, result: .valid))
+
+        logins.apply(.couldntCheck, login: prod.id, now: now.addingTimeInterval(600.5))
+        #expect(logins.state.logins[0].lastDatabricksCheck
+            == DatabricksCheckRecord(at: now.addingTimeInterval(600), result: .couldntCheck))
+        #expect(logins.state.logins[0].loginTime == prod.loginTime)
+        #expect(logins.state.logins[0].invalidatedAt == nil)
+
+        logins.apply(.invalid, login: prod.id, now: now.addingTimeInterval(1200))
+        #expect(logins.state.logins[0].lastDatabricksCheck
+            == DatabricksCheckRecord(at: now.addingTimeInterval(1200), result: .invalid))
+    }
+
+    @Test func aValidCheckBeforeTheExpiryIsNotStillValid() {
+        let checkedAt = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: checkedAt.addingTimeInterval(-hour + 60))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: checkedAt)
+
+        #expect(!isStillValid(logins.state.logins[0], now: checkedAt.addingTimeInterval(120)))
+    }
+
+    @Test func stillValidAtTheExpiryItself() {
+        let expiry = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: expiry.addingTimeInterval(-hour))
+        var logins = model([prod])
+
+        logins.apply(.valid, login: prod.id, now: expiry)
+
+        #expect(isStillValid(logins.state.logins[0], now: expiry))
+    }
+
+    @Test func stillValidEndsThroughTheStoredFacts() {
+        let now = at("2026-11-17T12:00:00Z")
+        let prod = databricks("prod", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        var stillValid = model([prod])
+        stillValid.apply(.valid, login: prod.id, now: now)
+
+        var loggedIn = stillValid
+        loggedIn.markLoggedInNow(id: prod.id, now: now)
+        #expect(!isStillValid(loggedIn.state.logins[0], now: now))
+
+        var lengthened = stillValid
+        lengthened.state.logins[0].sessionLength = 3 * hour
+        #expect(!isStillValid(lengthened.state.logins[0], now: now))
+
+        var couldntCheck = stillValid
+        couldntCheck.apply(.couldntCheck, login: prod.id, now: now.addingTimeInterval(600))
+        #expect(!isStillValid(couldntCheck.state.logins[0], now: now.addingTimeInterval(600)))
+
+        var invalid = stillValid
+        invalid.apply(.invalid, login: prod.id, now: now.addingTimeInterval(600))
+        #expect(!isStillValid(invalid.state.logins[0], now: now.addingTimeInterval(600)))
+    }
+
+    @Test func onlyAWorkspaceProfileCanBeStillValid() {
+        let now = at("2026-11-17T12:00:00Z")
+        var dev = login(remaining: -hour, now: now)
+        dev.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+        var account = databricks("analytics-dev", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        account.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)
+        account.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+
+        #expect(!isStillValid(dev, now: now))
+        #expect(!isStillValid(account, now: now))
     }
 
     @Test func takeWarningsMarksAndPersists() throws {
@@ -156,16 +398,72 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(logins.state.logins[1].warnedForExpiry == nil)
     }
 
-    @Test func expiringSelection() {
+    @Test func dueLoginsAreExpiringOrExpiredButNeverStillValid() {
         let now = at("2026-11-17T12:00:00Z")
         let ok = login(remaining: 4 * hour, now: now, name: "dev")
         let expiring = login(remaining: 10 * 60, now: now, name: "prod")
         let expired = login(remaining: -hour, now: now, name: "analytics-dev")
         let unknown = databricks("analytics-prod", sessionLength: nil)
+        var loggedOut = login(remaining: 4 * hour, now: now, name: "qa")
+        loggedOut.invalidatedAt = now
+        var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        stillValid.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
 
-        let selected = model([ok, expiring, expired, unknown]).expiringOrExpired(now: now)
+        let due = model([ok, expiring, stillValid, expired, unknown, loggedOut]).dueLogins(now: now)
 
-        #expect(selected.map(\.id) == [expiring.id, expired.id])
+        #expect(due.map(\.id) == [expiring.id, expired.id, loggedOut.id])
+    }
+
+    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoTimer() {
+        let now = at("2026-11-17T12:00:00Z")
+        let unknown = databricks("analytics-prod", sessionLength: nil)
+        var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
+        stillValid.lastDatabricksCheck = DatabricksCheckRecord(at: now, result: .valid)
+        let okLater = login(remaining: 5 * hour, now: now, name: "prod")
+        let okSooner = login(remaining: 2 * hour, now: now, name: "dev")
+        let expiring = login(remaining: 10 * 60, now: now, name: "qa")
+        let expiredRecently = login(remaining: -hour, now: now, name: "analytics-dev")
+        let expiredLongAgo = login(remaining: -3 * hour, now: now, name: "sandbox")
+        var loggedOut = login(remaining: 4 * hour, now: now, name: "billing")
+        loggedOut.invalidatedAt = now.addingTimeInterval(-30 * 60)
+        let logins = model([
+            unknown, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
+        ])
+
+        let order = logins.panelOrder(now: now)
+
+        #expect(order.map(\.id) == [
+            expiredLongAgo.id, expiredRecently.id, loggedOut.id, expiring.id, okSooner.id, okLater.id,
+            stillValid.id, unknown.id,
+        ])
+    }
+
+    @Test func panelOrderKeepsStoredOrderOnTies() {
+        let now = at("2026-11-17T12:00:00Z")
+        let first = login(remaining: 2 * hour, now: now, name: "dev")
+        let second = login(remaining: 2 * hour, now: now, name: "prod")
+        let noTimerFirst = databricks("analytics-dev", sessionLength: nil)
+        let noTimerSecond = databricks("analytics-prod", sessionLength: nil)
+
+        let order = model([noTimerFirst, first, noTimerSecond, second]).panelOrder(now: now)
+
+        #expect(order.map(\.id) == [first.id, second.id, noTimerFirst.id, noTimerSecond.id])
+    }
+
+    @Test func removeLoginStripsItFromEveryPreset() {
+        let now = at("2026-11-17T12:00:00Z")
+        let dev = login(remaining: hour, now: now, name: "dev")
+        let prod = databricks("prod")
+        let both = Preset(name: "dev + prod", loginIDs: [dev.id, prod.id])
+        let devOnly = Preset(name: "Night shift", loginIDs: [dev.id])
+        var logins = model([dev, prod], presets: [both, devOnly])
+
+        logins.removeLogin(id: dev.id)
+
+        #expect(logins.state.logins.map(\.id) == [prod.id])
+        #expect(logins.state.presets.map(\.loginIDs) == [[prod.id], []])
+        #expect(logins.state.presets.map(\.name) == ["dev + prod", "Night shift"])
+        #expect(logins.logins(in: logins.state.presets[1]).isEmpty)
     }
 
     @Test func presetSkipsDeletedLogins() {

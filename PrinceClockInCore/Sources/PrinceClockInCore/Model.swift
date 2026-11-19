@@ -68,6 +68,35 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
+/// What one Databricks check that ran found. A skipped check has no result.
+public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
+    case valid
+    /// The CLI's no-credentials error.
+    case invalid
+    /// The check failed for another reason, such as being offline.
+    case couldntCheck
+}
+
+/// A Databricks login's last check that ran: when, and what it found.
+public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
+    public let at: Date
+    public let result: DatabricksCheckResult
+
+    /// `at` is rounded down to whole seconds.
+    public init(at: Date, result: DatabricksCheckResult) {
+        self.at = at.wholeSeconds
+        self.result = result
+    }
+}
+
+/// Why a login was invalidated.
+public enum InvalidationReason: String, Codable, Hashable, Sendable {
+    /// Its AWS cache file disappeared, as `aws sso logout` does.
+    case loggedOut
+    /// A Databricks check found it invalid.
+    case foundInvalid
+}
+
 public struct Login: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var displayName: String
@@ -78,10 +107,14 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Set when the AWS cache file disappears or a Databricks check says invalid. The login counts
     /// as expired while `loginTime` is `nil` or not newer.
     public var invalidatedAt: Date?
+    /// Why `invalidatedAt` was set. `nil` in a file written before the reason was stored, which
+    /// `isLoggedOut` reads by the kind's only earlier cause.
+    public var invalidationReason: InvalidationReason?
     /// The expiry the last warning was for, so a relaunch doesn't warn twice. A new login or a
     /// longer session changes the expiry and so re-arms the warning.
     public var warnedForExpiry: Date?
     public var lastAWSCache: AWSCacheRecord?
+    public var lastDatabricksCheck: DatabricksCheckRecord?
 
     /// Dates and `sessionLength` are rounded down to whole seconds.
     public init(
@@ -91,8 +124,10 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         sessionLength: TimeInterval? = nil,
         loginTime: Date? = nil,
         invalidatedAt: Date? = nil,
+        invalidationReason: InvalidationReason? = nil,
         warnedForExpiry: Date? = nil,
-        lastAWSCache: AWSCacheRecord? = nil
+        lastAWSCache: AWSCacheRecord? = nil,
+        lastDatabricksCheck: DatabricksCheckRecord? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -100,8 +135,10 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.sessionLength = sessionLength.map { $0.rounded(.down) }
         self.loginTime = loginTime?.wholeSeconds
         self.invalidatedAt = invalidatedAt?.wholeSeconds
+        self.invalidationReason = invalidationReason
         self.warnedForExpiry = warnedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
+        self.lastDatabricksCheck = lastDatabricksCheck
     }
 
     /// 8 hours for AWS; `nil` for every other kind, where the user sets it.
@@ -116,8 +153,10 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     func roundedToWholeSeconds() -> Login {
         Login(
             id: id, displayName: displayName, kind: kind, sessionLength: sessionLength,
-            loginTime: loginTime, invalidatedAt: invalidatedAt, warnedForExpiry: warnedForExpiry,
-            lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) })
+            loginTime: loginTime, invalidatedAt: invalidatedAt, invalidationReason: invalidationReason,
+            warnedForExpiry: warnedForExpiry,
+            lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
+            lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
     }
 }
 

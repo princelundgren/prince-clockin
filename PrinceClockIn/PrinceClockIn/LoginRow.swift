@@ -22,7 +22,7 @@ struct LoginRow: View {
                     .labelsHidden()
                 VStack(alignment: .leading) {
                     Text(login.displayName)
-                    Text(rowStateText(timerState(
+                    Text(stateText(timerState(
                         for: login, now: coordinator.now, leadTime: coordinator.model.state.settings.warningLeadTime)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -38,7 +38,7 @@ struct LoginRow: View {
                 }
                 .font(.callout)
             }
-            if coordinator.model.validWhileExpired.contains(login.id) {
+            if isStillValid(login, now: coordinator.now) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Databricks says this login is still valid, but its timer has run out. Its session length may be too short.")
                         .fixedSize(horizontal: false, vertical: true)
@@ -87,6 +87,15 @@ struct LoginRow: View {
             }
         }
         .font(.callout)
+    }
+
+    private func stateText(_ state: TimerState) -> String {
+        switch state {
+        case .ok(let remaining): "\(timeLeftText(remaining, locale: .current)) left"
+        case .expiring(let remaining): "Expiring · \(timeLeftText(remaining, locale: .current)) left"
+        case .expired: "Expired"
+        case .unknown: "No timer"
+        }
     }
 
     private func toggle(_ section: Expanded) {

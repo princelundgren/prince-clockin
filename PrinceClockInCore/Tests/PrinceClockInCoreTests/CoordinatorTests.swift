@@ -353,7 +353,7 @@ private extension Coordinator {
 
         let posted = try #require(fixture.notifier.warnings.first)
         #expect(posted.first?.invalidatedAt == launch)
-        #expect(warningContent(posted, now: launch).title == "analytics-dev expired")
+        #expect(warningContent(posted, now: launch, locale: Locale(identifier: "en_GB")).title == "analytics-dev expired")
     }
 
     @Test func overlappingTickIsSkipped() async throws {
@@ -503,6 +503,21 @@ private extension Coordinator {
         #expect(await eventually { coordinator.lastFailures[dev.id] == nil && coordinator.login(dev.id)?.loginTime != nil })
     }
 
+    @Test func removingALoginTakesItOutOfItsPresetsAndSaves() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let preset = Preset(name: "Morning", loginIDs: [dev.id, prod.id])
+        let fixture = try Fixture()
+        let coordinator = fixture.makeCoordinator()
+        coordinator.addLogin(dev)
+        coordinator.addLogin(prod)
+        coordinator.savePreset(preset)
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(fixture.stored?.presets.map(\.loginIDs) == [[prod.id]])
+    }
+
     @Test func removingALoginForgetsItsFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in .exited(code: 1, output: "") })
@@ -645,6 +660,32 @@ private extension Coordinator {
         coordinator.removePreset(id: preset.id)
         #expect(fixture.stored?.presets.isEmpty == true)
         #expect(coordinator.saveFailure == nil)
+    }
+
+    @Test func setTimerIsSaved() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+
+        try coordinator.setTimer(id: dev.id, expiresIn: 4 * hour, sessionLength: 12 * hour)
+
+        let stored = try #require(fixture.stored?.logins.first)
+        #expect(stored.loginTime == launch.addingTimeInterval(-8 * hour))
+        #expect(stored.sessionLength == 12 * hour)
+    }
+
+    @Test func refusedSetTimerNeitherChangesNorSaves() async throws {
+        let dev = aws("dev", loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        let before = coordinator.model
+
+        #expect(throws: TimerError.inFuture) {
+            try coordinator.setTimer(id: dev.id, loggedInAt: launch.addingTimeInterval(60), sessionLength: 12 * hour)
+        }
+
+        #expect(coordinator.model == before)
+        #expect(fixture.stored == AppState(logins: [dev]))
     }
 
     @Test func saveFailureIsReported() async throws {

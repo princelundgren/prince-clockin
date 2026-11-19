@@ -1,10 +1,5 @@
 import Foundation
 
-public enum DatabricksValidity: Equatable, Sendable {
-    case valid
-    case invalid
-}
-
 /// Asks the Databricks CLI whether a profile still has a usable login. Runs
 /// `databricks current-user me --profile <name>`, never `auth token`, which prints a token.
 public actor DatabricksChecker {
@@ -30,10 +25,11 @@ public actor DatabricksChecker {
         self.timeout = timeout
     }
 
-    /// `.valid` on exit 0 and `.invalid` on the CLI's no-credentials error. `nil` when skipped (an
-    /// account-level profile, a login running, a check for this profile less than `minInterval` ago)
-    /// and for any other outcome, so an offline or VPN-down failure changes nothing.
-    public func check(profile: String, accountLevel: Bool, loginRunning: Bool) async -> DatabricksValidity? {
+    /// `.valid` on exit 0 and `.invalid` on the CLI's no-credentials error, never `.couldntCheck`.
+    /// `nil` when skipped (an account-level profile, a login running, a check for this profile less
+    /// than `minInterval` ago) and for any other outcome, so an offline or VPN-down failure changes
+    /// nothing.
+    public func check(profile: String, accountLevel: Bool, loginRunning: Bool) async -> DatabricksCheckResult? {
         guard !accountLevel, !loginRunning else { return nil }
         let now = clock()
         if let last = lastCheck[profile], now.timeIntervalSince(last) < minInterval { return nil }
