@@ -89,7 +89,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var logins = model([dev])
 
         logins.apply(.possibleLogin(at: rewrite), login: dev.id, now: now)
-        #expect(logins.possibleLogins == [dev.id: rewrite])
+        #expect(logins.possibleLogins == [dev.id: PossibleLogin(time: rewrite, isFoundOnWake: false)])
         #expect(logins.state.logins[0].loginTime == dev.loginTime)
 
         logins.confirmPossibleLogin(id: dev.id)

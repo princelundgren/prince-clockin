@@ -144,6 +144,7 @@ public final class Coordinator {
     private var runningDatabricksID: UUID?
     private var runningChecks = 0
     private var unseenFailures: Set<UUID> = []
+    @ObservationIgnored private var isFirstCheckAfterWake = false
     @ObservationIgnored private var isTicking = false
     @ObservationIgnored private var isStarted = false
 
@@ -212,7 +213,8 @@ public final class Coordinator {
         defer { isTicking = false }
         let tickTime = clock()
         now = tickTime
-        observeAWSCaches(now: tickTime)
+        observeAWSCaches(now: tickTime, isFirstCheckAfterWake: isFirstCheckAfterWake)
+        isFirstCheckAfterWake = false
         let due = model.takeWarnings(now: tickTime)
         saveIfChanged()
         await check(model.databricksLogins(among: due), now: tickTime)
@@ -274,6 +276,28 @@ public final class Coordinator {
     /// The panel was shown, so the user has seen every failure so far.
     public func markPanelShown() {
         unseenFailures.removeAll()
+    }
+
+    /// The Mac woke: a login the next tick finds possibly logged in elsewhere says it changed while
+    /// the Mac slept. Call it before the wake's tick.
+    public func systemDidWake() {
+        isFirstCheckAfterWake = true
+    }
+
+    /// Login `id`'s tile at the last tick, or `nil` for a login not tracked. `heldControl` is the
+    /// control the tile was when the pointer entered it.
+    public func tile(
+        for id: UUID, holding heldControl: TileControl? = nil, locale: Locale, calendar: Calendar
+    ) -> TilePresentation? {
+        guard let login = login(id) else { return nil }
+        let activity: TileActivity = running == id ? .running : queued.contains(id) ? .queued : .idle
+        let facts = TileFacts(
+            activity: activity, failure: lastFailures[id], isAwaitingApproval: pendingApprovals.contains(id),
+            possibleLoginAt: model.possibleLogins[id]?.time,
+            isPossibleLoginFoundOnWake: model.possibleLogins[id]?.isFoundOnWake ?? false)
+        return tilePresentation(
+            for: login, now: now, leadTime: model.state.settings.warningLeadTime, facts: facts,
+            holding: heldControl, locale: locale, calendar: calendar)
     }
 
     /// The output of the login's last run, kept in memory only.
@@ -436,7 +460,7 @@ public final class Coordinator {
     /// first read, else the stored record, else missing for a login still marked logged out. A
     /// session with none of these is only read, as a baseline, so one never seen logged in keeps
     /// the timer it has.
-    private func observeAWSCaches(now: Date) {
+    private func observeAWSCaches(now: Date, isFirstCheckAfterWake: Bool = false) {
         for login in model.state.logins {
             guard case .awsSSOSession(let session) = login.kind else { continue }
             let previous = awsStates[login.id]
@@ -446,7 +470,7 @@ public final class Coordinator {
             let observation = observe(
                 previous: previous, current: current, timerExpiry: expiry(of: login),
                 leadTime: model.state.settings.warningLeadTime)
-            model.apply(observation, login: login.id, now: now)
+            model.apply(observation, login: login.id, now: now, isFirstCheckAfterWake: isFirstCheckAfterWake)
             awsStates[login.id] = current
             switch current {
             case .present(let snapshot):
