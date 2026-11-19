@@ -669,6 +669,42 @@ private final class GatedLogins: Sendable {
         #expect(await eventually { coordinator.batch == nil && coordinator.waitingCustomID == nil })
     }
 
+    @Test func batchCardNamesTheRunningLoginAndTheNextQueued() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let logins = GatedLogins(["dev", "prod"])
+        let fixture = try Fixture(logins: [dev, prod], loginRunner: logins.runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id, prod.id])
+        await expectBatch(coordinator, BatchState(
+            running: dev.id, queued: [prod.id], batch: BatchProgress(position: 1, total: 2)))
+
+        #expect(coordinator.batchCard == .running(
+            title: "Logging in to dev", progress: "1 of 2", instruction: "Finish in your browser. Next: prod",
+            failures: nil))
+        await logins.release("dev")
+        await logins.release("prod")
+        #expect(await eventually { coordinator.batch == nil })
+    }
+
+    @Test func batchCardAsksForTheWaitingCustomLoginsDone() async throws {
+        let vpn = custom(command: nil)
+        let prod = aws("prod")
+        let fixture = try Fixture(logins: [vpn, prod], loginRunner: GatedLogins(["prod"]).runner)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([vpn.id, prod.id])
+        #expect(await eventually { coordinator.waitingCustomID == vpn.id })
+
+        #expect(coordinator.batchCard == .waitingForDone(
+            id: vpn.id, title: "vpn is waiting for you", instruction: "Log in your own way, then click Done."))
+        coordinator.cancelBatch()
+        #expect(await eventually { coordinator.batch == nil })
+    }
+
     @Test func failureIsKeptUntilTheNextRunOfThatLogin() async throws {
         let dev = aws("dev")
         let attempts = OSAllocatedUnfairLock(initialState: 0)

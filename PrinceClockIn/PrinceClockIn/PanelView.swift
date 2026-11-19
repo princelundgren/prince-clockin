@@ -37,8 +37,8 @@ struct PanelView: View {
             ForEach(appModel.panelBanners, id: \.self) { banner in
                 BannerView(banner: banner) { perform($0, on: banner) }
             }
-            if let batch = coordinator.batch {
-                BatchSection(batch: batch, coordinator: coordinator)
+            if let card = coordinator.batchCard {
+                BatchCardView(card: card, coordinator: coordinator)
             }
             if logins.isEmpty {
                 Text("No logins tracked yet. Add them in Settings.")
@@ -221,24 +221,54 @@ private struct FlowButtons: View {
     }
 }
 
-private struct BatchSection: View {
-    let batch: BatchProgress
+/// The running batch: which login runs and what to do, or the custom login waiting for Done.
+private struct BatchCardView: View {
+    let card: BatchCard
     let coordinator: Coordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ProgressView(value: Double(batch.position - 1), total: Double(batch.total)) {
-                Text("Logging in \(batch.position) of \(batch.total)")
-            }
-            HStack {
-                if let id = coordinator.waitingCustomID,
-                   let login = coordinator.model.state.logins.first(where: { $0.id == id }) {
-                    Text("\(login.displayName) is waiting for you")
-                    Button("Done") { coordinator.confirmCustomDone(id: id) }
+        VStack(alignment: .leading, spacing: 4) {
+            switch card {
+            case .running(let title, let progress, let instruction, let failures):
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Text(progress)
+                        .monospacedDigit()
+                        .fixedSize()
                 }
-                Spacer()
-                Button("Cancel") { coordinator.cancelBatch() }
+                if let failures {
+                    Text(failures)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                if let instruction {
+                    Text(instruction)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                buttons(done: nil)
+            case .waitingForDone(let id, let title, let instruction):
+                Text(title)
+                    .font(.headline)
+                Text(instruction)
+                    .fixedSize(horizontal: false, vertical: true)
+                buttons(done: id)
             }
         }
+        .font(.callout)
+    }
+
+    /// Cancel All, and Done for custom login `done` when it waits.
+    private func buttons(done: UUID?) -> some View {
+        HStack {
+            Spacer()
+            Button("Cancel All") { coordinator.cancelBatch() }
+            if let done {
+                Button("Done") { coordinator.confirmCustomDone(id: done) }
+            }
+        }
+        .buttonStyle(.bordered)
     }
 }

@@ -117,6 +117,15 @@ public final class Coordinator {
             hasFailure: hasUnseenFailure || saveFailure != nil)
     }
 
+    /// The panel's card for the running batch, or `nil` when the queue is idle.
+    public var batchCard: BatchCard? {
+        batch.map {
+            PrinceClockInCore.batchCard(
+                batch: $0, running: running.flatMap(login), next: queued.lazy.compactMap(login).first,
+                outcomes: outcomes, waitingForDone: waitingCustomID.flatMap(login))
+        }
+    }
+
     /// Whether a Databricks check runs now, from the warning time or Check Now.
     public var isCheckingDatabricks: Bool { runningChecks > 0 }
     /// Whether Check Now can run: no check or Databricks login runs, and a workspace profile, which
