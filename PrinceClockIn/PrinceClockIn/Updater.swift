@@ -6,8 +6,9 @@ import Sparkle
 @MainActor
 @Observable
 final class Updater: NSObject {
-    /// Whether a scheduled check found an update the user hasn't looked at yet.
-    private(set) var updateAvailable = false
+    /// The version of the update a scheduled check found, until its update session ends; `nil`
+    /// when none waits.
+    private(set) var updateVersion: String?
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
 
@@ -16,7 +17,8 @@ final class Updater: NSObject {
         controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self)
     }
 
-    /// Shows Sparkle's window: the update found, "no update", or the feed's error.
+    /// Shows Sparkle's window: the update found, "no update", or the feed's error. For an update
+    /// that waits, it brings that update's window forward.
     func checkForUpdates() {
         controller?.checkForUpdates(nil)
     }
@@ -35,15 +37,11 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
         _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
     ) {
         if !state.userInitiated {
-            updateAvailable = true
+            updateVersion = update.displayVersionString
         }
     }
 
-    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
-        updateAvailable = false
-    }
-
     func standardUserDriverWillFinishUpdateSession() {
-        updateAvailable = false
+        updateVersion = nil
     }
 }

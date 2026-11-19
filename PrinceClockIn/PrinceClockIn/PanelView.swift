@@ -32,6 +32,14 @@ struct PanelView: View {
                 Divider()
                 actions
             }
+            if let version = updater.updateVersion {
+                Divider()
+                HStack {
+                    Text(updateLineText(version: version, isRelaunchPostponed: false))
+                    Spacer()
+                    Button("View…") { updater.checkForUpdates() }
+                }
+            }
             Divider()
             footer
         }

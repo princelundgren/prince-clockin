@@ -15,7 +15,7 @@ struct MenuBarLabel: View {
                 Text(text)
                     .monospacedDigit()
             }
-            if updater.updateAvailable {
+            if updater.updateVersion != nil {
                 Image(systemName: "circle.fill")
                     .imageScale(.small)
                     .accessibilityLabel("Update available")
