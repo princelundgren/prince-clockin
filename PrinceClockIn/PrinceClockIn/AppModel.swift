@@ -104,8 +104,14 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func observeSystemChanges() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                self?.coordinator.systemDidWake()
+                await self?.tick()
+            }
+        }
         let changes: [(NotificationCenter, Notification.Name)] = [
-            (NSWorkspace.shared.notificationCenter, NSWorkspace.didWakeNotification),
             (.default, .NSSystemClockDidChange),
             (.default, .NSSystemTimeZoneDidChange),
         ]
