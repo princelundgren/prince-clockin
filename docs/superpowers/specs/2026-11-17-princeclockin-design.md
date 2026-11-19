@@ -1,7 +1,7 @@
 ---
 status: building
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
-verified: 2026-11-19
+verified: 2026-11-20
 ---
 
 # PrinceClockIn: design
@@ -411,8 +411,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     elsewhere?" question later. It is asked once: selecting another login or removing this one
     ends it.
 - **Presets:** the presets with +/−; the selected preset's Name and "Logs in to, in order", a list
-  with + (a menu of the tracked logins), −, Move Up and Move Down. Drag also reorders; Move Up and
-  Move Down are the keyboard and VoiceOver way.
+  with + (a menu of the tracked logins not in it), −, Move Up and Move Down. Drag also reorders;
+  Move Up and Move Down are the keyboard and VoiceOver way. + adds an empty preset, "New preset"
+  ("New preset 2" and on while that name is taken), and selects it; − removes the selected preset at once.
 - **Warnings:** "Warn before a login expires" (30 minutes by default), and Notifications: their
   state, Open System Settings…, and, while they're off, "With notifications off, only the menu bar
   shows that a login is about to expire."
