@@ -74,7 +74,7 @@ final class StatusItemController: NSObject {
         menuDueIDs = coordinator.model.dueLogins(now: coordinator.now).map(\.id)
         menuItems = rightClickMenu(
             dueCount: menuDueIDs.count, isBatchRunning: coordinator.batch != nil,
-            updateVersion: updater.updateVersion)
+            updateVersion: updater.updateVersion, isRelaunchPostponed: updater.isRelaunchPostponed)
         let menu = NSMenu()
         for (index, item) in menuItems.enumerated() {
             if item == .separator {

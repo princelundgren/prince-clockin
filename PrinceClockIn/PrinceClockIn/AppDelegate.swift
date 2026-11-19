@@ -10,11 +10,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     // Created with the delegate, before launch finishes, so a notification button that launched
     // the app finds its handler, and the timers run before the panel is first opened.
-    private let appModel = AppModel()
-    private let updater = Updater()
+    private let appModel: AppModel
+    private let updater: Updater
     private let popover = NSPopover()
     private var statusItem: StatusItemController?
     private var settingsWindow: NSWindow?
+
+    override init() {
+        appModel = AppModel()
+        updater = Updater(coordinator: appModel.coordinator)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = makeMainMenu()
