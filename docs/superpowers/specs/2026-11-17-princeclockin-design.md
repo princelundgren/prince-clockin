@@ -310,9 +310,16 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    Past about 420 pt the list scrolls with the system scroller.
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
-5. **Presets**, under a "Presets" header: one button per preset, its name truncated at the end and
-   its logins listed in its help tag. An empty preset reads "Night shift · No logins", is
-   disabled, and its help tag says to add logins in Settings → Presets.
+5. **Presets**, under a "Presets" header: one tile per preset, drawn as a login tile is, so the
+   panel reads as one piece (owner, 2026-11-20): the same frame, fill, hover and press, a
+   `rectangle.stack` symbol no login uses, the name, and under it the logins in order ("dev, prod,
+   staging"), each line truncated at the end. The help tag says "Logs in to dev, prod and
+   staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since `help(_:)`
+   sets both. Under the pointer the tile shows Log In, and a click starts the preset. An empty
+   preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to add
+   logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
+   tiles, the presets start fresh at each opening, so no hover carries over, and past about
+   230 pt, four and a half tiles, they scroll, so the panel's height stays bounded.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
@@ -484,16 +491,17 @@ A token has only the meanings its row lists.
 
 #### Controls and keyboard
 
-- Panel buttons, except the footer's, are `.bordered` at `controlSize(.regular)` (28 pt);
-  Settings rows may use `.small`. One `.borderedProminent` per view: the state's single default,
-  in this order: Set in an open Set Timer, Done while a custom login waits, Log In to N Due, the
-  first due tile's own action (its Log In, drawn bold instead, or Try Again when it failed), else
-  the first question's Mark as Logged In at <time>. Nothing is prominent when nothing needs the
-  user, and Cancel All, Try Again during a batch, and Run It never are.
+- Panel buttons, except the tiles and the footer's, are `.bordered` at `controlSize(.regular)`
+  (28 pt); a tile, login or preset, is one plain button over its whole first line. Settings rows may
+  use `.small`. One `.borderedProminent` per view: the state's single default, in this order: Set in
+  an open Set Timer, Done while a custom login waits, Log In to N Due, the first due tile's own
+  action (its Log In, drawn bold instead, or Try Again when it failed), else the first question's
+  Mark as Logged In at <time>. Nothing is prominent when nothing needs the user, and Cancel All, Try
+  Again during a batch, and Run It never are.
 - **Return** triggers that default wherever focus is, except in a text field, where it commits
   the field; **Space** activates the focused control, such as a tile. **Escape** cancels an open
   Set Timer, else closes the panel.
-- **Tab** moves through every control in visual order; the **arrow keys** move between tiles.
+- **Tab** moves through every control in visual order; the **arrow keys** move between login tiles.
   Opening the panel makes its window key, with focus on the first tile.
 - Return and Escape are key equivalents (`keyboardShortcut(.defaultAction)` on the default,
   `.cancelAction` on Set Timer's Cancel, and the panel's `cancelOperation(_:)` otherwise), so
@@ -509,8 +517,8 @@ A token has only the meanings its row lists.
   `escapeResponse(openSetTimer:tiles:)` Escape.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
   shows none.
-- **VoiceOver:** every tile follows one template, a label of "name, kind, state, time" ("prod, AWS
-  SSO session, expiring, 19 minutes left") and "Logs in" as its hint, with no hint while a click
+- **VoiceOver:** every login tile follows one template, a label of "name, kind, state, time" ("prod,
+  AWS SSO session, expiring, 19 minutes left") and "Logs in" as its hint, with no hint while a click
   does nothing. A pending item's word (logging in, queued, failed, not yet approved, logged in
   elsewhere?) is the state, in place of the timer's, and the time stays: "qa, AWS SSO session,
   failed, 40 minutes ago" (owner, 2026-11-19). VoiceOver reads
@@ -753,7 +761,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
     `clock.badge.checkmark`,
     `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud` and
-    `square.stack.3d.up`, and the footer's `gear` and `power`.
+    `square.stack.3d.up`, the preset tiles' `rectangle.stack`, and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
