@@ -32,5 +32,9 @@
     <string>https://updates.princelundgren.com/princeclockin/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>2KvmzhYpdJqQb2KliZZQGm5291TEwNrFmDo5FSrDCZ8=</string>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
 </dict>
 </plist>
