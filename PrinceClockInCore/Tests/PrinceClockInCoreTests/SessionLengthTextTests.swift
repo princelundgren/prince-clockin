@@ -55,9 +55,19 @@ private let swedish = Locale(identifier: "sv_SE")
         #expect(try sessionLength(fieldText: "8760", locale: british) == maximumSessionLength)
     }
 
+    @Test func aLengthUnderAMinuteIsRefusedAndAMinuteIsNot() throws {
+        for text in ["0.01", "0.016"] {
+            #expect(throws: SessionLengthRefusal.tooShort) {
+                try sessionLength(fieldText: text, locale: british)
+            }
+        }
+        #expect(try sessionLength(fieldText: "0.016667", locale: british) == 60)
+    }
+
     @Test func refusalsCarryTheirCopy() {
         #expect(SessionLengthRefusal.notANumberOfHours.message == "Enter a number of hours")
         #expect(SessionLengthRefusal.tooLong.message == TimerError.sessionLengthTooLong.message)
+        #expect(SessionLengthRefusal.tooShort.message == TimerError.sessionLengthUnderAMinute.message)
     }
 
     // MARK: What the field shows
@@ -70,7 +80,7 @@ private let swedish = Locale(identifier: "sv_SE")
     }
 
     @Test func theShownTextReadsBackAsTheSameWholeSeconds() throws {
-        let lengths: [TimeInterval] = [20 * 60, 25 * 60, 1, 7 * hour + 13 * 60 + 7, maximumSessionLength]
+        let lengths: [TimeInterval] = [20 * 60, 25 * 60, 61, 7 * hour + 13 * 60 + 7, maximumSessionLength]
         for locale in [british, swedish] {
             for length in lengths {
                 let text = sessionLengthHoursText(length, locale: locale)

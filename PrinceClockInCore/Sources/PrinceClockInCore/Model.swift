@@ -229,4 +229,14 @@ public struct AppState: Codable, Equatable, Sendable {
         state.logins = logins.map { $0.roundedToWholeSeconds() }
         return state
     }
+
+    /// The same state with every session length that `checkedSessionLength` refuses made unknown.
+    func withRefusedSessionLengthsUnknown() -> AppState {
+        var state = self
+        for index in state.logins.indices {
+            let length = state.logins[index].sessionLength
+            state.logins[index].sessionLength = length.flatMap { try? checkedSessionLength($0) }
+        }
+        return state
+    }
 }

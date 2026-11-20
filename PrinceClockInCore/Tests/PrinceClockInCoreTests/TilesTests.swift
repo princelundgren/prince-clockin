@@ -442,6 +442,8 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(sessionLengthText(72 * hour) == "3 days")
         #expect(sessionLengthText(36 * hour) == "36 hours")
         #expect(sessionLengthText(90 * minute) == "90 minutes")
+        #expect(sessionLengthText(20 * minute + 30) == "20 minutes")
+        #expect(sessionLengthText(minute) == "1 minute")
     }
 
     // MARK: VoiceOver

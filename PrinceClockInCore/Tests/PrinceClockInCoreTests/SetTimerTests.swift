@@ -134,6 +134,11 @@ private func draft(_ login: Login = aws(), _ edit: (inout SetTimerDraft) -> Void
             == .ready(TimerSetting(loginTime: now.addingTimeInterval(hour - 8760 * hour), sessionLength: 8760 * hour)))
     }
 
+    @Test func aCustomSessionLengthUnderAMinuteIsRefused() {
+        #expect(draft { $0.sessionLength = .custom; $0.customHours = "0.01" }.check(now: now, locale: british)
+            == .refused(.sessionLengthUnderAMinute))
+    }
+
     @Test func anUnlistedSessionLengthIsKeptExactlyUntilCustomIsEdited() {
         let twentyMinutes = draft(aws(sessionLength: 20 * minute)) { $0.mode = .loggedInAt; $0.loggedInAt = now }
 

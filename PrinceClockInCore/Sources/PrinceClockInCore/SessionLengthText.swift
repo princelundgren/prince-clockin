@@ -6,11 +6,14 @@ public enum SessionLengthRefusal: Error, Equatable, Sendable {
     case notANumberOfHours
     /// Longer than `maximumSessionLength`.
     case tooLong
+    /// Shorter than `minimumSessionLength`.
+    case tooShort
 
     public var message: String {
         switch self {
         case .notANumberOfHours: "Enter a number of hours"
         case .tooLong: TimerError.sessionLengthTooLong.message
+        case .tooShort: TimerError.sessionLengthUnderAMinute.message
         }
     }
 }
@@ -19,7 +22,8 @@ public enum SessionLengthRefusal: Error, Equatable, Sendable {
 /// `nil` for empty text, which makes the session length unknown, else the length in seconds,
 /// rounded down.
 /// - Throws: `.notANumberOfHours` for text that isn't a positive, finite number of hours, or one
-///   under a second; `.tooLong` for a length over `maximumSessionLength`.
+///   under a second; `.tooShort` for a length under `minimumSessionLength`; `.tooLong` for one over
+///   `maximumSessionLength`.
 public func sessionLength(fieldText text: String, locale: Locale) throws(SessionLengthRefusal) -> TimeInterval? {
     guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
     guard let length = sessionLengthFromHours(text, locale: locale) else { throw .notANumberOfHours }
@@ -27,6 +31,8 @@ public func sessionLength(fieldText text: String, locale: Locale) throws(Session
         return try checkedSessionLength(length)
     } catch .sessionLengthNotPositive {
         throw .notANumberOfHours
+    } catch .sessionLengthUnderAMinute {
+        throw .tooShort
     } catch {
         throw .tooLong
     }

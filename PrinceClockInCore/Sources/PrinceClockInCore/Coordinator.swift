@@ -410,8 +410,9 @@ public final class Coordinator {
 
     /// Sets the session length, rounded down to whole seconds, or makes it unknown with `nil`.
     /// - Throws: `.sessionLengthTooLong` for a length that isn't finite or is longer than
-    ///   `maximumSessionLength`, and `.sessionLengthNotPositive` for one of zero or less, or under
-    ///   a second, either leaving the session length as it was.
+    ///   `maximumSessionLength`, `.sessionLengthNotPositive` for one of zero or less, or under a
+    ///   second, and `.sessionLengthUnderAMinute` for one under a minute, each leaving the session
+    ///   length as it was.
     public func setSessionLength(id: UUID, to length: TimeInterval?) throws(TimerError) {
         let length = try length.map(checkedSessionLength)
         edit(id) { $0.sessionLength = length }

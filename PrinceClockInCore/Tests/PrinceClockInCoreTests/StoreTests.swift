@@ -107,6 +107,20 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     }
 }
 
+@Test func aStoredSessionLengthUnderAMinuteLoadsAsUnknown() throws {
+    try withTemporaryDirectory { directory in
+        let store = StateStore(directory: directory)
+        let short = Login(displayName: "tool", kind: .custom(command: nil), sessionLength: 36)
+        let minute = Login(displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: 60)
+        var unknown = short
+        unknown.sessionLength = nil
+
+        try store.save(AppState(logins: [short, minute]))
+
+        #expect(store.load() == .loaded(AppState(logins: [unknown, minute])))
+    }
+}
+
 @Test func missingFileLoadsEmpty() throws {
     try withTemporaryDirectory { directory in
         #expect(StateStore(directory: directory).load() == .empty)
