@@ -335,6 +335,17 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             confirmTitle: "Mark as Logged In yesterday at 23:40"))
     }
 
+    @Test func aPossibleLoginBeforeYesterdaySaysOnItsDate() {
+        // Before yesterday on the real clock too, which `DateFormatter`'s relative formatting reads.
+        let changed = at("2026-11-17T22:38:00Z")
+
+        let detail = tile(login(remaining: 10 * minute, now: now), facts: TileFacts(possibleLoginAt: changed)).detail
+
+        #expect(detail == .possibleLogin(
+            question: "Its login changed on 17 Nov 2026 at 23:38. Was that you?",
+            confirmTitle: "Mark as Logged In on 17 Nov 2026 at 23:38"))
+    }
+
     @Test func aStillValidTileSaysItsSessionLengthMayBeTooShort() {
         #expect(tile(stillValid(checkedAt: now)).detail == .stillValid(
             message: "Its 1-day timer ran out, but Databricks says the login still works. The session length may be too short."))

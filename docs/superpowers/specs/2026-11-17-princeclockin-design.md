@@ -409,7 +409,9 @@ without its text, so no earlier text shows.
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02, Log In and Set Timer…. A question the first check after the Mac wakes raises says
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
-    (owner, 2026-11-19). After a sleep, each login asks on its own tile.
+    (owner, 2026-11-19). After a sleep, each login asks on its own tile. A time on another day
+    reads "yesterday at 23:38", or "on 17 Nov 2026 at 23:38" where the locale has no word for the
+    day.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
     session length may be too short." with Edit Session Length…. Its subtitle carries the check:
     "Checked 22:30 · valid".

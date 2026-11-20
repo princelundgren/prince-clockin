@@ -26,15 +26,27 @@ public func clockTimeText(_ date: Date, locale: Locale, calendar: Calendar) -> S
 /// the day ("tomorrow at 03:55"), else the medium date and short time, in `calendar`'s time zone.
 /// Relative to the real clock.
 public func dayAndTimeText(_ date: Date, locale: Locale, calendar: Calendar) -> String {
+    dayAndTimeFormatter(isRelative: true, locale: locale, calendar: calendar).string(from: date)
+}
+
+/// `dayAndTimeText` for after a verb, with "on" ahead of a date ("on 17 Nov 2026 at 23:38") and
+/// nothing ahead of a word for the day ("yesterday at 23:38").
+func dayAndTimeAfterAVerbText(_ date: Date, locale: Locale, calendar: Calendar) -> String {
+    let text = dayAndTimeText(date, locale: locale, calendar: calendar)
+    let dated = dayAndTimeFormatter(isRelative: false, locale: locale, calendar: calendar).string(from: date)
+    return text == dated ? "on \(text)" : text
+}
+
+private func dayAndTimeFormatter(isRelative: Bool, locale: Locale, calendar: Calendar) -> DateFormatter {
     let formatter = DateFormatter()
     formatter.locale = locale
     formatter.calendar = calendar
     formatter.timeZone = calendar.timeZone
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
-    formatter.doesRelativeDateFormatting = true
+    formatter.doesRelativeDateFormatting = isRelative
     formatter.formattingContext = .middleOfSentence
-    return formatter.string(from: date)
+    return formatter
 }
 
 /// A batch's progress, in its one form ("1 of 2").

@@ -221,7 +221,7 @@ private func detail(
     case .possibleLogin(let time, let isFoundOnWake):
         let when = calendar.isDate(time, inSameDayAs: now)
             ? "at \(clockTimeText(time, locale: locale, calendar: calendar))"
-            : dayAndTimeText(time, locale: locale, calendar: calendar)
+            : dayAndTimeAfterAVerbText(time, locale: locale, calendar: calendar)
         let changed = isFoundOnWake ? "\(when), while this Mac slept" : when
         return .possibleLogin(
             question: "Its login changed \(changed). Was that you?", confirmTitle: "Mark as Logged In \(when)")
