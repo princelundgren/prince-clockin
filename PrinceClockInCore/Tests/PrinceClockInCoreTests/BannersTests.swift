@@ -121,7 +121,7 @@ private let backup = URL(filePath: "/tmp/state.json.unreadable")
     @Test func notificationsOffOffersSystemSettings() {
         let banner = Banner.notificationsOff
 
-        #expect(banner.lines == ["Notifications are off, so only the menu bar warns before a login expires."])
+        #expect(banner.lines == ["Notifications are off, so only the menu bar shows that a login is about to expire."])
         #expect(banner.actions.map(\.title) == ["Open System Settings…"])
     }
 }

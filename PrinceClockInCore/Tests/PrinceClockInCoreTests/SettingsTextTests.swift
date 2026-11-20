@@ -25,7 +25,7 @@ import PrinceClockInCore
         #expect(notificationsSetting(areOff: false) == NotificationsSetting(state: "On", note: nil))
     }
 
-    @Test func notificationsOffSayOnlyTheMenuBarWarns() {
+    @Test func notificationsOffSayOnlyTheMenuBarShowsIt() {
         #expect(notificationsSetting(areOff: true) == NotificationsSetting(
             state: "Off", note: "With notifications off, only the menu bar shows that a login is about to expire."))
     }

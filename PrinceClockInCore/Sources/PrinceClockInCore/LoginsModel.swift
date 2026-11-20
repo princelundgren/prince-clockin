@@ -61,13 +61,13 @@ public struct LoginsModel: Equatable, Sendable {
         if result != .couldntCheck { state.logins[index].lastDatabricksAnswer = record }
     }
 
-    /// The logins due a warning at `now`, in stored order, each marked as warned for its current
-    /// expiry so the next call, or a relaunch, doesn't return it again.
-    public mutating func takeWarnings(now: Date) -> [UUID] {
-        let due = warningsDue(state.logins, now: now, leadTime: state.settings.warningLeadTime)
+    /// The logins due an expiry notification at `now`, in stored order, each marked as notified for
+    /// its current expiry so the next call, or a relaunch, doesn't return it again.
+    public mutating func takeExpiryNotifications(now: Date) -> [UUID] {
+        let due = expiryNotificationsDue(state.logins, now: now, leadTime: state.settings.notificationLeadTime)
         for id in due {
             guard let index = index(of: id) else { continue }
-            state.logins[index].warnedForExpiry = expiry(of: state.logins[index])
+            state.logins[index].notifiedForExpiry = expiry(of: state.logins[index])
         }
         return due
     }
@@ -85,7 +85,7 @@ public struct LoginsModel: Equatable, Sendable {
     /// The logins due at `now`, in stored order, for Log In to N Due: expiring or expired, never
     /// still valid and never with an unknown timer.
     public func dueLogins(now: Date) -> [Login] {
-        state.logins.filter { isDue($0, now: now, leadTime: state.settings.warningLeadTime) }
+        state.logins.filter { isDue($0, now: now, leadTime: state.settings.notificationLeadTime) }
     }
 
     /// The order of the panel's tiles at `now`: due logins by time left, so the expired come first,
@@ -93,7 +93,7 @@ public struct LoginsModel: Equatable, Sendable {
     /// valid; then those logged in with no expiry; then those with no timer. Ties keep the stored
     /// order, since `sorted` is stable.
     public func panelOrder(now: Date) -> [Login] {
-        let leadTime = state.settings.warningLeadTime
+        let leadTime = state.settings.notificationLeadTime
         return state.logins
             .map { (key: panelSortKey($0, now: now, leadTime: leadTime), login: $0) }
             .sorted { ($0.key.group, $0.key.timeLeft) < ($1.key.group, $1.key.timeLeft) }

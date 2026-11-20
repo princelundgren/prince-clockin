@@ -14,7 +14,7 @@ private func sampleState() -> AppState {
     let aws = Login(
         displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: 8 * 3600,
         loginTime: at("2026-11-17T09:00:00Z"), invalidatedAt: at("2026-11-17T08:00:00Z"),
-        invalidationReason: .loggedOut, warnedForExpiry: at("2026-11-17T17:00:00Z"),
+        invalidationReason: .loggedOut, notifiedForExpiry: at("2026-11-17T17:00:00Z"),
         lastAWSCache: AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     let databricks = Login(displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true))
     let checked = Login(
@@ -25,7 +25,7 @@ private func sampleState() -> AppState {
     return AppState(
         logins: [aws, databricks, checked, custom],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
-        settings: Settings(warningLeadTime: 15 * 60, loginTimeout: 120))
+        settings: Settings(notificationLeadTime: 15 * 60, loginTimeout: 120))
 }
 
 private func encodeFlat(_ kind: LoginKind) throws -> String {
@@ -142,8 +142,16 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
 
 @Test func newerVersionIsSetAside() throws {
     try withTemporaryDirectory { directory in
-        let newer = Data(#"{"version": 2, "somethingNew": [1, 2, 3]}"#.utf8)
+        let newer = Data(#"{"version": 3, "somethingNew": [1, 2, 3]}"#.utf8)
         try expectSetAside(newer, in: directory)
+    }
+}
+
+@Test func aVersion1FileIsSetAside() throws {
+    try withTemporaryDirectory { directory in
+        let version1 = Data(
+            #"{"version": 1, "presets": [], "logins": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300}}"#.utf8)
+        try expectSetAside(version1, in: directory)
     }
 }
 
@@ -173,7 +181,7 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
         let text = String(decoding: try Data(contentsOf: directory.appending(path: "state.json")), as: UTF8.self)
 
         #expect(text.contains(#""sessionLength" : 28800"#))
-        #expect(text.contains(#""version" : 1"#))
+        #expect(text.contains(#""version" : 2"#))
         #expect(text.contains(#""loginTime" : "2026-11-17T09:00:00Z""#))
         #expect(!text.contains("fingerprint"))
         #expect(text.contains(#""invalidationReason" : "loggedOut""#))
@@ -187,7 +195,7 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
 func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, loggedOut: Bool) throws {
     try withTemporaryDirectory { directory in
         let json = """
-        {"version": 1, "presets": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300},
+        {"version": 2, "presets": [], "settings": {"notificationLeadTime": 1800, "loginTimeout": 300},
          "logins": [{"id": "00000000-0000-0000-0000-000000000001", "displayName": "dev",
            "kind": \(kind), "sessionLength": 28800,
            "loginTime": "2026-11-17T09:00:00Z", "invalidatedAt": "2026-11-17T10:00:00Z"}]}
@@ -209,11 +217,11 @@ func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, logg
 @Test func loadRoundsFractionalValuesDown() throws {
     try withTemporaryDirectory { directory in
         let json = """
-        {"version": 1, "presets": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300},
+        {"version": 2, "presets": [], "settings": {"notificationLeadTime": 1800, "loginTimeout": 300},
          "logins": [{"id": "00000000-0000-0000-0000-000000000001", "displayName": "dev",
            "kind": {"type": "awsSSOSession", "name": "dev"},
            "sessionLength": 28800.5, "loginTime": "2026-11-17T09:00:00.5Z",
-           "invalidatedAt": "2026-11-17T08:00:00.9Z", "warnedForExpiry": "2026-11-17T17:00:00.5Z",
+           "invalidatedAt": "2026-11-17T08:00:00.9Z", "notifiedForExpiry": "2026-11-17T17:00:00.5Z",
            "lastAWSCache": {"modified": "2026-11-17T09:00:05.5Z", "expiresAt": "2026-11-17T10:00:00.5Z"}}]}
         """
         try Data(json.utf8).write(to: directory.appending(path: "state.json"))
@@ -227,7 +235,7 @@ func fileWithoutInvalidationReasonReadsAsTheKindsOnlyOldCause(kind: String, logg
         #expect(login.sessionLength == 28800)
         #expect(login.loginTime == at("2026-11-17T09:00:00Z"))
         #expect(login.invalidatedAt == at("2026-11-17T08:00:00Z"))
-        #expect(login.warnedForExpiry == at("2026-11-17T17:00:00Z"))
+        #expect(login.notifiedForExpiry == at("2026-11-17T17:00:00Z"))
         #expect(login.lastAWSCache == AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
     }
 }

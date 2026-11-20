@@ -408,7 +408,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(after.lastDatabricksCheck == DatabricksCheckRecord(at: later, result: .couldntCheck))
         #expect(after.lastDatabricksAnswer == DatabricksCheckRecord(at: now, result: .valid))
         #expect(logins.dueLogins(now: later).isEmpty)
-        #expect(logins.takeWarnings(now: later).isEmpty)
+        #expect(logins.takeExpiryNotifications(now: later).isEmpty)
     }
 
     @Test func onlyAWorkspaceProfileCanBeStillValid() {
@@ -423,16 +423,16 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(!isStillValid(account, now: now))
     }
 
-    @Test func takeWarningsMarksAndPersists() throws {
+    @Test func takeExpiryNotificationsMarksAndPersists() throws {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: 10 * 60, now: now)
         let prod = login(remaining: 4 * hour, now: now, name: "prod")
         var logins = model([dev, prod])
 
-        #expect(logins.takeWarnings(now: now) == [dev.id])
-        #expect(logins.takeWarnings(now: now).isEmpty)
-        #expect(logins.state.logins[0].warnedForExpiry == expiry(of: dev))
-        #expect(logins.state.logins[1].warnedForExpiry == nil)
+        #expect(logins.takeExpiryNotifications(now: now) == [dev.id])
+        #expect(logins.takeExpiryNotifications(now: now).isEmpty)
+        #expect(logins.state.logins[0].notifiedForExpiry == expiry(of: dev))
+        #expect(logins.state.logins[1].notifiedForExpiry == nil)
     }
 
     @Test func dueLoginsAreExpiringOrExpiredButNeverStillValid() {

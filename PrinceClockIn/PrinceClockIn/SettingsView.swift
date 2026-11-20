@@ -120,9 +120,9 @@ struct SettingsNote: View {
 
 // MARK: Notifications
 
-/// Settings → Notifications: how long before expiry a login warns, and whether notifications are on.
-/// The permission is read again when the pane appears and when the app becomes active, as after
-/// the user changes it in System Settings.
+/// Settings → Notifications: how long before expiry a login is notified, and whether notifications
+/// are on. The permission is read again when the pane appears and when the app becomes active, as
+/// after the user changes it in System Settings.
 private struct NotificationsSettings: View {
     let appModel: AppModel
 
@@ -131,7 +131,8 @@ private struct NotificationsSettings: View {
         Form {
             Section {
                 MinutesField(
-                    title: "Warn before a login expires", value: \.warningLeadTime, coordinator: appModel.coordinator)
+                    title: "Notify before a login expires", value: \.notificationLeadTime,
+                    coordinator: appModel.coordinator)
             }
             Section {
                 VStack(alignment: .leading, spacing: 4) {
@@ -216,7 +217,7 @@ private struct GeneralSettings: View {
             }
             Section {
                 Text(
-                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and warnings. "
+                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and notifications. "
                         + "Open PrinceClockIn from Applications to bring it back.")
                     .fixedSize(horizontal: false, vertical: true)
             }

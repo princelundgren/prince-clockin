@@ -3,8 +3,8 @@
 [![CI](https://github.com/princelundgren/prince-clockin/actions/workflows/ci.yml/badge.svg)](https://github.com/princelundgren/prince-clockin/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A macOS menu bar app that shows how long each command-line cloud login has left, warns before one
-expires, and logs in to the ones you pick, one after another, when you click.
+A macOS menu bar app that shows how long each command-line cloud login has left, notifies you before
+one expires, and logs in to the ones you pick, one after another, when you click.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/panel-dark.png">
@@ -18,7 +18,7 @@ expires, and logs in to the ones you pick, one after another, when you click.
 - **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
   symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
   with its time left, the due ones first.
-- **Warns once** before a login expires, 30 minutes ahead by default. Logins that need it at the
+- **Notifies once** before a login expires, 30 minutes ahead by default. Logins that need it at the
   same time, or while the Mac slept, share one notification, whose Log In button starts them.
 - **Logs in when you click**: any tile that isn't running, queued, failed, awaiting approval or
   asking, Log In to N Due when several are due, or a preset you define such as "AWS dev +
@@ -26,8 +26,8 @@ expires, and logs in to the ones you pick, one after another, when you click.
   a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs in on its own.
 - **Notices logins you do in a terminal**: an `aws sso login` is read from the AWS CLI's cache
   file, and when the file can't tell a login from a renewal, the tile asks "Logged in
-  elsewhere?". A Databricks profile is checked with the Databricks CLI when it enters its warning
-  time, or when you click Check Databricks Now in Settings → Logins.
+  elsewhere?". A Databricks profile is checked with the Databricks CLI when it enters its
+  notification time, or when you click Check Databricks Now in Settings → Logins.
 - **Takes a timer by hand**: when a tile asks "Logged in elsewhere?", Set Timer… takes when the
   login expires or when you logged in.
 - **Runs a custom login's command in Terminal**, so you can type passwords or MFA codes there, or
@@ -69,7 +69,7 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
 
 - **The session length decides the timer.** AWS sessions default to 8 hours, the IAM Identity
   Center default. A Databricks login has no default, since its limit is a token policy on your
-  account: until you set its session length, its timer is unknown, so it never warns and is
+  account: until you set its session length, its timer is unknown, so it never notifies and is
   checked only when you click Check Databricks Now.
 - **A Databricks profile with another auth type** (personal access token, `azure-cli`,
   machine-to-machine) isn't offered; track it as a custom login. A profile with no `auth_type`

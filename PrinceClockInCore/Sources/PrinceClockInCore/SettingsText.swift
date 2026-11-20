@@ -24,7 +24,7 @@ public func removePresetHelp(for preset: Preset?) -> String {
 public struct NotificationsSetting: Equatable, Sendable {
     /// "On" or "Off".
     public let state: String
-    /// Under the row while notifications are off: what warns instead.
+    /// Under the row while notifications are off: what shows the expiry instead.
     public let note: String?
 
     public init(state: String, note: String?) {
