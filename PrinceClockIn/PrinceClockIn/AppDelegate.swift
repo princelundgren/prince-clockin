@@ -17,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: StatusItemController?
     private var settingsWindow: NSWindow?
     private let loginsPaneRequest = LoginsPaneRequest()
+    /// While the panel is shown: closes it on a click in another app, the desktop or another menu
+    /// bar item.
+    private var outsideClickMonitor: Any?
 
     override init() {
         appModel = AppModel()
@@ -80,16 +83,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         hosting.onCancel = { [weak self] in self?.panelCancelled() }
         popover.contentViewController = hosting
         popover.delegate = self
-        NotificationCenter.default.addObserver(
-            forName: NSPopover.didShowNotification, object: popover, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.panelDidShow() }
-        }
-        NotificationCenter.default.addObserver(
-            forName: NSPopover.didCloseNotification, object: popover, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.panelDidClose() }
-        }
     }
 
     /// The tiles take their order before the panel appears, so they don't re-sort once it is
@@ -101,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     /// The panel's content is built once, so what it shows from the system is read on each showing.
     /// Its banners count as seen only from this reading of the notification permission on.
-    private func panelDidShow() {
+    func popoverDidShow(_ notification: Notification) {
         appModel.coordinator.markPanelShown()
         panelSession.didShow()
         Task {
@@ -119,8 +112,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    private func panelDidClose() {
-        statusItem?.button?.highlight(false)
+    /// Every close passes here: a click outside, the icon, Escape and Settings alike.
+    func popoverDidClose(_ notification: Notification) {
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
         if panelSession.close() { appModel.dismissNotificationsBanner() }
     }
 
@@ -136,8 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem?.button else { return }
         NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
-        button.highlight(true)
+        popover.contentViewController?.view.window?.makeKeyAndOrderFront(nil)
+        if outsideClickMonitor == nil {
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown]
+            ) { [weak self] _ in
+                Task { @MainActor in self?.popover.performClose(nil) }
+            }
+        }
     }
 
     /// Keeps the panel open through the mouse-down of a click on the status item, which a

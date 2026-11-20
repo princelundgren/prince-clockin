@@ -263,7 +263,9 @@ never in colour; the panel has the times.
 
 A transient popover about 320 pt wide, on the system popover material with no fill, border or
 shadow of its own. It closes when a browser or Terminal takes focus, so a running batch never
-depends on it being open. From top to bottom:
+depends on it being open, and on any click outside it, in another app or menu bar item too. The
+app draws no highlight of its own on the status item. It opens and closes as the maintainer's
+other menu bar apps do (owner, 2026-11-20). From top to bottom:
 
 1. **Banners**, at most two, highest first; a third waits until one clears:
    1. **State set aside**: "PrinceClockIn couldn't use its saved logins (the file was unreadable
@@ -712,6 +714,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - The menu bar symbol, an image view rather than the button's own image, which Apple documents
     as styled for the menu bar, looks right in a light menu bar, over a light wallpaper and on an
     inactive second display.
+  - Whether the system highlights the status item while the panel is open, as it does on macOS
+    27.
+  - A slow click and a tap-to-click on the icon while the panel is open close it and leave it
+    closed; on macOS 27.2.1, holds of 0.25 to 1.2 s did.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
