@@ -327,13 +327,15 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    with its title as its VoiceOver label and help tag and the link pointer on hover, as in the
    maintainer's other menu bar apps (owner, 2026-11-20).
 
-**Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
-files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
-AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
-databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
+**Empty states**: with no login tracked, the panel shows SwiftUI's `ContentUnavailableView` in
+place of the tiles: the menu bar's `clock` symbol, "No Logins Yet", what discovery found ("Found 3
+AWS SSO sessions and 1 Databricks profile in your config files.") and Add Logins…. When nothing is
+found, the text reads "No AWS SSO sessions or Databricks profiles in your config files. Log in once
+with the aws or databricks CLI, or add your own command." Add Logins… opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
 under +, since SwiftUI can't open a `Menu` programmatically.
-Discovery reads the config files again on each opening; while it runs, no earlier text shows.
+Discovery reads the config files again on each opening; while it runs, the empty state shows
+without its text, so no earlier text shows.
 
 #### Tiles
 
@@ -501,8 +503,9 @@ A token has only the meanings its row lists.
   use `.small`. One `.borderedProminent` per view: the state's single default, in this order: Set in
   an open Set Timer, Done while a custom login waits, Log In to N Due, the first due tile's own
   action (its Log In, drawn bold instead, or Try Again when it failed), else the first question's
-  Mark as Logged In at <time>. Nothing is prominent when nothing needs the user, and Cancel All, Try
-  Again during a batch, and Run It never are.
+  Mark as Logged In at <time>, and in the empty panel, with no batch running, Add Logins…. Nothing
+  is prominent when nothing needs the user, and Cancel All, Try Again during a batch, and Run It
+  never are.
 - **Return** triggers that default wherever focus is, except in a text field, where it commits
   the field; **Space** activates the focused control, such as a tile. **Escape** cancels an open
   Set Timer, else closes the panel.
@@ -534,7 +537,8 @@ A token has only the meanings its row lists.
 #### Wording and formats
 
 The glossary is binding: one word per thing, in the panel, menus, Settings and notifications, in
-title case for buttons and menu items.
+title case for buttons, menu items and the empty state's title, as the system's own empty states
+are.
 
 | Use | Not |
 |---|---|

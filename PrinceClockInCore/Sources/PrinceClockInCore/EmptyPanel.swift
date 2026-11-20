@@ -1,13 +1,14 @@
 import Foundation
 
-/// What the panel shows in place of tiles while no login is tracked, above Add Logins….
+/// What the panel says in place of tiles while no login is tracked, above Add Logins….
 public struct EmptyPanel: Equatable, Sendable {
-    /// "No logins yet" when discovery found logins to add; `nil` when it found none.
-    public let title: String?
+    /// The empty state's title, shown from the moment no login is tracked, before discovery answers.
+    public static let title = "No Logins Yet"
+
+    /// What discovery found in the config files, or how to get a login when it found none.
     public let message: String
 
-    public init(title: String?, message: String) {
-        self.title = title
+    public init(message: String) {
         self.message = message
     }
 }
@@ -24,12 +25,8 @@ public func emptyPanel(aws: [String], databricks: [DatabricksProfile], locale: L
     let found = counts.filter { $0.0 > 0 }.map { count, kind in "\(count) \(kind)\(count == 1 ? "" : "s")" }
     guard !found.isEmpty else {
         return EmptyPanel(
-            title: nil,
             message: "No AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or "
                 + "databricks CLI, or add your own command.")
     }
-    let total = aws.count + databricks.count
-    return EmptyPanel(
-        title: "No logins yet",
-        message: "Found \(total) in your config files: \(found.formatted(.list(type: .and).locale(locale))).")
+    return EmptyPanel(message: "Found \(found.formatted(.list(type: .and).locale(locale))) in your config files.")
 }

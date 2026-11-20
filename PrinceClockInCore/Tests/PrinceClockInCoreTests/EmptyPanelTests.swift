@@ -10,9 +10,7 @@ private let gb = Locale(identifier: "en_GB")
             aws: ["dev", "prod", "staging"], databricks: [DatabricksProfile(name: "analytics-dev", accountLevel: false)],
             locale: gb)
 
-        #expect(state == EmptyPanel(
-            title: "No logins yet",
-            message: "Found 4 in your config files: 3 AWS SSO sessions and 1 Databricks profile."))
+        #expect(state == EmptyPanel(message: "Found 3 AWS SSO sessions and 1 Databricks profile in your config files."))
     }
 
     @Test func countsAccountProfilesAsTheirOwnKind() {
@@ -26,20 +24,19 @@ private let gb = Locale(identifier: "en_GB")
             locale: gb)
 
         #expect(state.message
-            == "Found 4 in your config files: 1 AWS SSO session, 2 Databricks profiles and 1 Databricks account profile.")
+            == "Found 1 AWS SSO session, 2 Databricks profiles and 1 Databricks account profile in your config files.")
     }
 
     @Test func oneKindAloneIsNotAList() {
         let state = emptyPanel(aws: ["dev"], databricks: [], locale: gb)
 
-        #expect(state.message == "Found 1 in your config files: 1 AWS SSO session.")
+        #expect(state.message == "Found 1 AWS SSO session in your config files.")
     }
 
     @Test func nothingFoundSaysHowToGetALogin() {
         let state = emptyPanel(aws: [], databricks: [], locale: gb)
 
         #expect(state == EmptyPanel(
-            title: nil,
             message: "No AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or "
                 + "databricks CLI, or add your own command."))
     }
