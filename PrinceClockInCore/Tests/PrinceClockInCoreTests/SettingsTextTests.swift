@@ -19,7 +19,7 @@ import PrinceClockInCore
         #expect(removePresetHelp(for: nil) == "Remove the selected preset.")
     }
 
-    // MARK: Warnings
+    // MARK: Notifications
 
     @Test func notificationsOnSayNoMore() {
         #expect(notificationsSetting(areOff: false) == NotificationsSetting(state: "On", note: nil))

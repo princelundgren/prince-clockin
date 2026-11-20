@@ -3,7 +3,7 @@ import SwiftUI
 
 /// One pane of the Settings window's sidebar.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case logins, presets, warnings, general, about
+    case logins, presets, notifications, general, about
 
     var id: Self { self }
 
@@ -11,7 +11,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .logins: "Logins"
         case .presets: "Presets"
-        case .warnings: "Warnings"
+        case .notifications: "Notifications"
         case .general: "General"
         case .about: "About"
         }
@@ -21,7 +21,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .logins: "person.badge.key"
         case .presets: "list.bullet"
-        case .warnings: "bell"
+        case .notifications: "bell"
         case .general: "gearshape"
         case .about: "info.circle"
         }
@@ -50,7 +50,7 @@ struct SettingsView: View {
             switch pane {
             case .logins: LoginsSettings(appModel: appModel, request: loginsPaneRequest)
             case .presets: PresetsSettings(coordinator: appModel.coordinator)
-            case .warnings: WarningsSettings(appModel: appModel)
+            case .notifications: NotificationsSettings(appModel: appModel)
             case .general: GeneralSettings(appModel: appModel)
             case .about: AboutSettings(updater: updater)
             }
@@ -118,12 +118,12 @@ struct SettingsNote: View {
     }
 }
 
-// MARK: Warnings
+// MARK: Notifications
 
-/// Settings → Warnings: how long before expiry a login warns, and whether notifications are on.
+/// Settings → Notifications: how long before expiry a login warns, and whether notifications are on.
 /// The permission is read again when the pane appears and when the app becomes active, as after
 /// the user changes it in System Settings.
-private struct WarningsSettings: View {
+private struct NotificationsSettings: View {
     let appModel: AppModel
 
     var body: some View {

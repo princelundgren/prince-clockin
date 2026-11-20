@@ -20,7 +20,7 @@ public func removePresetHelp(for preset: Preset?) -> String {
     return "Remove \(preset.name)."
 }
 
-/// Settings → Warnings' Notifications row.
+/// The Notifications row in Settings → Notifications.
 public struct NotificationsSetting: Equatable, Sendable {
     /// "On" or "Off".
     public let state: String

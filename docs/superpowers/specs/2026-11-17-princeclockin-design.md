@@ -293,7 +293,7 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
       expires." With Open System Settings…, which opens System Settings → Notifications. It
       appears once each time notifications are turned off (owner, 2026-11-19): closing the panel
       after it has been shown dismisses it until notifications are on again, and meanwhile it
-      lives in Settings → Warnings.
+      lives in Settings → Notifications.
 2. **The batch card**, while a batch runs; Log In to N Due is hidden meanwhile, and a login with
    nothing pending joins the queue by a click on its tile:
    - "Logging in to prod", its progress "1 of 2", "Finish in your browser. Next: staging", and
@@ -447,7 +447,7 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   with + (a menu of the tracked logins not in it), −, Move Up and Move Down. Drag also reorders;
   Move Up and Move Down are the keyboard and VoiceOver way. + adds an empty preset, "New preset"
   ("New preset 2" and on while that name is taken), and selects it; − removes the selected preset at once.
-- **Warnings:** "Warn before a login expires" (30 minutes by default), and Notifications: their
+- **Notifications:** "Warn before a login expires" (30 minutes by default), and Notifications: their
   state, Open System Settings…, and, while they're off, "With notifications off, only the menu bar
   shows that a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
