@@ -217,12 +217,6 @@ private struct GeneralSettings: View {
                     SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
                 }
             }
-            Section {
-                Text(
-                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and notifications. "
-                        + "Open PrinceClockIn from Applications to bring it back.")
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .formStyle(.grouped)
         .onAppear { launchAtLoginStatus = LaunchAtLogin.status }
