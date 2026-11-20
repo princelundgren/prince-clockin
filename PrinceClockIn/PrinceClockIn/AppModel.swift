@@ -3,13 +3,15 @@ import Observation
 import PrinceClockInCore
 import UserNotifications
 
-/// Builds the coordinator with the real system services and drives it: the 30-second tick, wake,
-/// clock and time-zone changes, and notification buttons. It makes no decisions of its own.
+/// Builds the coordinator with the real system services and drives it: a tick at each deadline the
+/// coordinator gives, on a change in the AWS cache directory, on wake, clock and time-zone changes,
+/// and notification buttons. It makes no decisions of its own.
 @MainActor
 @Observable
 final class AppModel: NSObject, UNUserNotificationCenterDelegate {
-    private static let tickInterval: TimeInterval = 30
-    private static let tickTolerance: TimeInterval = 5
+    /// How late a deadline's tick may run so the system can group it with other wake-ups: a
+    /// notification or a shown minute that much late goes unnoticed.
+    private static let tickTolerance: TimeInterval = 1
     private static let notificationsBannerDismissedKey = "notificationsBannerDismissed"
 
     let coordinator: Coordinator
@@ -22,8 +24,18 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private(set) var isNotificationsBannerDismissed =
         UserDefaults.standard.bool(forKey: AppModel.notificationsBannerDismissedKey)
 
-    /// Held for the app's life, so App Nap doesn't coalesce the tick timer of a windowless app.
-    @ObservationIgnored private let activity: NSObjectProtocol
+    /// Whether the panel is shown.
+    var isPanelShown = false
+    /// Whether the Settings window is open.
+    var isSettingsShown = false
+    /// Whether VoiceOver runs, which reads the menu bar item's label with its time left.
+    private var isVoiceOverOn = NSWorkspace.shared.isVoiceOverEnabled
+
+    @ObservationIgnored private var tickTimer: Timer?
+    /// Held while a tick timer waits, so App Nap doesn't delay a windowless app's deadline.
+    @ObservationIgnored private var activity: NSObjectProtocol?
+    @ObservationIgnored private var voiceOverObservation: NSKeyValueObservation?
+    @ObservationIgnored private var awsCacheWatcher: AWSCacheWatcher?
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
@@ -44,21 +56,23 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             approvals: UserDefaultsApprovals(),
             configPaths: .standard(environment: environment),
             clock: Date.init)
-        activity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and notifying before they expire")
         super.init()
         // Set before launch finishes, so a notification button that launched the app isn't lost.
         UNUserNotificationCenter.current().delegate = self
         SystemNotifier.registerCategories()
-        startTicking()
         observeSystemChanges()
         Task {
             await SystemNotifier.requestAuthorization()
             await refreshNotificationPermission()
         }
+        // No timer or cache change ticks before the coordinator has started and taken its baseline.
         Task {
             await coordinator.start()
-            await tick()
+            await coordinator.tick()
+            scheduleTicks()
+            awsCacheWatcher = AWSCacheWatcher(directory: home.appending(path: ".aws/sso/cache")) { [weak self] in
+                Task { await self?.coordinator.tick() }
+            }
         }
     }
 
@@ -118,17 +132,42 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    private func tick() async {
-        await coordinator.tick()
-        await refreshNotificationPermission()
+    private var shownTimes: ShownTimes {
+        if isPanelShown || isSettingsShown { return .all }
+        return isVoiceOverOn ? .menuBarLabel : .none
     }
 
-    private func startTicking() {
-        let timer = Timer(timeInterval: Self.tickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.tick() }
+    /// Keeps one tick timer armed at the coordinator's next deadline, moved whenever the logins,
+    /// the last tick's time or what is shown changes.
+    private func scheduleTicks() {
+        Task { [weak self] in
+            let deadlines = Observations { [weak self] in
+                self.flatMap { $0.coordinator.nextTickDeadline(shown: $0.shownTimes, calendar: .current) }
+            }
+            for await deadline in deadlines {
+                self?.armTick(at: deadline)
+            }
+        }
+    }
+
+    private func armTick(at deadline: Date?) {
+        tickTimer?.invalidate()
+        tickTimer = nil
+        guard let deadline else {
+            activity.map(ProcessInfo.processInfo.endActivity)
+            activity = nil
+            return
+        }
+        if activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and notifying before they expire")
+        }
+        let timer = Timer(fire: deadline, interval: 0, repeats: false) { [weak self] _ in
+            Task { @MainActor in await self?.coordinator.tick() }
         }
         timer.tolerance = Self.tickTolerance
         RunLoop.main.add(timer, forMode: .common)
+        tickTimer = timer
     }
 
     private func observeSystemChanges() {
@@ -136,7 +175,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 self?.coordinator.systemDidWake()
-                await self?.tick()
+                await self?.coordinator.tick()
             }
         }
         let changes: [(NotificationCenter, Notification.Name)] = [
@@ -145,8 +184,12 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         ]
         for (center, name) in changes {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.tick() }
+                Task { @MainActor in await self?.coordinator.tick() }
             }
+        }
+        voiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled) { [weak self] workspace, _ in
+            let isOn = workspace.isVoiceOverEnabled
+            Task { @MainActor in self?.isVoiceOverOn = isOn }
         }
     }
 

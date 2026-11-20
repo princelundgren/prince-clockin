@@ -84,7 +84,7 @@ public final class Coordinator {
     }
 
     public private(set) var model: LoginsModel
-    /// The time of the last tick; the views time every row against it.
+    /// The time of the last tick or refresh; the views time every row against it.
     public private(set) var now: Date
     /// Where an unreadable or newer state file was set aside at launch.
     public private(set) var loadNotice: URL?
@@ -109,7 +109,7 @@ public final class Coordinator {
     public private(set) var saveFailure: String?
     /// Whether a login still tracked failed, not by a cancel, since the panel was last shown.
     public var hasUnseenFailure: Bool { !unseenFailures.isEmpty }
-    /// The menu bar's row at the last tick. A failed save shows as a failure until a save works,
+    /// The menu bar's row at the last tick or refresh. A failed save shows as a failure until a save works,
     /// whether or not the panel has been shown.
     public var menuBarStatus: MenuBarStatus {
         PrinceClockInCore.menuBarStatus(
@@ -157,6 +157,7 @@ public final class Coordinator {
     private var unseenFailures: Set<UUID> = []
     @ObservationIgnored private var isFirstCheckAfterWake = false
     @ObservationIgnored private var isTicking = false
+    @ObservationIgnored private var isTickPending = false
     @ObservationIgnored private var isStarted = false
 
     /// Loads the store at once, so a notification action that launches the app finds its logins.
@@ -218,22 +219,43 @@ public final class Coordinator {
         await rereadAccountLevels()
     }
 
-    /// Reads the AWS cache files, takes and saves the expiry notifications due, checks the
-    /// Databricks logins among them and posts one grouped notification. A tick that arrives while
-    /// one runs is skipped.
+    /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks logins
+    /// among them and posts one grouped notification. A tick that arrives while one runs makes that
+    /// one run once more when it ends, so a deadline that falls during a slow check is still met.
     public func tick() async {
-        guard !isTicking else { return }
+        guard !isTicking else {
+            isTickPending = true
+            return
+        }
         isTicking = true
         defer { isTicking = false }
-        let tickTime = clock()
-        now = tickTime
-        observeAWSCaches(now: tickTime, isFirstCheckAfterWake: isFirstCheckAfterWake)
+        repeat {
+            isTickPending = false
+            refresh()
+            let tickTime = now
+            let due = model.takeExpiryNotifications(now: tickTime)
+            saveIfChanged()
+            await check(model.databricksLogins(among: due), now: tickTime)
+            let notified = due.compactMap(login)
+            if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
+        } while isTickPending
+    }
+
+    /// Moves `now` to the clock and reads the AWS cache files, without notifying: for the panel or
+    /// Settings about to show, whose times would otherwise be those of the last tick.
+    public func refresh() {
+        now = clock()
+        observeAWSCaches(now: now, isFirstCheckAfterWake: isFirstCheckAfterWake)
         isFirstCheckAfterWake = false
-        let due = model.takeExpiryNotifications(now: tickTime)
         saveIfChanged()
-        await check(model.databricksLogins(among: due), now: tickTime)
-        let notified = due.compactMap(login)
-        if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
+    }
+
+    /// When the next tick is needed for the logins as they are at `now`; see
+    /// `nextTickDeadline(_:now:leadTime:shown:calendar:)`.
+    public func nextTickDeadline(shown: ShownTimes, calendar: Calendar) -> Date? {
+        PrinceClockInCore.nextTickDeadline(
+            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime, shown: shown,
+            calendar: calendar)
     }
 
     /// Checks every tracked Databricks login, for Check Databricks Now.
@@ -303,7 +325,7 @@ public final class Coordinator {
         isFirstCheckAfterWake = true
     }
 
-    /// Login `id`'s tile at the last tick, or `nil` for a login not tracked.
+    /// Login `id`'s tile at the last tick or refresh, or `nil` for a login not tracked.
     public func tile(for id: UUID, locale: Locale, calendar: Calendar) -> TilePresentation? {
         guard let login = login(id) else { return nil }
         let activity: TileActivity = running == id ? .running : queued.contains(id) ? .queued : .idle

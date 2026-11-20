@@ -85,7 +85,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     /// The tiles take the stored order before the panel appears and keep it until it next opens.
+    /// Its times are brought up to the clock first, since the last tick may be hours old.
     func popoverWillShow(_ notification: Notification) {
+        appModel.coordinator.refresh()
+        appModel.isPanelShown = true
         panelSession.open(order: appModel.coordinator.model.state.logins.map(\.id))
     }
 
@@ -113,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         outsideClickMonitor = nil
+        appModel.isPanelShown = false
         if panelSession.close() { appModel.dismissNotificationsBanner() }
     }
 
@@ -167,6 +171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             window.setFrameAutosaveName(Self.settingsFrameName)
             window.delegate = self
             settingsWindow = window
+            appModel.coordinator.refresh()
+            appModel.isSettingsShown = true
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -188,6 +194,7 @@ extension AppDelegate: NSWindowDelegate {
         guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
         window.setFrameAutosaveName("")
         settingsWindow = nil
+        appModel.isSettingsShown = false
         loginsPaneRequest.isAddMenuPending = false
     }
 }
