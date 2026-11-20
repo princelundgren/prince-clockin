@@ -47,6 +47,14 @@ import PrinceClockInCore
         #expect(output.contains("out") && output.contains("err"))
     }
 
+    @Test func runnerCanDiscardStandardOutputAndKeepStandardError() async {
+        let outcome = await FoundationProcessRunner().runDiscardingStandardOutput(
+            executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "echo secret-out; echo err >&2; exit 3"],
+            environment: ["PATH": "/usr/bin:/bin"], timeout: .seconds(10))
+
+        #expect(outcome == .exited(code: 3, output: "err\n"))
+    }
+
     @Test func runnerReportsLaunchFailure() async {
         let outcome = await run("/nonexistent/tool", [])
         guard case .launchFailed = outcome else {

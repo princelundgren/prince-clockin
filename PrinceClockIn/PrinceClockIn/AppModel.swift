@@ -4,7 +4,7 @@ import PrinceClockInCore
 import UserNotifications
 
 /// Builds the coordinator with the real system services and drives it: a tick at each deadline the
-/// coordinator gives, on a change in the AWS cache directory, on wake, clock and time-zone changes,
+/// coordinator gives, on a change in the AWS cache directory or gcloud's config directory, on wake, clock and time-zone changes,
 /// and notification buttons. It makes no decisions of its own.
 @MainActor
 @Observable
@@ -36,6 +36,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored private var activity: NSObjectProtocol?
     @ObservationIgnored private var voiceOverObservation: NSKeyValueObservation?
     @ObservationIgnored private var awsCacheWatcher: AWSCacheWatcher?
+    @ObservationIgnored private var gcloudConfigWatcher: AWSCacheWatcher?
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
@@ -46,15 +47,18 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             filePath: environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory(),
             directoryHint: .isDirectory)
         homeDirectory = home
+        let configPaths = ConfigPaths.standard(environment: environment)
         coordinator = Coordinator(
             store: StateStore(directory: Self.stateDirectory()),
             queue: queue,
             pathResolver: pathResolver,
             checker: DatabricksChecker(runner: runner, pathResolver: pathResolver),
+            gcloudChecker: GcloudChecker(runner: runner, pathResolver: pathResolver),
             aws: AWSCacheFileReader(cacheDirectory: home.appending(path: ".aws/sso/cache")),
+            gcloud: GcloudCredentialsFileReader(configDirectory: configPaths.gcloudConfig),
             notifier: SystemNotifier(),
             approvals: UserDefaultsApprovals(),
-            configPaths: .standard(environment: environment),
+            configPaths: configPaths,
             clock: Date.init)
         super.init()
         // Set before launch finishes, so a notification button that launched the app isn't lost.
@@ -71,6 +75,11 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             await coordinator.tick()
             scheduleTicks()
             awsCacheWatcher = AWSCacheWatcher(directory: home.appending(path: ".aws/sso/cache")) { [weak self] in
+                Task { await self?.coordinator.tick() }
+            }
+            gcloudConfigWatcher = AWSCacheWatcher(
+                directory: configPaths.gcloudConfig, fileNames: gcloudCredentialsFileNames
+            ) { [weak self] in
                 Task { await self?.coordinator.tick() }
             }
         }

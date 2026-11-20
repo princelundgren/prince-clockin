@@ -22,8 +22,12 @@ private func sampleState() -> AppState {
         lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck),
         lastDatabricksAnswer: DatabricksCheckRecord(at: at("2026-11-17T09:00:00Z"), result: .valid))
     let custom = Login(displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
+    let gcloud = Login(
+        displayName: "dev@example.com", kind: .gcloudAccount(account: "dev@example.com#example.goog"),
+        lastGcloudRow: .present(rowID: 4),
+        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .invalid))
     return AppState(
-        logins: [aws, databricks, checked, custom],
+        logins: [aws, databricks, checked, custom, gcloud],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
         settings: Settings(notificationLeadTime: 15 * 60, loginTimeout: 120))
 }
@@ -40,6 +44,28 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
             == #"{"accountLevel":false,"name":"analytics-dev","type":"databricksProfile"}"#)
     #expect(try encodeFlat(.custom(command: "tool login")) == #"{"command":"tool login","type":"custom"}"#)
     #expect(try encodeFlat(.custom(command: nil)) == #"{"type":"custom"}"#)
+    #expect(try encodeFlat(.gcloudAccount(account: "dev@example.com#example.goog"))
+            == #"{"account":"dev@example.com#example.goog","type":"gcloudAccount"}"#)
+}
+
+@Test func gcloudAccountKindRoundTrips() throws {
+    let kind = LoginKind.gcloudAccount(account: "dev@example.com")
+
+    let decoded = try JSONDecoder().decode(LoginKind.self, from: try JSONEncoder().encode(kind))
+
+    #expect(decoded == kind)
+}
+
+@Test func aLoginFromBeforeGcloudDecodesWithNoRow() throws {
+    let json = #"""
+        {"id":"8B0E5C3A-2F4D-4C1E-9A7B-1D2E3F4A5B6C","displayName":"dev",
+         "kind":{"type":"awsSSOSession","name":"dev"},"sessionLength":28800}
+        """#
+
+    let login = try JSONDecoder().decode(Login.self, from: Data(json.utf8))
+
+    #expect(login.kind == .awsSSOSession(name: "dev"))
+    #expect(login.lastGcloudRow == nil)
 }
 
 @Test func awsDefaultsToEightHoursDatabricksToNil() {
@@ -47,6 +73,7 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(Login.defaultSessionLength(for: .awsSSOSession(name: "dev")) == eightHours)
     #expect(Login.defaultSessionLength(for: .databricksProfile(name: "analytics-dev", accountLevel: false)) == nil)
     #expect(Login.defaultSessionLength(for: .custom(command: nil)) == nil)
+    #expect(Login.defaultSessionLength(for: .gcloudAccount(account: "dev@example.com")) == nil)
 }
 
 @Test func loginKindDecodesItsFlatShape() throws {

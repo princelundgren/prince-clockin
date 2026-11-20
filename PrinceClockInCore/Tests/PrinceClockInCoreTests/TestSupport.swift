@@ -1,5 +1,6 @@
 import Foundation
 import PrinceClockInCore
+import SQLite3
 
 /// Parses an ISO 8601 fixture such as `2026-11-17T09:00:00Z`; a malformed fixture fails the test run.
 func at(_ iso: String) -> Date {
@@ -57,6 +58,8 @@ struct RecordedCall {
     let arguments: [String]
     let environment: [String: String]
     let timeout: Duration
+    /// Whether the run asked for its stdout to be discarded.
+    var discardsStandardOutput = false
 }
 
 final class FakeRunner: ProcessRunning, @unchecked Sendable {
@@ -76,11 +79,60 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
     func run(
         executable: URL, arguments: [String], environment: [String: String], timeout: Duration
     ) async -> ProcessOutcome {
+        await record(RecordedCall(executable: executable, arguments: arguments, environment: environment, timeout: timeout))
+    }
+
+    func runDiscardingStandardOutput(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration
+    ) async -> ProcessOutcome {
+        await record(RecordedCall(
+            executable: executable, arguments: arguments, environment: environment, timeout: timeout,
+            discardsStandardOutput: true))
+    }
+
+    private func record(_ call: RecordedCall) async -> ProcessOutcome {
         let index = lock.withLock {
-            recorded.append(RecordedCall(
-                executable: executable, arguments: arguments, environment: environment, timeout: timeout))
+            recorded.append(call)
             return recorded.count - 1
         }
         return await respond(index)
+    }
+}
+
+/// A gcloud `credentials.db` at `url`, with gcloud's schema, to which statements are applied as
+/// gcloud applies them. `value` holds a placeholder, never a real token.
+final class GcloudStoreFixture {
+    let url: URL
+    private var database: OpaquePointer?
+
+    init(at url: URL) throws {
+        self.url = url
+        guard sqlite3_open(url.path, &database) == SQLITE_OK else { throw FixtureError.sqlite("open") }
+        try execute("CREATE TABLE IF NOT EXISTS credentials (account_id TEXT PRIMARY KEY, value BLOB)")
+    }
+
+    deinit { sqlite3_close(database) }
+
+    /// gcloud's write at a login: `REPLACE INTO`, which gives the row a new, larger `rowid`.
+    func replace(_ account: String) throws {
+        try execute("REPLACE INTO credentials (account_id, value) VALUES ('\(account)', 'placeholder')")
+    }
+
+    /// gcloud's write at `gcloud auth revoke`.
+    func delete(_ account: String) throws {
+        try execute("DELETE FROM credentials WHERE account_id = '\(account)'")
+    }
+
+    func rowID(of account: String) throws -> Int64? {
+        try readGcloudCredentials(at: url).rowIDs[account]
+    }
+
+    /// Fixture SQL only: the accounts are test constants, so they are interpolated.
+    private func execute(_ sql: String) throws {
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else { throw FixtureError.sqlite(sql) }
+    }
+
+    enum FixtureError: Error {
+        case sqlite(String)
     }
 }

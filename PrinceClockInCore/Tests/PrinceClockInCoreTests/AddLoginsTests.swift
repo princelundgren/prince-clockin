@@ -36,7 +36,7 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func foundLoginsComeUnderTheirHeaderThenCustomLogin() {
-        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace]))
+        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace], gcloud: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -47,7 +47,7 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func accountProfilesComeAfterWorkspaceProfiles() {
-        let menu = addMenu(found: (aws: [], databricks: [account, workspace]))
+        let menu = addMenu(found: (aws: [], databricks: [account, workspace], gcloud: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -58,9 +58,31 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func nothingNewSaysSoAboveCustomLogin() {
-        let menu = addMenu(found: (aws: [], databricks: []))
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: []))
 
-        #expect(menu == [.note("No new AWS SSO sessions or Databricks profiles"), .customLogin])
+        #expect(menu == [.note("No new AWS SSO sessions, Databricks profiles or gcloud accounts"), .customLogin])
+    }
+
+    @Test func gcloudAccountsComeLastAndShowTheirEmail() {
+        let menu = addMenu(found: (aws: ["qa"], databricks: [account], gcloud: ["dev@example.com#example.goog"]))
+
+        #expect(menu == [
+            .header("Found in your config files"),
+            .found(.awsSSOSession(name: "qa")),
+            .found(.databricksProfile(account)),
+            .found(.gcloudAccount(account: "dev@example.com#example.goog")),
+            .customLogin,
+        ])
+        #expect(menu[3].title == "dev@example.com")
+        #expect(menu[3].kind == "gcloud account")
+    }
+
+    @Test func trackingAGcloudAccountChangesTheTrackedConfigNames() {
+        let names = TrackedConfigNames(logins: [
+            Login(displayName: "dev", kind: .gcloudAccount(account: "dev@example.com#example.goog")),
+        ])
+
+        #expect(names.gcloud == ["dev@example.com#example.goog"])
     }
 
     @Test func whileTheConfigFilesAreReadOnlyCustomLoginIsOffered() {
@@ -97,6 +119,14 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
 
         #expect(login.displayName == "account")
         #expect(login.kind == .databricksProfile(name: "account", accountLevel: true))
+        #expect(login.sessionLength == nil)
+    }
+
+    @Test func aFoundGcloudAccountIsTrackedByItsFullIDNamedByItsEmailWithNoSessionLength() {
+        let login = AddLoginCandidate.gcloudAccount(account: "dev@example.com#example.goog").login()
+
+        #expect(login.displayName == "dev@example.com")
+        #expect(login.kind == .gcloudAccount(account: "dev@example.com#example.goog"))
         #expect(login.sessionLength == nil)
     }
 

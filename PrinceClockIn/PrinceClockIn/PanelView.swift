@@ -110,7 +110,8 @@ struct PanelView: View {
         let found = await coordinator.discoverCandidates()
         guard !Task.isCancelled else { return }
         session.showEmptyPanel(
-            emptyPanel(aws: found.aws, databricks: found.databricks, locale: .current), forOpening: opening)
+            emptyPanel(aws: found.aws, databricks: found.databricks, gcloud: found.gcloud, locale: .current),
+            forOpening: opening)
     }
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.

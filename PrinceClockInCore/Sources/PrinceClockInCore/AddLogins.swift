@@ -1,11 +1,15 @@
 import Foundation
 
-/// An AWS SSO session or Databricks profile found in the config files and not yet tracked.
+/// An AWS SSO session, Databricks profile or gcloud account found in the config files and not yet
+/// tracked.
 public enum AddLoginCandidate: Equatable, Sendable {
     case awsSSOSession(name: String)
     case databricksProfile(DatabricksProfile)
+    /// A store `account_id`; see `LoginKind.gcloudAccount`.
+    case gcloudAccount(account: String)
 
-    /// The login that tracks it: named as in the config file, with its kind's default length.
+    /// The login that tracks it: named as in the config file, a gcloud account by its email, with its
+    /// kind's default length.
     public func login() -> Login {
         Login(displayName: name, kind: loginKind, sessionLength: Login.defaultSessionLength(for: loginKind))
     }
@@ -14,6 +18,7 @@ public enum AddLoginCandidate: Equatable, Sendable {
         switch self {
         case .awsSSOSession(let name): .awsSSOSession(name: name)
         case .databricksProfile(let profile): .databricksProfile(name: profile.name, accountLevel: profile.accountLevel)
+        case .gcloudAccount(let account): .gcloudAccount(account: account)
         }
     }
 
@@ -21,28 +26,35 @@ public enum AddLoginCandidate: Equatable, Sendable {
         switch self {
         case .awsSSOSession(let name): name
         case .databricksProfile(let profile): profile.name
+        case .gcloudAccount(let account): gcloudAccountEmail(account)
         }
     }
 }
 
-/// The AWS SSO session and Databricks profile names that tracked logins use: what discovery leaves
-/// out of the + menu, so its read of the config files need only be redone when these change.
+/// The AWS SSO session, Databricks profile and gcloud account names that tracked logins use: what
+/// discovery leaves out of the + menu, so its read of the config files need only be redone when
+/// these change.
 public struct TrackedConfigNames: Hashable, Sendable {
     public let aws: Set<String>
     public let databricks: Set<String>
+    /// Store `account_id`s.
+    public let gcloud: Set<String>
 
     public init(logins: [Login]) {
         var aws: Set<String> = []
         var databricks: Set<String> = []
+        var gcloud: Set<String> = []
         for login in logins {
             switch login.kind {
             case .awsSSOSession(let name): aws.insert(name)
             case .databricksProfile(let name, _): databricks.insert(name)
+            case .gcloudAccount(let account): gcloud.insert(account)
             case .custom: break
             }
         }
         self.aws = aws
         self.databricks = databricks
+        self.gcloud = gcloud
     }
 }
 
@@ -72,17 +84,18 @@ public enum AddMenuItem: Equatable, Sendable {
 }
 
 /// The + menu for what discovery found that isn't tracked: under "Found in your config files", the
-/// AWS SSO sessions, then the Databricks profiles, then the account profiles, each in file order;
-/// then Custom Login…. With nothing found it says so; while the files are still being read
-/// (`found` is `nil`) it offers Custom Login… alone.
-public func addMenu(found: (aws: [String], databricks: [DatabricksProfile])?) -> [AddMenuItem] {
+/// AWS SSO sessions, then the Databricks profiles, then the account profiles, each in file order,
+/// then the gcloud accounts in discovery's order; then Custom Login…. With nothing found it says so;
+/// while the files are still being read (`found` is `nil`) it offers Custom Login… alone.
+public func addMenu(found: DiscoveredLogins?) -> [AddMenuItem] {
     guard let found else { return [.customLogin] }
     let workspaces = found.databricks.filter { !$0.accountLevel }
     let accounts = found.databricks.filter(\.accountLevel)
     let candidates = found.aws.map(AddLoginCandidate.awsSSOSession)
         + (workspaces + accounts).map(AddLoginCandidate.databricksProfile)
+        + found.gcloud.map(AddLoginCandidate.gcloudAccount)
     guard !candidates.isEmpty else {
-        return [.note("No new AWS SSO sessions or Databricks profiles"), .customLogin]
+        return [.note("No new AWS SSO sessions, Databricks profiles or gcloud accounts"), .customLogin]
     }
     return [.header("Found in your config files")] + candidates.map(AddMenuItem.found) + [.customLogin]
 }

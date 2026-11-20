@@ -93,6 +93,18 @@ and a timer. The kinds are:
   as the Databricks CLI tells them apart, since a workspace profile can hold an `account_id` too.
   The app reads this from the config file again at launch and before each check (owner,
   2026-11-20); a profile no longer in the file keeps what was last read.
+- **gcloud account**: a user account in gcloud's credential store, `credentials.db` in the gcloud
+  config directory: `CLOUDSDK_CONFIG` (a leading `~` expanded), else `~/.config/gcloud`. It is a
+  SQLite table `credentials (account_id, value)`; `account_id` is the email, or
+  `email#universe_domain` outside the default universe, kept whole as the login's account and shown
+  by the part before `#`. Login runs `gcloud auth login --force --account=<email>`; without
+  `--force` gcloud only makes an account with stored credentials active and doesn't sign in. The
+  login and the check pass only the email, so gcloud uses the row of its own `core/universe_domain`:
+  an account outside that universe is logged in and checked in gcloud's current one instead, a
+  known limit the README names. No default session
+  length, as for Databricks. Service accounts (an email ending `.gserviceaccount.com`) aren't
+  offered, and application-default credentials are no kind: the user can add either as a custom
+  login.
 - **Custom login**: for any other login (Azure, Okta and so on), with a session length the user
   sets. It can carry a command, which opens in a Terminal window so the user can type passwords,
   MFA codes or choices; the timer starts when the user clicks Done (owner, 2026-11-17). Without a
@@ -107,10 +119,13 @@ A session length is picked from one list everywhere, in Set Timer and in Setting
 12 hours, 1 day, 3 days, 7 days, Custom… (any number of hours or days) and No timer, which leaves
 the session length unknown.
 
-The app discovers AWS SSO sessions and Databricks profiles and offers the ones not yet tracked in
-Settings' + menu. The user picks which to track, so nothing is tracked unasked. It reads
-`~/.aws/config` and `~/.databrickscfg`, or the files `AWS_CONFIG_FILE` and `DATABRICKS_CONFIG_FILE`
-name (a leading `~` expanded). Custom logins are added by hand.
+The app discovers AWS SSO sessions, Databricks profiles and gcloud accounts and offers the ones
+not yet tracked in Settings' + menu. The user picks which to track, so nothing is tracked unasked.
+It reads `~/.aws/config` and `~/.databrickscfg`, or the files `AWS_CONFIG_FILE` and
+`DATABRICKS_CONFIG_FILE` name (a leading `~` expanded), and gcloud's `credentials.db`. Of that
+store it reads only `account_id` and `rowid`, opened read-only and waiting up to 200 ms on a write
+in progress, never `value`, which holds the refresh token; a store missing or unreadable offers no
+accounts. Custom logins are added by hand.
 
 A **preset** is a named, ordered set of logins, created and edited in Settings → Presets. Removing
 a login also removes it from every preset. A preset left with no logins stays, says "No logins"
@@ -162,6 +177,18 @@ The login time comes from:
      file counts as a login.
    - **Databricks**: a tracked profile that goes from invalid to valid. The login time is the
      check's time, the best the app knows.
+   - **gcloud**: gcloud writes an account's row with `REPLACE INTO` at each login, which gives it
+     a `rowid` larger than any before; a token refresh writes only `access_tokens.db`, and
+     `gcloud auth revoke` deletes the row. The app stores the row last seen per account, missing
+     or with its `rowid`, whatever a check or Set Timer does in between, and compares:
+     1. A larger `rowid`: a login, at `credentials.db`'s modification date, the best the app knows.
+     2. The same: nothing happened.
+     3. No row, after one: logged out, as for AWS ("Logged out"). A row after none: a login.
+     4. A first sight, with nothing stored: a baseline only. Adding the account takes it at once,
+        so a login right after is seen.
+     A store that can't be read changes nothing. A revoke and a new login of the store's newest
+     row, both while the app isn't running or within one batch of the directory watch, can give
+     the row its old `rowid` back and go unseen.
 
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
 without a token. Set too short, a renewal after the timer's expiry is taken for a login, so the
@@ -183,12 +210,13 @@ Facts the timer design rests on:
 
 Each timer has a state: **ok**, **expiring** (within the notification time), **expired**, or
 **unknown** (no login time or no session length), shown by the `timer` symbol with nothing
-trailing, and read to VoiceOver as "No timer". An AWS SSO session or
+trailing, and read to VoiceOver as "No timer". An AWS SSO session, gcloud account or
 custom login with an unknown timer that has been logged in to, and not invalidated since, shows
 as **logged in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS
-session stays so until the app sees a logout, which makes it "Logged out"; the app can't see a
-custom login log out, so it stays so (owner, 2026-11-20). A Databricks login in that state asks
-for its session length instead (see Running logins). A Databricks login whose
+session or gcloud account stays so until the app sees a logout, which makes it "Logged out"; the
+app can't see a custom login log out, so it stays so (owner, 2026-11-20). A Databricks login in
+that state asks for its session length instead (see Running logins). A Databricks workspace or
+gcloud login whose
 timer says expired but whose last check that answered (valid or invalid) since that expiry found
 it valid is **still valid** (owner, 2026-11-19).
 
@@ -200,13 +228,15 @@ severity for the menu bar both leave a still-valid login out.
 When the app starts, it reads every tracked login's state as a baseline and keeps the stored
 timers. A missing AWS cache file means logged out, and so expired, only for a session the app has
 seen logged in, one whose file times it has stored; a session it has never seen keeps the timer it
-has, unknown until a login is recorded. A login done while the app wasn't running is found only by
-the AWS file-time rule above, or set by hand.
+has, unknown until a login is recorded. A gcloud account follows the same rule with its stored
+row. A login done while the app wasn't running is found only by the AWS file-time rule and the
+gcloud `rowid` rule above, or set by hand.
 
-Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/`, on
-wake from sleep, on a clock change and on a time-zone change, with no polling, so a menu bar app
-that runs all day does no work while nothing happens. Each recomputation also reads the AWS cache
-files and sends any notification now due.
+Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/` or
+the gcloud config directory, on wake from sleep, on a clock change and on a time-zone change, with
+no polling, so a menu bar app that runs all day does no work while nothing happens. Each
+recomputation also reads the AWS cache files and gcloud's credential store and sends any
+notification now due.
 
 - **The next moment** is the soonest notification time or expiry, or at once while a notification
   is due and unsent. What is on screen adds more:
@@ -218,38 +248,53 @@ files and sends any notification now due.
   tolerance. With no next moment there is no timer.
 - **App Nap** is held off only while that timer waits, with
   `.userInitiatedAllowingIdleSystemSleep`, which leaves the Mac free to sleep.
-- **The AWS cache directory** is watched with File System Events, since the AWS CLI rewrites a
-  session's file in place. The watch follows the directory's path, so it also sees one created or
-  removed after launch.
-- **Opening the panel or Settings** first brings the times and the AWS sessions up to the clock,
-  since the last recomputation may be hours old. That leaves notifying to the recomputation, which a
-  notification found due makes happen at once.
-- A recomputation that arrives while one runs (a Databricks check can take seconds) makes that one
+- **The AWS cache directory** and **the gcloud config directory** are watched with File System
+  Events, since the AWS CLI rewrites a session's file in place and gcloud its `credentials.db`.
+  Each watch follows the directory's path, so it also sees one created or removed after launch.
+  The gcloud watch reports file events and reacts only to `credentials.db` and its SQLite journal
+  (`-journal`, `-wal`), or to a batch File System Events couldn't itemize, since every gcloud
+  command writes its logs and `access_tokens.db` beside it. The files are matched under the
+  directory's name or, if it is a symlink, its target's.
+- **Opening the panel or Settings** first brings the times, the AWS sessions and the gcloud
+  accounts up to the clock, since the last recomputation may be hours old. That leaves notifying to
+  the recomputation, which a notification found due makes happen at once.
+- A recomputation that arrives while one runs (a live check can take seconds) makes that one
   run once more when it ends.
 
-#### The Databricks live check
+#### The live checks
 
-The check asks the Databricks CLI whether a tracked profile is still valid, one profile at a time,
-for tracked profiles only, at most every 5 minutes per profile, and never while a `databricks`
-login is running. It runs when a Databricks login enters its notification time, and when the user
-clicks Check Databricks Now in Settings → Logins.
+A check asks a CLI whether a tracked Databricks profile or gcloud account is still valid, one
+login at a time, for tracked logins only, at most every 5 minutes per login, and never while a
+login of the same CLI is running. It runs when such a login enters its notification time, and
+when the user clicks Check Now in Settings → Logins.
 
-- A profile reported invalid moves its timer to expired, even if time remains.
-- A profile reported valid whose timer says expired is still valid (see Timers). Its tile says
+- **Databricks** runs `databricks current-user me --profile <name>`. Only the CLI's
+  no-credentials error counts as invalid.
+- **gcloud** runs `gcloud auth print-access-token --account=<email> --format=none`:
+  `--format=none` prints nothing, and the run's stdout goes to `/dev/null` besides, so no token
+  reaches the app; only stderr is read, and only for the check's result. Invalid only when stderr
+  contains `Reauthentication failed` (reauthentication needed, which can't prompt here),
+  `There was a problem reauthenticating while refreshing` (reauth required),
+  `to complete reauthentication` (a browser login required), `invalid_grant` (the refresh token
+  expired or revoked) or `does not have any valid credentials` (no credentials for the account).
+  gcloud wraps every refresh failure, a server error, rate limit or context-aware-access denial
+  too, in "There was a problem refreshing…" and the advice to run `gcloud auth login`, so neither
+  counts alone: any other failure is couldn't check.
+- A login reported invalid moves its timer to expired, even if time remains.
+- A login reported valid whose timer says expired is still valid (see Timers). Its tile says
   "Still valid" and offers Edit Session Length…, since the session length may be too short.
 - A check that fails (offline, VPN down) changes nothing but its result: it is kept and shown as
-  the last check, and a still valid login stays still valid (owner, 2026-11-19). Only the CLI's
-  no-credentials error counts as invalid.
-- Account profiles are offered but never checked: they run on their timer alone and say "Not
-  checked", and their Settings row says the Databricks CLI can't check an account profile.
-- A check of one profile returns **valid**, **invalid**, **couldn't check** (the check failed)
+  the last check, and a still valid login stays still valid (owner, 2026-11-19).
+- Databricks account profiles are offered but never checked: they run on their timer alone and say
+  "Not checked", and their Settings row says the Databricks CLI can't check an account profile.
+- A check of one login returns **valid**, **invalid**, **couldn't check** (the check failed)
   or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
-  apart. The core keeps each profile's last check, its time and one of the first three results, and
+  apart. The core keeps each login's last check, its time and one of the first three results, and
   publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
-- A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
-  which keeps its last check, so a skip never reads as a fresh result.
-- Check Databricks Now is disabled while a check runs, while a Databricks login runs, and when no
-  workspace profile is tracked.
+- A press of Check Now within 5 minutes of a login's last check skips that login, which keeps its
+  last check, so a skip never reads as a fresh result.
+- Check Now is disabled while a check runs, while a Databricks or gcloud login runs, and when
+  neither a workspace profile nor a gcloud account is tracked.
 
 ### Menu bar and panel
 
@@ -359,8 +404,9 @@ list scrolls sooner; any room left after the logins goes to the presets (owner, 
 **Empty states**: with no login tracked, the panel shows SwiftUI's `ContentUnavailableView` in
 place of the tiles: the menu bar's `clock` symbol, "No Logins Yet", what discovery found ("Found 3
 AWS SSO sessions and 1 Databricks profile in your config files.") and Add Logins…. When nothing is
-found, the text reads "No AWS SSO sessions or Databricks profiles in your config files. Log in once
-with the aws or databricks CLI, or add your own command." Add Logins… opens Settings on Logins
+found, the text reads "No AWS SSO sessions, Databricks profiles or gcloud accounts in your config
+files. Log in once with the aws, databricks or gcloud CLI, or add your own command." Add Logins…
+opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
 under +, since SwiftUI can't open a `Menu` programmatically.
 Discovery reads the config files again on each opening; while it runs, the empty state shows
@@ -375,7 +421,8 @@ without its text, so no earlier text shows.
     ("5h 13m") or its state word trailing. It still logs in when clicked, and while the pointer is
     on it, its time or state word, or the empty trailing side, gives way to a Log In, never bold.
   - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an
-    AWS session seen logged out, as its subtitle, and a visible Log In trailing, unless it has a
+    AWS session or gcloud account seen logged out, as its subtitle, and a visible Log In trailing,
+    unless it has a
     pending item (see below).
   - Log In is plain `.primary` text, not a chip, since the whole tile is the button; on the tile
     Return logs in, it is bold (owner, 2026-11-20).
@@ -406,7 +453,8 @@ without its text, so no earlier text shows.
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
     (owner, 2026-11-19). After a sleep, each login asks on its own tile.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
-    session length may be too short." with Edit Session Length…. Its subtitle carries the check:
+    session length may be too short." ("but gcloud says" for a gcloud account) with Edit Session
+    Length…. Its subtitle carries the check:
     "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
@@ -440,11 +488,12 @@ without its text, so no earlier text shows.
   update window), Settings… ⌘,, Check for Updates…, Report an Issue… and Quit PrinceClockIn ⌘Q.
   Every item is also reachable from the panel or Settings.
 - **The + menu** in Settings → Logins: a "Found in your config files" section with each untracked
-  AWS SSO session, Databricks profile and Databricks account profile, its kind beside it, then
-  Custom Login…. With nothing new: "No new AWS SSO sessions or Databricks profiles", then Custom
-  Login…; while the pane is still reading the config files, Custom Login… alone. The pane reads
-  them when it appears and again whenever an AWS SSO session or Databricks profile is tracked or
-  removed, a new read cancelling the last. Choosing a found login tracks it at once and selects it.
+  AWS SSO session, Databricks profile, Databricks account profile and gcloud account (by its
+  email), its kind beside it, then Custom Login…. With nothing new: "No new AWS SSO sessions,
+  Databricks profiles or gcloud accounts", then Custom Login…; while the pane is still reading the
+  config files, Custom Login… alone. The pane reads them when it appears and again whenever an AWS
+  SSO session, Databricks profile or gcloud account is tracked or removed, a new read cancelling
+  the last. Choosing a found login tracks it at once and selects it.
 - Menus and the Settings sidebar use the system selection colour, which follows the user's accent
   colour.
 
@@ -457,9 +506,10 @@ resizable, with zoom available, as in the maintainer's other menu bar apps (owne
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
 - **Logins:** the tracked logins, each with a `.secondary` kind symbol (`cloud` AWS,
-  `square.stack.3d.up` Databricks, `terminal` custom) and a subtitle with its kind, session length
-  ("No timer" when unknown) and last check ("Databricks profile · 3-day session · Checked 14:02 ·
-  valid"; an account profile's ends "Not checked"). Check Databricks Now in the pane's header.
+  `square.stack.3d.up` Databricks, `person.badge.key` gcloud, `terminal` custom) and a subtitle
+  with its kind, session length ("No timer" when unknown) and last check ("Databricks profile ·
+  3-day session · Checked 14:02 · valid"; an account profile's ends "Not checked"). Check Now in
+  the pane's header.
   Dragging a login reorders the list, and the panel's tiles with it. + is the + menu; − removes the
   selected login at once, or, for a login in a preset, first asks "Remove vpn? It also leaves the
   presets Morning and Night shift." with Remove (destructive) and Cancel (owner, 2026-11-19); it is
@@ -470,6 +520,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   - AWS SSO session: its source ("qa in ~/.aws/config");
   - Databricks profile: its source ("analytics-dev in ~/.databrickscfg") and its last check
     ("Not checked yet" before the first); an account profile says "Not checked" and why;
+  - gcloud account: its source, the whole `account_id` ("dev@example.com in ~/.config/gcloud"),
+    and its last check ("Not checked yet" before the first);
   - custom login: Command, optional, with "The command runs in Terminal and is saved as plain
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
@@ -575,9 +627,9 @@ are.
 | Logged in elsewhere? | Signed in elsewhere? · renewed outside the app |
 | Mark as Logged In at 14:02 | Yes |
 | Expired · Expiring · Logged out · No timer · Logged in · Queued · Logging in · Failed · Still valid · Not yet approved | Unknown · Timer ended · No known expiry |
-| AWS SSO session · Databricks profile · Databricks account profile · Custom login | AWS SSO · Custom · Custom command |
+| AWS SSO session · Databricks profile · Databricks account profile · gcloud account · Custom login | AWS SSO · Custom · Custom command |
 | Set Timer… · Show Output… · Report an Issue… (an ellipsis on every item that opens a window, a form or a browser page) | Set Time… · Report an issue |
-| Login timeout · Cancel All (stops a batch) · Check Databricks Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now |
+| Login timeout · Cancel All (stops a batch) · Check Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now · Check Databricks Now |
 | Notification actions: Log In · Done | Log in |
 
 The copy is in English, the app's only localization. Durations and times use the app's language
@@ -602,7 +654,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - **Settings in a sidebar window rather than toolbar panes** (owner, 2026-11-18), the house style
   of the maintainer's other menu bar apps: five panes with lists and detail forms read better
   with a sidebar.
-- **Check Databricks Now in Settings** (owner, 2026-11-18), although the HIG keeps Settings for
+- **Check Now in Settings** (owner, 2026-11-18), although the HIG keeps Settings for
   options: the panel keeps only what the moment needs, and a check is rarely needed by hand.
 - **Shortcuts shown in the right-click menu** (owner, 2026-11-18), which the HIG keeps out of
   context menus: an app with no visible main menu has nowhere else to show them. The exception
@@ -637,17 +689,17 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   running login cancels it, and the queue goes on.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser.
-- AWS and Databricks logins run as an executable plus an argument list, never through a shell
-  string, so a session or profile name can't inject a command. The name is joined to its flag
-  (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or
-  verbose flags.
+- AWS, Databricks and gcloud logins run as an executable plus an argument list, never through a
+  shell string, so a session, profile or account name can't inject a command. An AWS, Databricks
+  or gcloud name is joined to its flag (`--profile=<name>`, `--account=<email>`), so a name
+  starting with `-` can't be read as a flag of its own. No debug or verbose flags.
 - AWS and Databricks logins need no Terminal: both CLIs, run with no controlling terminal and
   standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
-  (checked by the owner, 2026-11-17).
+  (checked by the owner, 2026-11-17). A gcloud login runs the same way (see Left to the builder).
 - A Databricks login run with no session length records its login time; its tile keeps its unknown
   timer, with nothing trailing, and asks for the session length inline, as Set Timer does
   ("Choose a session length" over Set Timer's Session Length pop-up), and the timer counts from
-  that login.
+  that login. A gcloud login with none shows logged in with no expiry, as AWS and custom logins do.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.
@@ -655,6 +707,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   and the system directories), as does a failed read, until the next try.
 - Only `refreshToken` and `expiresAt` are decoded from an AWS cache file. The token's value goes
   only into the hash and is discarded. No error or log ever includes a cache file's contents.
+- Only `account_id` and `rowid` are read from gcloud's `credentials.db`, never `value`. The gcloud
+  check's stdout is never captured (see The live checks).
 - A login's output from its last run is kept in memory only, never written to disk, and can be
   viewed from its tile (Show Output…) to diagnose a failure.
 - A custom command is stored as plaintext in the settings file, so it must not contain secrets; the
@@ -688,9 +742,12 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last notification was for (so a relaunch doesn't notify twice), for
-  Databricks, whether the profile is account-level (as last read from its config), the time and
-  result of its last check and of its last answer (valid or invalid), and, for AWS, the cache
-  file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
+  Databricks, whether the profile is account-level (as last read from its config), for Databricks
+  and gcloud, the time and result of its last check and of its last answer (valid or invalid),
+  for AWS, the cache file's last-seen modified and `expiresAt` times, and, for gcloud, the
+  account's last-seen row, missing or its `rowid`, which is no secret. Fingerprints are never
+  stored. The file format version stays 2: the gcloud kind and row are additions an older file
+  decodes without.
 - The file is `state.json`, with a format version. One that won't decode, or has another format
   version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
   app starts empty and says so in the panel (State set aside). A save that fails keeps the state
@@ -781,6 +838,16 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
+- Read from gcloud 594.0.0's source, not yet run against a live gcloud:
+  - **Store:** `credentials.db`'s schema, `REPLACE INTO` at each login (a new, larger `rowid`, as
+    checked with `sqlite3`), a refresh touching only `access_tokens.db`, and revoke deleting the row.
+  - **`--account`:** `auth login` and `auth print-access-token` both take
+    `args.account_name or args.account`, so the global `--account=<email>` names the account.
+  - **Login:** `gcloud auth login --force --account=<email>` with no tty and stdin from
+    `/dev/null` opening the browser and exiting 0 when the sign-in completes; it also makes that
+    account gcloud's active one.
+  - **Check:** `--format=none` printing nothing, and the stderr strings The live checks reads as
+    invalid; an offline failure is expected to match none of them.
 - Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
   these behaviours are unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
@@ -805,8 +872,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
     tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
     `clock.badge.checkmark`,
-    `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud` and
-    `square.stack.3d.up`, the preset tiles' `rectangle.stack`, and the footer's `gear` and `power`.
+    `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud`,
+    `square.stack.3d.up` and `person.badge.key`, the preset tiles' `rectangle.stack`, and the
+    footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in

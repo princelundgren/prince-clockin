@@ -546,7 +546,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         let analytics = databricks("analytics-dev")
         let logins = model([dev, prod, analytics])
 
-        #expect(logins.databricksLogins(among: [analytics.id, dev.id, UUID()]).map(\.id) == [analytics.id])
+        #expect(logins.checkedLogins(among: [analytics.id, dev.id, UUID()]).map(\.id) == [analytics.id])
         #expect(logins.checkNowTargets().map(\.id) == [prod.id, analytics.id])
     }
 }

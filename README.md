@@ -14,7 +14,8 @@ one expires, and logs in to the ones you pick, one after another, when you click
 ## What it does
 
 - **Tracks your logins**: AWS IAM Identity Center sessions (`aws sso login`), Databricks CLI
-  profiles (`databricks auth login`), and any other login as a custom login.
+  profiles (`databricks auth login`), gcloud user accounts (`gcloud auth login`), and any other
+  login as a custom login.
 - **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
   symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
   in the order you set in Settings, with its time left.
@@ -26,8 +27,9 @@ one expires, and logs in to the ones you pick, one after another, when you click
   a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs in on its own.
 - **Notices logins you do in a terminal**: an `aws sso login` is read from the AWS CLI's cache
   file, and when the file can't tell a login from a renewal, the tile asks "Logged in
-  elsewhere?". A Databricks profile is checked with the Databricks CLI when it enters its
-  notification time, or when you click Check Databricks Now in Settings → Logins.
+  elsewhere?". A `gcloud auth login` is read from gcloud's credential store. A Databricks profile
+  or gcloud account is checked with its CLI when it enters its notification time, or when you click
+  Check Now in Settings → Logins.
 - **Takes a timer by hand**: when a tile asks "Logged in elsewhere?", Set Timer… takes when the
   login expires or when you logged in.
 - **Runs a custom login's command in Terminal**, so you can type passwords or MFA codes there, or
@@ -47,7 +49,8 @@ one expires, and logs in to the ones you pick, one after another, when you click
    to send notifications. The first custom login that runs a command also asks for permission to
    control Terminal.
 4. Click the menu bar icon, then **Add Logins…**. Settings opens on Logins with its + menu: the AWS
-   SSO sessions and Databricks profiles found in your config files, and Custom Login…. After you
+   SSO sessions, Databricks profiles and gcloud accounts found in your config files, and Custom
+   Login…. After you
    add a found one, it offers to set its timer if you're already logged in. To keep the timers
    running after you log out or restart, turn on **Launch at login** in Settings → General; it is
    off by default.
@@ -62,7 +65,8 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
 - macOS 26 or later.
 - The CLIs for what you track, on your login shell's `PATH`:
   - `aws` (AWS CLI v2), with sessions in the `[sso-session <name>]` form of `~/.aws/config`;
-  - `databricks`, with profiles that use `auth_type = databricks-cli`.
+  - `databricks`, with profiles that use `auth_type = databricks-cli`;
+  - `gcloud`, with user accounts logged in through `gcloud auth login`.
 - zsh or bash as your login shell, which PrinceClockIn reads the `PATH` from.
 
 ## Known limits
@@ -70,15 +74,21 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
 - **The session length decides the timer.** AWS sessions default to 8 hours, the IAM Identity
   Center default. A Databricks login has no default, since its limit is a token policy on your
   account: until you set its session length, its timer is unknown, so it never notifies and is
-  checked only when you click Check Databricks Now.
+  checked only when you click Check Now. A gcloud account has no default either; until you set
+  one, it shows Logged in after a login, never notifies and is checked only when you click Check
+  Now.
+- **gcloud service accounts and application-default credentials** aren't offered; track them as
+  custom logins.
+- **A gcloud account outside the default universe** (`email#universe` in gcloud's store) is logged
+  in and checked in the universe gcloud is set to (`core/universe_domain`), not its own.
 - **A Databricks profile with another auth type** (personal access token, `azure-cli`,
   machine-to-machine) isn't offered; track it as a custom login. A profile with no `auth_type`
   shows up after `databricks auth login --profile <name>`, which switches it to OAuth and removes
   any token or secret it holds.
 - **Databricks account profiles** can be tracked but are never checked: they run on their timer
   alone.
-- **`AWS_CONFIG_FILE` or `DATABRICKS_CONFIG_FILE` set only in a shell rc file** isn't seen: the
-  app reads only `PATH` from your shell.
+- **`AWS_CONFIG_FILE`, `DATABRICKS_CONFIG_FILE` or `CLOUDSDK_CONFIG` set only in a shell rc file**
+  isn't seen: the app reads only `PATH` from your shell.
 - **With fish or another login shell**, the app uses a standard `PATH` (Homebrew, `/usr/local` and
   the system directories) and may not find the CLIs.
 - **⌘-dragging the icon out of the menu bar quits the app**, which stops its timers and notifications.
@@ -91,7 +101,8 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
   profiling off. The CLIs it runs make their own traffic.
 - It never stores, logs, shows or sends a token, a client secret or a value from your shell
   environment. To tell a new AWS login from a renewal, it reads the cache file's refresh token
-  only to fingerprint it, and keeps that fingerprint in memory only.
+  only to fingerprint it, and keeps that fingerprint in memory only. From gcloud's credential
+  store it reads only the account names and their row numbers, never the credentials.
 - Your logins, presets, timers and settings are stored as readable JSON in
   `~/Library/Application Support/PrinceClockIn/`. A custom login's command is stored there as
   plain text, so it must not contain a secret. Which commands you've approved to run is kept as
