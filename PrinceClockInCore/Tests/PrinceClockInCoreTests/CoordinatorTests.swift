@@ -427,11 +427,12 @@ private final class GatedLogins: Sendable {
         #expect(title == "analytics-dev expired")
     }
 
-    @Test func overlappingTickIsSkipped() async throws {
+    @Test func overlappingTickRunsOnceMoreAfterTheRunningOne() async throws {
         let gate = Gate()
         let expiring = databricks("analytics-dev", remaining: 600)
+        let dueDuringTheCheck = login(remaining: 30 * 60 + 30, now: launch, name: "prod")
         let fixture = try Fixture(
-            logins: [expiring],
+            logins: [expiring, dueDuringTheCheck],
             checkRunner: ArgumentRunner { _ in
                 await gate.wait()
                 return .exited(code: 0, output: "")
@@ -447,10 +448,51 @@ private final class GatedLogins: Sendable {
 
         await gate.open()
         await first.value
-        await coordinator.tick()
         #expect(coordinator.now == launch.addingTimeInterval(30))
         #expect(fixture.checkRunner.calls.count == 1)
-        #expect(fixture.notifier.expiryNotifications.count == 1)
+        #expect(fixture.notifier.expiryNotifications.map { $0.map(\.id) } == [[expiring.id], [dueDuringTheCheck.id]])
+    }
+
+    @Test func refreshDetectsTerminalLogin() async throws {
+        let dev = aws("dev", loginTime: launch)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        let loggedIn = launch.addingTimeInterval(9 * hour)
+        fixture.aws.set("dev", snapshot(modified: loggedIn, expiresAt: loggedIn.addingTimeInterval(hour)))
+        fixture.clock.advance(by: 9 * hour + 60)
+        coordinator.refresh()
+
+        #expect(coordinator.now == launch.addingTimeInterval(9 * hour + 60))
+        #expect(coordinator.login(dev.id)?.loginTime == loggedIn)
+    }
+
+    @Test func refreshLeavesADueNotificationToTheTick() async throws {
+        let dev = aws("dev", loginTime: launch)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        fixture.clock.advance(by: 7 * hour + 45 * 60)
+        coordinator.refresh()
+
+        #expect(coordinator.login(dev.id)?.notifiedForExpiry == nil)
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
+    }
+
+    @Test func nextTickDeadlineFollowsTheLoginsAndLeadTime() async throws {
+        let dev = login(remaining: 3 * hour, now: launch, name: "dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        var settings = coordinator.model.state.settings
+        settings.notificationLeadTime = 10 * 60
+        coordinator.updateSettings(settings)
+
+        let deadline = coordinator.nextTickDeadline(shown: .none, calendar: Calendar(identifier: .gregorian))
+
+        #expect(deadline == launch.addingTimeInterval(3 * hour - 10 * 60))
     }
 
     @Test func noDatabricksCheckWhileDatabricksLoginRuns() async throws {
