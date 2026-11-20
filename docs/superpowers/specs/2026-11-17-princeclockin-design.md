@@ -610,10 +610,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its notification time. Logins that do so close together, or
-  while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
-  notification time passed while the app wasn't running is announced once at the next launch, as
-  expired if it has.
+- One notification when a login enters its notification time. Logins that enter it at the same
+  moment, or while the Mac slept or the app wasn't running, are grouped into one notification. A
+  login whose notification time passed while the app wasn't running is announced once at the next
+  launch, as expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
