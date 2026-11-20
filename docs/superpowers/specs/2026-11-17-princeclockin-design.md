@@ -245,7 +245,9 @@ clicks Check Databricks Now in Settings → Logins.
 - A check of one profile returns **valid**, **invalid**, **couldn't check** (the check failed)
   or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
   apart. The core keeps each profile's last check, its time and one of the first three results, and
-  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
+  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid", with the
+  day as well for a check on an earlier day ("Checked yesterday at 12:30 · valid"); the Still
+  valid tile shows its last valid answer the same way.
 - A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
   which keeps its last check, so a skip never reads as a fresh result.
 - The 5 minutes hold across launches: they count from the stored time of the profile's last valid
@@ -410,8 +412,8 @@ without its text, so no earlier text shows.
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
     (owner, 2026-11-19). After a sleep, each login asks on its own tile.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
-    session length may be too short." with Edit Session Length…. Its subtitle carries the check:
-    "Checked 22:30 · valid".
+    session length may be too short." with Edit Session Length…. Its subtitle carries the check,
+    as Settings shows it: "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
   - **Session length:** a Databricks login that logged in with no session length asks for it (see

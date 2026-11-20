@@ -20,7 +20,7 @@ public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calend
         if accountLevel {
             parts.append("Not checked")
         } else if let check = login.lastDatabricksCheck {
-            parts.append(checkText(check, now: now, locale: locale, calendar: calendar))
+            parts.append(databricksCheckText(check, now: now, locale: locale, calendar: calendar))
         }
     }
     return parts.joined(separator: " · ")
@@ -85,7 +85,7 @@ public func loginSettingsForm(
                 note: "The Databricks CLI can't check an account profile, so this login runs on its timer alone.")
         } else {
             LastCheck(
-                text: login.lastDatabricksCheck.map { checkText($0, now: now, locale: locale, calendar: calendar) }
+                text: login.lastDatabricksCheck.map { databricksCheckText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",
                 note: nil)
         }
@@ -97,19 +97,6 @@ public func loginSettingsForm(
     case .custom:
         return LoginSettingsForm(nameNote: "\(shown).", source: nil, lastCheck: nil, commandNote: customCommandNote)
     }
-}
-
-/// "Checked 14:02 · valid", with the day as well when the check wasn't today.
-private func checkText(_ check: DatabricksCheckRecord, now: Date, locale: Locale, calendar: Calendar) -> String {
-    let when = calendar.isDate(check.at, inSameDayAs: now)
-        ? clockTimeText(check.at, locale: locale, calendar: calendar)
-        : dayAndTimeText(check.at, locale: locale, calendar: calendar)
-    let result = switch check.result {
-    case .valid: "valid"
-    case .invalid: "invalid"
-    case .couldntCheck: "couldn't check"
-    }
-    return "Checked \(when) · \(result)"
 }
 
 /// `url`'s path, with `~` for `home` when the file is under it.
