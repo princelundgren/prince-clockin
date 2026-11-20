@@ -553,7 +553,8 @@ A token has only the meanings its row lists.
   `panelKeyResponse(to:in:)` decides Return and the arrows, and
   `escapeResponse(openSetTimer:tiles:)` Escape.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
-  shows none.
+  shows none. It also carries File → Close (⌘W) and an Edit menu (Undo, Redo, Cut, Copy, Paste,
+  Select All), for the Settings window and its text fields.
 - **VoiceOver:** every login tile follows one template, a label of "name, kind, state, time" ("prod,
   AWS SSO session, expiring, 19 minutes left") and "Logs in" as its hint, with no hint while a click
   does nothing. A pending item's word (logging in, queued, failed, not yet approved, logged in
@@ -678,7 +679,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 - Swift 6. An `NSStatusItem` with a transient `NSPopover` (about 320 pt) and a right-click
   `NSMenu`, their content in SwiftUI. The status item's behaviour is `terminationOnRemoval`.
-- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q.
+- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q, File →
+  Close (⌘W) and an Edit menu.
 - Colours come from the app's asset catalog, with light, dark and Increase Contrast variants.
 - Minimum macOS 26 (owner, 2026-11-17).
 - Not sandboxed (see Approaches). Hardened runtime, Developer ID signing, notarized.
