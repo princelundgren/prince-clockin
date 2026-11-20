@@ -88,7 +88,10 @@ and a timer. The kinds are:
   the timer stays unknown until the user enters the length once. Profiles using other auth types
   (personal access tokens, `azure-cli`, machine-to-machine) aren't offered; the user can add one
   as a custom login. A profile for the account rather than a workspace is a **Databricks account
-  profile**.
+  profile**: one with a `host` and an `account_id` but no `workspace_id` (or `workspace_id = none`),
+  as the Databricks CLI tells them apart, since a workspace profile can hold an `account_id` too.
+  The app reads this from the config file again at launch and before each check (owner,
+  2026-11-20); a profile no longer in the file keeps what was last read.
 - **Custom login**: for any other login (Azure, Okta and so on), with a session length the user
   sets. It can carry a command, which opens in a Terminal window so the user can type passwords,
   MFA codes or choices; the timer starts when the user clicks Done (owner, 2026-11-17). Without a
@@ -610,9 +613,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
-  whether the profile is account-level, the time and result of its last check and of its last
-  answer (valid or invalid), and, for AWS,
-  the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
+  whether the profile is account-level (as last read from its config), the time and result of
+  its last check and of its last answer (valid or invalid), and, for AWS, the cache file's
+  last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - A file that is unreadable, or from another version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.

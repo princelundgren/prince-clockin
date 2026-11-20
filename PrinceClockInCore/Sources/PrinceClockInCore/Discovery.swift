@@ -16,7 +16,9 @@ public func discoverAWSSessions(configText: String?) -> [String] {
 /// A Databricks CLI profile the user can log in to.
 public struct DatabricksProfile: Equatable, Sendable {
     public let name: String
-    /// True when the profile has an `account_id`. The profile is still offered.
+    /// True for a profile for the account rather than a workspace: one with a `host` and an
+    /// `account_id` but no `workspace_id`, or the `workspace_id` `none`, as the Databricks CLI tells
+    /// them apart. A workspace profile can hold an `account_id` too. The profile is still offered.
     public let accountLevel: Bool
 
     public init(name: String, accountLevel: Bool) {
@@ -34,8 +36,14 @@ public func discoverDatabricksProfiles(configText: String?) -> [DatabricksProfil
         guard section.values["auth_type"] == "databricks-cli", seen.insert(section.name).inserted else {
             return nil
         }
-        return DatabricksProfile(name: section.name, accountLevel: section.values["account_id"] != nil)
+        return DatabricksProfile(name: section.name, accountLevel: isAccountProfile(section.values))
     }
+}
+
+private func isAccountProfile(_ values: [String: String]) -> Bool {
+    let workspaceID = values["workspace_id"] ?? ""
+    return !(values["host"] ?? "").isEmpty && !(values["account_id"] ?? "").isEmpty
+        && (workspaceID.isEmpty || workspaceID == "none")
 }
 
 /// Where the AWS CLI and the Databricks CLI keep their config files.
