@@ -65,9 +65,8 @@ struct PresetsSettings: View {
     }
 }
 
-/// The selected preset's Name, and "Logs in to, in order": its logins with + (the tracked logins
-/// not in it), −, Move Up and Move Down below them. Dragging a login also reorders them; Move Up
-/// and Move Down are the keyboard's and VoiceOver's way.
+/// The selected preset's Name, and "Logs in to, in order": its logins, which a drag reorders, with
+/// + (the tracked logins not in it) and − below them.
 private struct PresetForm: View {
     let preset: Preset
     let coordinator: Coordinator
@@ -134,18 +133,6 @@ private struct PresetForm: View {
             .disabled(selection == nil)
             .help("Remove the selected login from this preset.")
             Spacer()
-            Button("Move Up") {
-                guard let selection else { return }
-                edit { $0.moveUp(selection) }
-            }
-            .controlSize(.small)
-            .disabled(!members.canMoveUp(selection))
-            Button("Move Down") {
-                guard let selection else { return }
-                edit { $0.moveDown(selection) }
-            }
-            .controlSize(.small)
-            .disabled(!members.canMoveDown(selection))
         }
     }
 

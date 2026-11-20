@@ -49,56 +49,6 @@ private let staging = named("staging")
         #expect(order.ids == [dev.id, staging.id])
     }
 
-    // MARK: Move Up and Move Down
-
-    @Test func moveUpSwapsALoginWithTheOneBeforeIt() {
-        var order = ListOrder([dev.id, prod.id, staging.id])
-
-        order.moveUp(staging.id)
-
-        #expect(order.ids == [dev.id, staging.id, prod.id])
-    }
-
-    @Test func moveDownSwapsALoginWithTheOneAfterIt() {
-        var order = ListOrder([dev.id, prod.id, staging.id])
-
-        order.moveDown(dev.id)
-
-        #expect(order.ids == [prod.id, dev.id, staging.id])
-    }
-
-    @Test func moveUpIsUnavailableForTheFirstLoginAndWithNothingSelected() {
-        let order = ListOrder([dev.id, prod.id])
-
-        #expect(!order.canMoveUp(dev.id))
-        #expect(order.canMoveUp(prod.id))
-        #expect(!order.canMoveUp(nil))
-    }
-
-    @Test func moveDownIsUnavailableForTheLastLoginAndWithNothingSelected() {
-        let order = ListOrder([dev.id, prod.id])
-
-        #expect(order.canMoveDown(dev.id))
-        #expect(!order.canMoveDown(prod.id))
-        #expect(!order.canMoveDown(nil))
-    }
-
-    @Test func aLoginNotInTheListCanMoveNeitherWay() {
-        let order = ListOrder([dev.id, prod.id])
-
-        #expect(!order.canMoveUp(staging.id))
-        #expect(!order.canMoveDown(staging.id))
-    }
-
-    @Test func movingPastEitherEndChangesNothing() {
-        var order = ListOrder([dev.id, prod.id])
-
-        order.moveUp(dev.id)
-        order.moveDown(prod.id)
-
-        #expect(order.ids == [dev.id, prod.id])
-    }
-
     // MARK: Drag
 
     @Test func draggingALoginDownPutsItBeforeTheRowItIsDroppedOn() {

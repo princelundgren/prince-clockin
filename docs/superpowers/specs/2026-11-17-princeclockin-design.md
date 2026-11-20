@@ -449,11 +449,13 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     Timer…, so a login the user has already done gets a known timer instead of the "Logged in
     elsewhere?" question later. It is asked once: selecting another login or removing this one
     ends it.
-- **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with
-  +/−; the selected preset's Name and "Logs in to, in order", a list with + (a menu of the tracked
-  logins not in it), −, Move Up and Move Down. Drag also reorders; Move Up and Move Down are the
-  keyboard and VoiceOver way. + adds an empty preset, "New preset" ("New preset 2" and on while
-  that name is taken), and selects it; − removes the selected preset at once.
+- **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
+  the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
+  the tracked logins not in it) and −. Drag is the only way to reorder, with no Move Up or Move Down
+  (owner, 2026-11-20): the owner found drag enough, accepting that reordering, which also sets the
+  order a preset logs in, takes a pointer unless VoiceOver offers a move. + adds an empty preset,
+  "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
+  selected preset at once.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
   hours (30 minutes by default), and Notifications: their state, Open System Settings…, and, while
   they're off, "With notifications off, only the menu bar shows that a login is about to expire."
@@ -781,4 +783,6 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - Text meets 4.5:1 on the real popover material and tile tints, hovered or not, in light,
     dark and Increase Contrast.
   - Dragging reorders Settings → Logins and Settings → Presets, each a `List` inside a grouped
-    `Form`, and the panel's tiles follow at its next opening.
+    `Form`, and the panel's tiles follow at its next opening; a preset's "Logs in to, in order"
+    reorders by drag too.
+  - Whether VoiceOver can reorder these lists without Move Up and Move Down.
