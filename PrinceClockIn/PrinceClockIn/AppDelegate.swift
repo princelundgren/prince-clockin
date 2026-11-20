@@ -38,6 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setUpPopover()
     }
 
+    /// Opening the app again while it runs, from Finder or Applications, puts its item back in the
+    /// menu bar if it isn't there and opens the panel under it, in place of AppKit's default handling.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        statusItem?.makeVisible()
+        showPanel()
+        return false
+    }
+
     /// The menu bar an `LSUIElement` app never shows, there so its key equivalents work while the
     /// app is active: Settings… and Quit, and the Close and Edit commands Settings' fields need.
     private func makeMainMenu() -> NSMenu {

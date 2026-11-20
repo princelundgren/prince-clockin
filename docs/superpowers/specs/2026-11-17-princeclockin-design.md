@@ -292,7 +292,8 @@ never in colour; the panel has the times.
 - A left click opens the panel and a right click opens the right-click menu.
 - Removing the icon from the menu bar quits the app, which stops timers and notifications.
   Opening the app again from Applications brings it back: at launch
-  the app makes its status item visible.
+  the app makes its status item visible. Opened again while it runs, it makes the status item
+  visible and opens the panel.
 
 #### Panel
 
@@ -830,3 +831,4 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     reorders by drag too.
   - Whether VoiceOver can reorder these lists without Move Up and Move Down.
   - Clicking a notification opens the panel under the icon while the app runs.
+  - Opening the app from Finder while it runs opens the panel, and no other window.
