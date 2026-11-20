@@ -14,11 +14,13 @@ struct TileView: View {
     let focus: FocusState<PanelFocus?>.Binding
     @State private var showsSessionLengthField = false
     @State private var output: String?
+    @State private var isHovered = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             firstLineButton(tile)
+                .onHover { isHovered = $0 }
             if let detail = tile.detail {
                 detailView(detail, tile: tile)
             }
@@ -33,7 +35,8 @@ struct TileView: View {
             }
         }
         .padding(8)
-        .background(tint(tile), in: RoundedRectangle(cornerRadius: 8))
+        .background(
+            tint(tile, isHovered: isHovered && tile.clickLogsIn), in: RoundedRectangle(cornerRadius: 8))
         .onChange(of: tile.detail) { output = nil }
     }
 
@@ -99,7 +102,7 @@ struct TileView: View {
     }
 
     @ViewBuilder private func trailing(_ tile: TilePresentation) -> some View {
-        switch tile.trailing {
+        switch isHovered ? tile.trailingOnHover : tile.trailing {
         case .timeLeft(let text):
             Text(text)
                 .monospacedDigit()
@@ -220,10 +223,12 @@ struct TileView: View {
     // MARK: Colour
 
     /// The tile's fill: a tint of the state's colour token, or a system fill for a state no token
-    /// means.
-    private func tint(_ tile: TilePresentation) -> AnyShapeStyle {
-        guard let colour = tile.colour else { return AnyShapeStyle(.quinary) }
-        return AnyShapeStyle(Color(colour.rawValue).opacity(0.1))
+    /// means, a step stronger while the pointer is on a tile a click logs in.
+    private func tint(_ tile: TilePresentation, isHovered: Bool) -> AnyShapeStyle {
+        guard let colour = tile.colour else {
+            return isHovered ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.quinary)
+        }
+        return AnyShapeStyle(Color(colour.rawValue).opacity(isHovered ? 0.16 : 0.1))
     }
 
     /// `.secondary` falls to about 3.7:1 on a light-appearance tint, so text there is `.primary`.
@@ -240,8 +245,8 @@ private struct TileButtonStyle: ButtonStyle {
     }
 }
 
-/// The visible Log In on a due tile, which the whole tile's button performs, so it is plain text
-/// rather than a button's shape. Prominent, on
+/// The visible Log In on a due tile, or under the pointer on any tile a click logs in, which the
+/// whole tile's button performs, so it is plain text rather than a button's shape. Prominent, on
 /// the login Return logs in, it is bold.
 private struct LogInLabel: View {
     let isProminent: Bool

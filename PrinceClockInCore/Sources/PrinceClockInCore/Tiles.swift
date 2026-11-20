@@ -96,6 +96,8 @@ public struct TilePresentation: Equatable, Identifiable, Sendable {
     public let colour: ColourToken?
     public let subtitle: TileSubtitle
     public let trailing: TileTrailing
+    /// What the trailing side shows while the pointer is on the tile: Log In when a click logs in.
+    public let trailingOnHover: TileTrailing
     /// Whether clicking the tile logs in: whenever nothing is pending. A click does nothing while
     /// the tile is running, queued, failed, waiting for approval or asking.
     public let clickLogsIn: Bool
@@ -118,6 +120,7 @@ public func tilePresentation(
     let pending = TilePending(facts, login: login)
     let due = isDue(login, now: now, leadTime: leadTime)
     let clickLogsIn = pending == nil
+    let trailing: TileTrailing = clickLogsIn && due ? .logIn : pending?.trailing ?? timer.trailing(locale: locale)
     let kind = loginKindName(login.kind)
     let spokenParts = [
         login.displayName, kind, pending?.spokenWord ?? timer.spokenState, timer.spokenTime(locale: locale),
@@ -128,7 +131,8 @@ public func tilePresentation(
         symbol: pending?.symbol ?? .systemImage(timer.symbolName),
         colour: pending.map(\.colour) ?? timer.colour,
         subtitle: timer.subtitle(kind: kind, locale: locale, calendar: calendar),
-        trailing: clickLogsIn && due ? .logIn : pending?.trailing ?? timer.trailing(locale: locale),
+        trailing: trailing,
+        trailingOnHover: clickLogsIn ? .logIn : trailing,
         clickLogsIn: clickLogsIn,
         detail: detail(pending: pending, timer: timer, login: login, now: now, locale: locale, calendar: calendar),
         isDue: due,

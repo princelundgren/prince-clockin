@@ -326,7 +326,8 @@ Discovery reads the config files again on each opening; while it runs, no earlie
   shown in full in its help tag and to VoiceOver), a subtitle, and on the trailing side the time
   left or a state word.
   - A tile that isn't due: the kind as its subtitle ("AWS SSO session") and the time left
-    ("5h 13m") or its state word trailing. It still logs in when clicked.
+    ("5h 13m") or its state word trailing. It still logs in when clicked, and while the pointer is
+    on it, its time or state word gives way to a Log In, never bold.
   - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an
     AWS session seen logged out, as its subtitle, and a visible Log In trailing, unless it has a
     pending item (see below).
@@ -382,6 +383,9 @@ Discovery reads the config files again on each opening; while it runs, no earlie
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.
+- **Hover:** while the pointer is on the first line of a tile a click logs in, its tint deepens to
+  16%, and an uncoloured tile's `.quinary` fill to `.quaternary`. Pressing dims its first line;
+  tiles keep the arrow pointer, as in the maintainer's other menu bar apps (owner, 2026-11-20).
 
 #### Menus
 
@@ -748,5 +752,5 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - Sparkle can postpone an update's relaunch until a batch ends, through its updater delegate.
   - At 320 pt, with a 24-hour region (Swedish) as well as a 12-hour one (US), no tile's state or
     time is cut off.
-  - Text meets 4.5:1 on the real popover material and tile tints, in light, dark and Increase
-    Contrast.
+  - Text meets 4.5:1 on the real popover material and tile tints, hovered or not, in light,
+    dark and Increase Contrast.

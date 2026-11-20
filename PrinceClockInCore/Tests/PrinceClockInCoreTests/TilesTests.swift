@@ -211,6 +211,7 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         for tile in pending {
             #expect(!tile.clickLogsIn)
             #expect(tile.accessibilityHint == "")
+            #expect(tile.trailingOnHover == tile.trailing)
         }
     }
 
@@ -220,6 +221,10 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(!dev.isDue)
         #expect(dev.trailing == .timeLeft("5h"))
         #expect(dev.accessibilityHint == "Logs in")
+    }
+
+    @Test func aTileThatIsntDueShowsLogInOnHover() {
+        #expect(tile(login(remaining: 5 * hour, now: now)).trailingOnHover == .logIn)
     }
 
     @Test func dueFollowsTheTimerNotWhatIsPending() {
