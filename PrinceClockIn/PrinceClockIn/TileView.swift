@@ -156,9 +156,12 @@ struct TileView: View {
     @ViewBuilder private func detailView(_ detail: TileDetail, tile: TilePresentation) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             switch detail {
-            case .failed(let message):
+            case .failed(let message, let offersAutomationSettings):
                 Text(message)
                     .fixedSize(horizontal: false, vertical: true)
+                if offersAutomationSettings {
+                    Button("Open System Settings…") { NSWorkspace.shared.open(AppLinks.automationSettings) }
+                }
                 HStack {
                     Button("Try Again") { perform(.logIn) }
                         .prominent(defaults.prominent == .tryAgain(id: tile.id))

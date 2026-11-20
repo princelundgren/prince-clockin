@@ -274,6 +274,16 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             == .failed(message: "aws not found on your login shell's PATH"))
     }
 
+    @Test func onlyADeniedTerminalPermissionOffersAutomationSettings() {
+        let vpn = Login(displayName: "vpn", kind: .custom(command: "vpn-login"), sessionLength: 8 * hour)
+
+        #expect(tile(vpn, facts: TileFacts(failure: .terminalNotPermitted)).detail == .failed(
+            message: "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation",
+            offersAutomationSettings: true))
+        #expect(tile(vpn, facts: TileFacts(failure: .terminalFailed("Terminal couldn't be started"))).detail
+            == .failed(message: "Terminal couldn't be started", offersAutomationSettings: false))
+    }
+
     @Test func aPossibleLoginAsksWithItsTime() {
         let dev = login(remaining: 10 * minute, now: now)
         let changed = at("2026-11-19T13:02:00Z")

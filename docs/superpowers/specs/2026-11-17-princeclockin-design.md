@@ -336,6 +336,7 @@ Discovery reads the config files again on each opening; while it runs, no earlie
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
     timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
+    A denied permission to control Terminal also offers Open System Settings… (see Running logins).
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02 and Set Timer…. A question the first check after the Mac wakes raises says "…at 07:48,
     while this Mac slept.", 07:48 being the file's change time, for as long as it asks (owner,
@@ -586,9 +587,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   executes. The command is passed as the parameter of a handler in a constant, compiled script, so
   it is never quoted into script source. The app launches Terminal first, then asks for the
   Automation permission off the main thread. A denied permission fails the login: its tile says
-  Failed, with a message that says where to allow it and Open System Settings…, and the queue goes
-  on. This was chosen over quoting the command into script source, and over `osascript`, whose
-  permission would be asked for on behalf of a different process.
+  Failed, with a message that says where to allow it and Open System Settings…, which opens System
+  Settings → Privacy & Security → Automation, and the queue goes on. This was chosen over quoting
+  the command into script source, and over `osascript`, whose permission would be asked for on
+  behalf of a different process.
 
 ### Platform
 

@@ -79,8 +79,9 @@ public enum TileControl: Equatable, Sendable {
 
 /// What a tile shows below its first line, for the user to answer.
 public enum TileDetail: Equatable, Sendable {
-    /// With Try Again and Show Output….
-    case failed(message: String)
+    /// With Try Again and Show Output…, and Open System Settings… for System Settings → Privacy &
+    /// Security → Automation when the failure is a denied permission to control Terminal.
+    case failed(message: String, offersAutomationSettings: Bool = false)
     /// "Logged in elsewhere?", with the confirming button's title and Set Timer….
     case possibleLogin(question: String, confirmTitle: String)
     /// With Edit Session Length….
@@ -258,7 +259,8 @@ private func detail(
 ) -> TileDetail? {
     switch pending {
     case .activity: return nil
-    case .failure(let failure): return .failed(message: failure.message)
+    case .failure(let failure):
+        return .failed(message: failure.message, offersAutomationSettings: failure == .terminalNotPermitted)
     case .approval(let command): return .notYetApproved(command: command)
     case .possibleLogin(let time, let isFoundOnWake):
         let when = calendar.isDate(time, inSameDayAs: now)

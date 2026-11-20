@@ -2,9 +2,14 @@ import Foundation
 
 /// Opens a custom login's command in a Terminal window, for the user to finish there.
 public protocol TerminalOpening: Sendable {
-    /// Returns once Terminal has the command. Throws when it can't be opened, such as when the user
-    /// has denied the permission to control Terminal.
+    /// Returns once Terminal has the command. Throws `TerminalNotPermitted` when the user has denied
+    /// the permission to control Terminal, and any other error when it can't be opened otherwise.
     func open(command: String) async throws
+}
+
+/// The user has denied PrinceClockIn the permission to control Terminal.
+public struct TerminalNotPermitted: Error, Equatable, Sendable {
+    public init() {}
 }
 
 /// Why a login in the queue didn't succeed.
@@ -21,6 +26,8 @@ public enum LoginFailure: Equatable, Sendable {
     case launchFailed(String)
     /// Terminal couldn't be opened for a custom login; the string is the system's reason.
     case terminalFailed(String)
+    /// The user has denied the permission to control Terminal, which a custom login's command needs.
+    case terminalNotPermitted
 }
 
 extension LoginFailure {
@@ -32,6 +39,8 @@ extension LoginFailure {
         case .timedOut: "The login timed out"
         case .cancelled: "Cancelled"
         case .launchFailed(let reason), .terminalFailed(let reason): reason
+        case .terminalNotPermitted:
+            "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation"
         }
     }
 }
@@ -237,6 +246,9 @@ public actor LoginQueue {
         if let command {
             do {
                 try await terminal.open(command: command)
+            } catch is TerminalNotPermitted {
+                if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
+                return .failed(id: id, reason: .terminalNotPermitted)
             } catch {
                 if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
                 return .failed(id: id, reason: .terminalFailed(error.localizedDescription))

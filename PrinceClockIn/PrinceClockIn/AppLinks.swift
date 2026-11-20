@@ -1,6 +1,6 @@
 import Foundation
 
-/// The pages the app opens in the browser, and the System Settings pane it opens.
+/// The pages the app opens in the browser, and the System Settings panes it opens.
 enum AppLinks {
     /// The repository's new-issue page, for Report an Issue….
     static let reportIssue = URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!
@@ -9,4 +9,8 @@ enum AppLinks {
     /// System Settings → Notifications. Apple documents no URL for it on macOS; this is the scheme
     /// its Notifications settings extension declares.
     static let notificationSettings = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
+    /// System Settings → Privacy & Security → Automation, by the same scheme: the Privacy & Security
+    /// extension's identifier and the `Privacy_Automation` anchor it declares.
+    static let automationSettings = URL(
+        string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation")!
 }
