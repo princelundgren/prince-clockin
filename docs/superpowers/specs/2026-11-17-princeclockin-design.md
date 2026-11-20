@@ -450,7 +450,8 @@ without its text, so no earlier text shows.
 
 #### Settings window
 
-Its own window hosting SwiftUI: a native sidebar list with a symbol per pane,
+Its own window hosting SwiftUI: a native sidebar list with a symbol per pane (`person.badge.key`
+Logins, `list.bullet` Presets, `bell` Notifications, `gearshape` General, `info.circle` About),
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
 Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
 resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
@@ -805,9 +806,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
     `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
     tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
-    `clock.badge.checkmark`,
-    `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud` and
-    `square.stack.3d.up`, the preset tiles' `rectangle.stack`, and the footer's `gear` and `power`.
+    `clock.badge.checkmark`, `checkmark.circle`, `questionmark.circle`, `terminal`, `cloud` and
+    `square.stack.3d.up`, the Settings sidebar's `person.badge.key`, `list.bullet`, `bell`,
+    `gearshape` and `info.circle`, Settings' + and − as `plus` and `minus`, the preset tiles'
+    `rectangle.stack`, and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
