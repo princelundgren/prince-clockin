@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private static let settingsFrameName = "Settings"
     /// The popover's arrow and a gap above the bottom of the screen.
     private static let popoverMargin: CGFloat = 24
+    /// How long a quit waits for the cancelled batch to finish before it goes ahead.
+    private static let quitWait: TimeInterval = 3
 
     // Created with the delegate, before launch finishes, so a notification button that launched
     // the app finds its handler, and the timers run before the panel is first opened.
@@ -22,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     /// While the panel is shown: closes it on a click in another app, the desktop or another menu
     /// bar item.
     private var outsideClickMonitor: Any?
+    /// While a quit waits for the cancelled batch to finish: the timer that ends the wait.
+    private var quitTimer: Timer?
 
     override init() {
         appModel = AppModel()
@@ -44,6 +48,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem?.makeVisible()
         showPanel()
         return false
+    }
+
+    /// Quitting while a batch runs cancels it and quits once the queue reports it finished, or
+    /// after `quitWait` if it doesn't; a relaunch postponed for the batch doesn't go ahead.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let coordinator = appModel.coordinator
+        guard coordinator.batch != nil else { return .terminateNow }
+        guard quitTimer == nil else { return .terminateLater }
+        updater.dropPostponedRelaunch()
+        coordinator.cancelBatch()
+        Task { [weak self] in
+            for await isRunning in Observations({ coordinator.batch != nil }) where !isRunning { break }
+            self?.replyToQuit()
+        }
+        // Fires in the mode AppKit waits in, even when main-actor tasks can't run until the reply.
+        let bound = Timer(timeInterval: Self.quitWait, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.replyToQuit() }
+        }
+        RunLoop.main.add(bound, forMode: .modalPanel)
+        quitTimer = bound
+        return .terminateLater
+    }
+
+    private func replyToQuit() {
+        guard let quitTimer else { return }
+        quitTimer.invalidate()
+        self.quitTimer = nil
+        NSApp.reply(toApplicationShouldTerminate: true)
     }
 
     /// The menu bar an `LSUIElement` app never shows, there so its key equivalents work while the

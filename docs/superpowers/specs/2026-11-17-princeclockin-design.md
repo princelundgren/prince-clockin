@@ -645,6 +645,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - A failed or timed-out login is reported on its tile, and the queue goes on to the next.
 - A login removed while it is queued leaves the queue, and the total shrinks with it. Removing the
   running login cancels it, and the queue goes on.
+- Quitting while a batch runs cancels it, as Cancel All does, and the app quits once the batch has
+  finished, or 3 seconds later if it hasn't. An update's relaunch postponed for the batch then
+  doesn't go ahead, so the app stays quit.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser. A login runs with the stored timeout held between 2 minutes and 24 hours, or with the
   default if the stored value isn't finite, so a hand-edited state file can't end every login at
@@ -756,7 +759,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   Update… show Sparkle's window, as does Check for Updates…, in the right-click menu and About.
   This departs on purpose from Sparkle's example for dockless apps, which brings back the Dock
   icon: the menu bar is where this app is looked at.
-- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty.
+- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty,
+  unless the user quits first (see Running logins).
 - Sparkle's license ships in the app from `PrinceClockIn/PrinceClockIn/ThirdPartyNotices.txt`, a
   copy of the pinned release's `LICENSE`; a release fails if the two differ.
 - The release workflow lives in this repository. Its build, signing and upload jobs run on

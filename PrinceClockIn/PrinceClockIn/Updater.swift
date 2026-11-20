@@ -32,6 +32,12 @@ final class Updater: NSObject {
         controller?.checkForUpdates(nil)
     }
 
+    /// The app is quitting: a relaunch postponed for the batch doesn't go ahead, so the app the
+    /// user quit stays quit.
+    func dropPostponedRelaunch() {
+        endPostponement()
+    }
+
     /// Lets Sparkle relaunch, once, as soon as no batch runs, replacing any earlier wait.
     private func relaunchWhenTheBatchEnds() {
         batchWait?.cancel()
