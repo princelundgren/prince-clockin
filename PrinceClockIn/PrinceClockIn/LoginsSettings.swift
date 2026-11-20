@@ -76,7 +76,7 @@ struct LoginsSettings: View {
             }
             .controlSize(.small)
             .disabled(!coordinator.canCheckDatabricksNow)
-            .help("Ask the Databricks CLI whether each Databricks login is still valid")
+            .help("Ask the Databricks CLI whether each Databricks login is still valid.")
         }
     }
 
@@ -85,7 +85,7 @@ struct LoginsSettings: View {
             Button("Add Login", systemImage: "plus") { addMenu.show(addMenuItems, choose: choose) }
                 .labelStyle(.iconOnly)
                 .background(AddMenuAnchor(presenter: addMenu))
-                .help("Add a login")
+                .help("Add a login.")
             Button("Remove Login", systemImage: "minus", action: removeSelected)
                 .labelStyle(.iconOnly)
                 .disabled(selected == nil)
@@ -428,22 +428,6 @@ private struct AddMenuAnchor: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {}
-}
-
-/// A secondary caption under a field.
-private struct SettingsNote: View {
-    let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
 }
 
 /// The prompt right after a login found in the config files is added: whether the user is already

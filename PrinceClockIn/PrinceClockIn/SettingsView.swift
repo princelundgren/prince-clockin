@@ -50,7 +50,7 @@ struct SettingsView: View {
             switch pane {
             case .logins: LoginsSettings(appModel: appModel, request: loginsPaneRequest)
             case .presets: PresetsSettings(coordinator: appModel.coordinator)
-            case .warnings: WarningsSettings(coordinator: appModel.coordinator)
+            case .warnings: WarningsSettings(appModel: appModel)
             case .general: GeneralSettings(appModel: appModel)
             case .about: AboutSettings(updater: updater)
             }
@@ -102,102 +102,55 @@ struct CommitField: View {
     }
 }
 
-// MARK: Presets
+/// A secondary caption under a field.
+struct SettingsNote: View {
+    let text: String
 
-private struct PresetsSettings: View {
-    let coordinator: Coordinator
-
-    private var logins: [Login] { coordinator.model.state.logins }
+    init(_ text: String) {
+        self.text = text
+    }
 
     var body: some View {
-        Form {
-            ForEach(coordinator.model.state.presets) { preset in
-                Section {
-                    PresetEditor(preset: preset, logins: logins, coordinator: coordinator)
-                }
-            }
-            Section {
-                Button("New preset") {
-                    coordinator.savePreset(Preset(name: "New preset", loginIDs: []))
-                }
-                .disabled(logins.isEmpty)
-            } footer: {
-                Text("A preset logs in to its logins in the order listed, one at a time.")
-            }
-        }
-        .formStyle(.grouped)
-    }
-}
-
-private struct PresetEditor: View {
-    let preset: Preset
-    let logins: [Login]
-    let coordinator: Coordinator
-
-    var body: some View {
-        HStack {
-            CommitField("Name", text: preset.name) { name in
-                guard !name.isEmpty else { return false }
-                save { $0.name = name }
-                return true
-            }
-            Button("Remove preset", role: .destructive) { coordinator.removePreset(id: preset.id) }
-        }
-        ForEach(Array(members.enumerated()), id: \.element.id) { index, login in
-            HStack {
-                Text("\(index + 1). \(login.displayName)")
-                Spacer()
-                Button("Move up", systemImage: "chevron.up") { move(from: index, by: -1) }
-                    .labelStyle(.iconOnly)
-                    .disabled(index == 0)
-                Button("Move down", systemImage: "chevron.down") { move(from: index, by: 1) }
-                    .labelStyle(.iconOnly)
-                    .disabled(index == members.count - 1)
-                Button("Remove from preset", systemImage: "minus.circle") {
-                    save { $0.loginIDs.removeAll { $0 == login.id } }
-                }
-                .labelStyle(.iconOnly)
-            }
-        }
-        let others = logins.filter { !preset.loginIDs.contains($0.id) }
-        if !others.isEmpty {
-            Menu("Add login") {
-                ForEach(others) { login in
-                    Button(login.displayName) { save { $0.loginIDs.append(login.id) } }
-                }
-            }
-            .fixedSize()
-        }
-    }
-
-    /// The preset's logins in its order, skipping any no longer tracked.
-    private var members: [Login] {
-        coordinator.model.logins(in: preset)
-    }
-
-    private func move(from index: Int, by offset: Int) {
-        var ids = members.map(\.id)
-        ids.swapAt(index, index + offset)
-        save { $0.loginIDs = ids }
-    }
-
-    private func save(_ change: (inout Preset) -> Void) {
-        var edited = preset
-        change(&edited)
-        coordinator.savePreset(edited)
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
 // MARK: Warnings
 
+/// Settings → Warnings: how long before expiry a login warns, and whether notifications are on.
+/// The permission is read again when the pane appears and when the app becomes active, as after
+/// the user changes it in System Settings.
 private struct WarningsSettings: View {
-    let coordinator: Coordinator
+    let appModel: AppModel
 
     var body: some View {
+        let notifications = notificationsSetting(areOff: appModel.notificationsAreOff)
         Form {
-            MinutesField(title: "Warn before expiry", value: \.warningLeadTime, coordinator: coordinator)
+            Section {
+                MinutesField(
+                    title: "Warn before a login expires", value: \.warningLeadTime, coordinator: appModel.coordinator)
+            }
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent("Notifications") {
+                        HStack {
+                            Text(notifications.state)
+                            Button("Open System Settings…") { NSWorkspace.shared.open(AppLinks.notificationSettings) }
+                                .controlSize(.small)
+                        }
+                    }
+                    if let note = notifications.note { SettingsNote(note) }
+                }
+            }
         }
         .formStyle(.grouped)
+        .task { await appModel.refreshNotificationPermission() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await appModel.refreshNotificationPermission() }
+        }
     }
 }
 
@@ -219,7 +172,7 @@ private struct MinutesField: View {
             })
         LabeledContent(title) {
             Stepper(value: minutes, in: 5...24 * 60, step: 5) {
-                Text("\(Int(minutes.wrappedValue)) min")
+                Text(sessionLengthText(coordinator.model.state.settings[keyPath: value]))
                     .monospacedDigit()
             }
         }
@@ -228,82 +181,120 @@ private struct MinutesField: View {
 
 // MARK: General
 
+/// Settings → General: Launch at login, Login timeout, and what removing the menu bar icon does.
+/// The login item's status is read again when the pane appears and when the app becomes active,
+/// since the user can change it in System Settings.
 private struct GeneralSettings: View {
     let appModel: AppModel
-    @State private var launchesAtLogin = false
-    @State private var launchAtLoginError: String?
+    @State private var launchAtLoginStatus = LaunchAtLoginStatus.off
+    @State private var launchAtLoginFailure: LaunchAtLoginFailure?
 
     var body: some View {
+        let launchAtLogin = launchAtLoginSetting(status: launchAtLoginStatus, failure: launchAtLoginFailure)
         Form {
             Section {
-                MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
-            }
-            Section {
-                Toggle("Launch at login", isOn: launchAtLoginBinding)
-                if let launchAtLoginError {
-                    Text(launchAtLoginError)
-                        .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Launch at login", isOn: launchAtLoginBinding(isOn: launchAtLogin.isOn))
+                    switch launchAtLogin.note {
+                    case .needsApproval(let note):
+                        HStack {
+                            SettingsNote(note)
+                            Spacer()
+                            Button("Open…", action: LaunchAtLogin.openLoginItemsSettings)
+                                .controlSize(.small)
+                        }
+                    case .failed(let note):
+                        SettingsNote(note)
+                    case nil:
+                        EmptyView()
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
+                    SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
                 }
             }
             Section {
-                if appModel.notificationsAreOff {
-                    Label(
-                        "Notifications are off, so only the menu bar warns before a login expires. Turn them on in System Settings → Notifications.",
-                        systemImage: "exclamationmark.triangle")
-                }
-                Text("Removing the icon from the menu bar quits PrinceClockIn, which stops its timers and notifications.")
-                Text("Custom commands are stored as plain text in the settings file, so they must not contain secrets.")
+                Text(
+                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and warnings. "
+                        + "Open PrinceClockIn from Applications to bring it back.")
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(.callout)
         }
         .formStyle(.grouped)
-        .onAppear { launchesAtLogin = LaunchAtLogin.isEnabled }
-        .task { await appModel.refreshNotificationPermission() }
+        .onAppear { launchAtLoginStatus = LaunchAtLogin.status }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLoginStatus = LaunchAtLogin.status
+        }
     }
 
     /// Reads the system's answer back after each change, since registering can need the user's
     /// approval in System Settings.
-    private var launchAtLoginBinding: Binding<Bool> {
+    private func launchAtLoginBinding(isOn: Bool) -> Binding<Bool> {
         Binding(
-            get: { launchesAtLogin },
+            get: { isOn },
             set: { enabled in
                 do {
                     try LaunchAtLogin.setEnabled(enabled)
-                    launchAtLoginError = nil
+                    launchAtLoginFailure = nil
                 } catch {
-                    launchAtLoginError = error.localizedDescription
+                    launchAtLoginFailure = LaunchAtLoginFailure(turningOn: enabled, reason: error.localizedDescription)
                 }
-                launchesAtLogin = LaunchAtLogin.isEnabled
+                launchAtLoginStatus = LaunchAtLogin.status
             })
     }
 }
 
 // MARK: About
 
+/// Settings → About: the app's icon, name, version and tagline with Check for Updates…, its links,
+/// and what it connects to.
 private struct AboutSettings: View {
+    private static let iconSize: CGFloat = 64
+
     let updater: Updater
 
     var body: some View {
         Form {
             Section {
-                LabeledContent("PrinceClockIn", value: version)
-                Button("Check for Updates…") { updater.checkForUpdates() }
+                HStack(spacing: 16) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: Self.iconSize, height: Self.iconSize)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PrinceClockIn")
+                            .font(.title2.bold())
+                        Text(version)
+                            .foregroundStyle(.secondary)
+                        Text("Your command-line logins, before they expire.")
+                    }
+                    Spacer()
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                }
             }
             Section {
-                Link("Report an Issue…", destination: AppLinks.reportIssue)
-                Link("Website", destination: AppLinks.website)
-                Button("Third-Party Notices…", action: openThirdPartyNotices)
+                HStack(spacing: 16) {
+                    Link("Report an Issue…", destination: AppLinks.reportIssue)
+                    Link("Website", destination: AppLinks.website)
+                    Button("Third-Party Notices…", action: openThirdPartyNotices)
+                        .buttonStyle(.link)
+                }
+                .foregroundStyle(Color("Link"))
+                Text(
+                    "No analytics or crash reports. PrinceClockIn's only connection is the daily update check; "
+                        + "the CLIs it runs make their own.")
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
     }
 
-    /// "v1.0.0 (42)": the marketing version and the build number.
     private var version: String {
         let info = Bundle.main.infoDictionary
-        let marketing = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "v\(marketing) (\(build))"
+        return versionText(
+            marketingVersion: info?["CFBundleShortVersionString"] as? String ?? "?",
+            build: info?["CFBundleVersion"] as? String ?? "?")
     }
 
     /// Opens the bundled licenses in the user's text viewer.
