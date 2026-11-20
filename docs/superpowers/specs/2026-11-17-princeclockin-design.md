@@ -328,7 +328,8 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
 3. **The tiles**, one per login, in the order Settings → Logins gives them, not sorted by state
    (owner, 2026-11-20): a due login stands out by its colour and Log In to N Due, not by its place.
    The order is taken when the panel opens and holds while it is open.
-   Past about 420 pt the list scrolls with the system scroller.
+   The list is as tall as its tiles, up to eight; past eight it shows half of the ninth and
+   scrolls with the system scroller (owner, 2026-11-20).
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
 5. **Presets**, under a "Presets" header: one tile per preset, in Settings → Presets' order, drawn
@@ -339,8 +340,8 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts the preset. An
    empty preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to
    add logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
-   tiles, the presets start fresh at each opening, so no hover carries over, and past about 230 pt,
-   four and a half tiles, they scroll, so the panel's height stays bounded.
+   tiles, the presets start fresh at each opening, so no hover carries over. The list is as tall as
+   its tiles, up to five; past five it shows half of the sixth and scrolls.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
@@ -348,6 +349,12 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    PrinceClockIn on the right, each a plain secondary icon whose 30 pt square takes the click,
    with its title as its VoiceOver label and help tag and the link pointer on hover, as in the
    maintainer's other menu bar apps (owner, 2026-11-20).
+
+**Height**: the panel grows with its lists and fits between the status item and the bottom of the
+screen's visible area. A preset never takes height from the logins while the screen has room. When
+it hasn't, the presets keep up to three tiles, and half of a fourth when more follow, and the login
+list scrolls sooner; any room left after the logins goes to the presets (owner, 2026-11-20).
+`panelListHeights` in the core holds the rule.
 
 **Empty states**: with no login tracked, the panel shows SwiftUI's `ContentUnavailableView` in
 place of the tiles: the menu bar's `clock` symbol, "No Logins Yet", what discovery found ("Found 3
@@ -783,6 +790,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     27.
   - The item's spacing, beside other menu bar items, with and without the update dot; on macOS
     27.2.1 the system's highlight sat 6 pt from each side of the clock without it.
+  - The panel's height: nine logins show eight and a half and scroll, six presets show five and a
+    half, and on a short screen the presets keep three and the login list scrolls; on macOS 27,
+    three logins and one preset showed whole with no scroll bar.
   - A slow click and a tap-to-click on the icon while the panel is open close it and leave it
     closed; on macOS 27.2.1, holds of 0.25 to 1.2 s did.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts

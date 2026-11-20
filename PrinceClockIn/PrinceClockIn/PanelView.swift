@@ -4,11 +4,7 @@ import SwiftUI
 /// The menu bar panel: banners, the running batch, one tile per login, the log-in actions and the
 /// footer.
 struct PanelView: View {
-    /// Past this height the tiles scroll.
-    private static let tilesMaximumHeight: CGFloat = 420
-    /// Past this height the preset tiles scroll: about four and a half, so the cut one shows there
-    /// are more.
-    private static let presetsMaximumHeight: CGFloat = 230
+    private static let tileSpacing: CGFloat = 6
 
     let appModel: AppModel
     let updater: Updater
@@ -17,6 +13,11 @@ struct PanelView: View {
     /// Add Logins…: Settings on Logins, with its + menu open.
     let addLogins: () -> Void
     @FocusState private var focus: PanelFocus?
+    /// Each tile's height as last drawn, which sets how tall its list is.
+    @State private var loginTileHeights: [UUID: CGFloat] = [:]
+    @State private var presetTileHeights: [UUID: CGFloat] = [:]
+    /// The panel's height outside its two lists, as last drawn.
+    @State private var heightOutsideLists: CGFloat = 0
 
     private var coordinator: Coordinator { appModel.coordinator }
     private var logins: [Login] { coordinator.model.state.logins }
@@ -44,6 +45,12 @@ struct PanelView: View {
             prominent: prominent, openSetTimer: session.openSetTimer, isEditingText: focus?.isTextField ?? false,
             tiles: tiles.map(\.tile.id), focusedTile: focus?.tile)
         let defaults = PanelDefaults(keys: keys)
+        let showsPresets = !logins.isEmpty && !coordinator.model.state.presets.isEmpty
+        let listHeights = panelListHeights(
+            loginTiles: tiles.map { Double(loginTileHeights[$0.tile.id] ?? 0) },
+            presetTiles: showsPresets ? presetTiles.map { Double(presetTileHeights[$0.id] ?? 0) } : [],
+            spacing: Self.tileSpacing,
+            room: session.maximumHeight.map { $0 - heightOutsideLists })
         VStack(alignment: .leading, spacing: 10) {
             ForEach(appModel.panelBanners, id: \.self) { banner in
                 BannerView(banner: banner) { perform($0, on: banner) }
@@ -54,7 +61,7 @@ struct PanelView: View {
             if logins.isEmpty {
                 EmptyPanelView(empty: session.emptyPanel, defaults: defaults, addLogins: addLogins)
             } else {
-                tileList(tiles, defaults: defaults, keys: keys)
+                tileList(tiles, height: listHeights.logins, defaults: defaults, keys: keys)
             }
             if showsLogInToDue {
                 Button("Log In to \(dueCount) Due") {
@@ -64,9 +71,9 @@ struct PanelView: View {
                 .returnKey(defaults.onReturn == .logInToDue)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            if !logins.isEmpty, !coordinator.model.state.presets.isEmpty {
+            if showsPresets {
                 Divider()
-                presets
+                presets(height: listHeights.presets)
                     .id(session.closings)
             }
             if let line = updater.status.line {
@@ -84,6 +91,9 @@ struct PanelView: View {
         }
         .padding()
         .frame(width: 320)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            heightOutsideLists = height - listHeights.logins - listHeights.presets
+        }
         .onChange(of: appModel.panelBanners) { _, banners in session.show(banners) }
         .onChange(of: session.showings) { focus = tiles.first.map { .tile($0.tile.id) } }
         .task(id: EmptyPanelTrigger(opening: session.openings, hasNoLogins: logins.isEmpty)) {
@@ -105,21 +115,25 @@ struct PanelView: View {
 
     /// The tiles, new for each opening of the panel, so a form or output left open doesn't come back.
     private func tileList(
-        _ tiles: [(login: Login, tile: TilePresentation)], defaults: PanelDefaults, keys: PanelKeyContext
+        _ tiles: [(login: Login, tile: TilePresentation)], height: Double, defaults: PanelDefaults,
+        keys: PanelKeyContext
     ) -> some View {
         ScrollView {
-            VStack(spacing: 6) {
+            VStack(spacing: Self.tileSpacing) {
                 ForEach(tiles, id: \.tile.id) { entry in
                     TileView(
                         login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
                         defaults: defaults, focus: $focus)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        loginTileHeights[entry.tile.id] = $0
+                    }
                 }
             }
             .onMoveCommand { move($0, keys: keys) }
         }
         .id(session.closings)
         .scrollBounceBehavior(.basedOnSize)
-        .frame(maxHeight: Self.tilesMaximumHeight)
+        .frame(height: height)
     }
 
     /// The up and down arrows move focus between the tiles.
@@ -143,20 +157,23 @@ struct PanelView: View {
         }
     }
 
-    private var presets: some View {
+    private func presets(height: Double) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Presets")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             ScrollView {
-                VStack(spacing: 6) {
+                VStack(spacing: Self.tileSpacing) {
                     ForEach(presetTiles) { tile in
                         PresetTileView(tile: tile) { logIn(toPreset: tile.id) }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                presetTileHeights[tile.id] = $0
+                            }
                     }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: Self.presetsMaximumHeight)
+            .frame(height: height)
         }
     }
 
@@ -204,10 +221,11 @@ private struct FooterIconButton: View {
     }
 }
 
-/// What the panel keeps for one opening: its tiles' order, taken as it opens, what discovery found
-/// while no login is tracked, the open Set Timer and its drafts, and whether the Notifications off
-/// banner was on screen. Closing the panel clears it and counts the closing, which gives the tiles
-/// new state for the next opening; each showing is counted too, for the focus it starts with.
+/// What the panel keeps for one opening: its tiles' order and the height its screen leaves it, both
+/// taken as it opens, what discovery found while no login is tracked, the open Set Timer and its
+/// drafts, and whether the Notifications off banner was on screen. Closing the panel clears it and
+/// counts the closing, which gives the tiles new state for the next opening; each showing is
+/// counted too, for the focus it starts with.
 @MainActor
 @Observable
 final class PanelSession {
@@ -215,6 +233,8 @@ final class PanelSession {
     static let setTimerNote = "This form is kept until the panel closes."
 
     private(set) var order: [UUID] = []
+    /// The most height the panel can take on the screen it opens on, if known.
+    private(set) var maximumHeight: Double?
     private(set) var emptyPanel: EmptyPanel?
     /// The login whose Set Timer is open; one at a time.
     private(set) var openSetTimer: UUID?
@@ -228,8 +248,9 @@ final class PanelSession {
     private(set) var closings = 0
     @ObservationIgnored private var notificationsBanner = NotificationsBannerSighting()
 
-    func open(order: [UUID]) {
+    func open(order: [UUID], maximumHeight: Double?) {
         self.order = order
+        self.maximumHeight = maximumHeight
         openings += 1
         notificationsBanner.panelOpened()
     }
