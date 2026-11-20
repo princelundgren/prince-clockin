@@ -534,7 +534,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   warning time passed while the app wasn't running is announced once at the next launch, as
   expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
-- A custom login waiting for Done posts a notification with a Done action.
+- A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
+  Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
+  "vpn is waiting for you" and "Log in your own way, then click Done."
 - A failed save posts a notification (see Panel).
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.

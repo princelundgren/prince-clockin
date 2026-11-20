@@ -132,6 +132,16 @@ private let british = Locale(identifier: "en_GB")
         #expect(warningContent([dev], now: now, locale: Locale(identifier: "sv_SE")).title == "dev expires in 5\u{202F}h 13\u{202F}m")
     }
 
+    @Test func customDoneNotificationPointsToTerminalOnlyWithACommand() {
+        let vpn = Login(displayName: "vpn", kind: .custom(command: "vpn-login"))
+        let manualVPN = Login(displayName: "vpn", kind: .custom(command: nil))
+
+        #expect(customDoneContent(vpn)
+            == NotificationText(title: "vpn is waiting in Terminal", body: "Finish the login there, then click Done."))
+        #expect(customDoneContent(manualVPN)
+            == NotificationText(title: "vpn is waiting for you", body: "Log in your own way, then click Done."))
+    }
+
     @Test func onlyActionButtonsGiveActions() {
         let dev = UUID()
         let prod = UUID()
