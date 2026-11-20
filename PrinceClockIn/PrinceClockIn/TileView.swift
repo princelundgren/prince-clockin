@@ -34,9 +34,7 @@ struct TileView: View {
                     draft: Bindable(session).sessionLengthDrafts[login.id])
             }
         }
-        .padding(8)
-        .background(
-            tint(tile, isHovered: isHovered && tile.clickLogsIn), in: RoundedRectangle(cornerRadius: 8))
+        .tileFrame(tileFill(colour: tile.colour, isHovered: isHovered && tile.clickLogsIn))
         .onChange(of: tile.detail) { output = nil }
     }
 
@@ -222,39 +220,9 @@ struct TileView: View {
 
     // MARK: Colour
 
-    /// The tile's fill: a tint of the state's colour token, or a system fill for a state no token
-    /// means, a step stronger while the pointer is on a tile a click logs in.
-    private func tint(_ tile: TilePresentation, isHovered: Bool) -> AnyShapeStyle {
-        guard let colour = tile.colour else {
-            return isHovered ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.quinary)
-        }
-        return AnyShapeStyle(Color(colour.rawValue).opacity(isHovered ? 0.16 : 0.1))
-    }
-
     /// `.secondary` falls to about 3.7:1 on a light-appearance tint, so text there is `.primary`.
     private func secondaryText(_ tile: TilePresentation) -> Color {
         colorScheme == .light && tile.colour != nil ? .primary : .secondary
-    }
-}
-
-/// A tile's first line as a control: the label alone, dimmed while pressed.
-private struct TileButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.6 : 1)
-    }
-}
-
-/// The visible Log In on a due tile, or under the pointer on any tile a click logs in, which the
-/// whole tile's button performs, so it is plain text rather than a button's shape. Prominent, on
-/// the login Return logs in, it is bold.
-private struct LogInLabel: View {
-    let isProminent: Bool
-
-    var body: some View {
-        Text("Log In")
-            .bold(isProminent)
-            .foregroundStyle(.primary)
     }
 }
 

@@ -6,6 +6,9 @@ import SwiftUI
 struct PanelView: View {
     /// Past this height the tiles scroll.
     private static let tilesMaximumHeight: CGFloat = 420
+    /// Past this height the preset tiles scroll: about four and a half, so the cut one shows there
+    /// are more.
+    private static let presetsMaximumHeight: CGFloat = 230
 
     let appModel: AppModel
     let updater: Updater
@@ -63,6 +66,7 @@ struct PanelView: View {
             if !logins.isEmpty, !coordinator.model.state.presets.isEmpty {
                 Divider()
                 presets
+                    .id(session.closings)
             }
             if let line = updater.status.line {
                 Divider()
@@ -143,11 +147,21 @@ struct PanelView: View {
             Text("Presets")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            FlowButtons(buttons: presetButtons) { id in
-                guard let preset = coordinator.model.state.presets.first(where: { $0.id == id }) else { return }
-                coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(presetButtons) { tile in
+                        PresetTileView(tile: tile) { logIn(toPreset: tile.id) }
+                    }
+                }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: Self.presetsMaximumHeight)
         }
+    }
+
+    private func logIn(toPreset id: UUID) {
+        guard let preset = coordinator.model.state.presets.first(where: { $0.id == id }) else { return }
+        coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
     }
 
     private var presetButtons: [PresetButton] {
@@ -323,35 +337,43 @@ private struct BannerView: View {
     }
 }
 
-/// One button per preset, in a row if they fit, else one per line; a name too long for the panel
-/// is truncated at the end, and its note after it never is.
-private struct FlowButtons: View {
-    let buttons: [PresetButton]
-    let action: (UUID) -> Void
+/// A preset's tile, drawn as a login tile is: one button over the whole tile, its logins under its
+/// name, and Log In under the pointer. An empty preset's tile is dimmed and takes no click. Its
+/// help tag is also its VoiceOver hint.
+private struct PresetTileView: View {
+    let tile: PresetButton
+    let logIn: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack { buttonViews }
-            VStack(alignment: .leading) { buttonViews }
-        }
-    }
-
-    private var buttonViews: some View {
-        ForEach(buttons) { button in
-            Button { action(button.id) } label: {
-                HStack(spacing: 0) {
-                    Text(button.title)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if let note = button.note {
-                        Text(" · \(note)")
-                            .fixedSize()
-                    }
+        Button(action: logIn) {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.stack")
+                    .imageScale(.large)
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(tile.title)
+                    Text(tile.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
+                .truncationMode(.tail)
+                Spacer(minLength: 4)
+                if isHovered {
+                    LogInLabel(isProminent: false)
+                        .fixedSize()
                 }
             }
-            .disabled(!button.isEnabled)
-            .help(button.helpTag)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(TileButtonStyle())
+        .disabled(!tile.isEnabled)
+        .onHover { isHovered = $0 && tile.isEnabled }
+        .tileFrame(tileFill(colour: nil, isHovered: isHovered))
+        .help(tile.helpTag)
+        .accessibilityLabel(tile.accessibilityLabel)
     }
 }
 
