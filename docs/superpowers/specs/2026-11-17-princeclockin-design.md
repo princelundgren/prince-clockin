@@ -771,7 +771,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Recorded 2026-11-17, on AWS CLI 2.39.0 and Databricks CLI 1.22.1:
   - **Refresh token (AWS):** a renewal keeps it and a login changes it, on the same session, so
     the hash is kept and decides first.
-  - **Databricks check:** `databricks current-user me --profile <name>` exits 0 for a valid
+  - **Databricks check:** `databricks current-user me --profile=<name>` exits 0 for a valid
     profile. For one with no usable login it exits 1 and prints
     `Error: error getting token: cache: no cached credentials; run `databricks auth login` to sign in`,
     which is the one failure read as invalid. That line was recorded from a logged-out profile, not

@@ -48,8 +48,14 @@ private func makeChecker(
     @Test func databricksExitZeroIsValid() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
-        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile", "dev"])
+        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile=dev"])
         #expect(runner.calls[0].timeout == .seconds(30))
+    }
+
+    @Test func aProfileNameStartingWithADashStaysJoinedToItsFlag() async throws {
+        let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
+        _ = await checker.check(profile: "-h", accountLevel: false, loginRunning: false)
+        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile=-h"])
     }
 
     @Test func databricksSkipsWithinInterval() async throws {
@@ -127,7 +133,7 @@ private func makeChecker(
     @Test func databricksChecksOneProfileOnly() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
         _ = await checker.check(profile: "dev", accountLevel: false, loginRunning: false)
-        #expect(runner.calls[0].arguments.filter { $0 == "--profile" }.count == 1)
+        #expect(runner.calls[0].arguments.filter { $0.hasPrefix("--profile") }.count == 1)
         #expect(runner.calls[0].arguments.contains("token") == false)
     }
 

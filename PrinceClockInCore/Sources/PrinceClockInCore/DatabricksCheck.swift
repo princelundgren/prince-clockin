@@ -25,7 +25,7 @@ public enum DatabricksCheck: Equatable, Sendable {
 }
 
 /// Asks the Databricks CLI whether a profile still has a usable login. Runs
-/// `databricks current-user me --profile <name>`, never `auth token`, which prints a token.
+/// `databricks current-user me --profile=<name>`, never `auth token`, which prints a token.
 public actor DatabricksChecker {
     /// What the CLI prints when it holds no usable credentials for the profile.
     private static let authFailure = "error getting token: cache: no cached credentials"
@@ -67,7 +67,7 @@ public actor DatabricksChecker {
         }
         let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.run(
-            executable: executable, arguments: ["current-user", "me", "--profile", profile],
+            executable: executable, arguments: ["current-user", "me", "--profile=\(profile)"],
             environment: environment, timeout: .seconds(timeout))
         switch outcome {
         case .exited(0, _): return .valid

@@ -410,7 +410,7 @@ private final class GatedLogins: Sendable {
         fixture.clock.advance(by: 600)
         await coordinator.tick()
 
-        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile=analytics-dev"]])
     }
 
     @Test func invalidDatabricksCheckBeforeNotificationTimePostsExpired() async throws {
@@ -519,7 +519,7 @@ private final class GatedLogins: Sendable {
 
         await coordinator.checkNow()
 
-        #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev", "analytics-prod"])
+        #expect(fixture.checkRunner.calls.map(\.last) == ["--profile=analytics-dev", "--profile=analytics-prod"])
     }
 
     @Test func checkNowIsPublishedWhileItRuns() async throws {
@@ -634,7 +634,7 @@ private final class GatedLogins: Sendable {
 
         await coordinator.checkNow()
 
-        #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev"])
+        #expect(fixture.checkRunner.calls.map(\.last) == ["--profile=analytics-dev"])
         #expect(fixture.stored?.logins.map(\.kind) == [
             .databricksProfile(name: "analytics-dev", accountLevel: false),
             .databricksProfile(name: "analytics-account", accountLevel: true),
