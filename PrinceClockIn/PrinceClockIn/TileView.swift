@@ -1,8 +1,8 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// One login's tile in the panel. Its first line is a menu of the login's actions, or, for a due
-/// login, a button that logs in beside a "…" menu; below it is whatever the login needs answered.
+/// One login's tile in the panel. Its first line is a button that logs in while nothing is pending;
+/// below it is whatever the login needs answered.
 /// The core decides everything shown; the tile draws it and forwards the user's choices. Its own
 /// state, and its Set Timer's in the panel session, lasts one opening of the panel.
 struct TileView: View {
@@ -12,18 +12,13 @@ struct TileView: View {
     let session: PanelSession
     let defaults: PanelDefaults
     let focus: FocusState<PanelFocus?>.Binding
-    /// The control the tile was when the pointer entered it, so a click's action can't change
-    /// under the pointer. The panel keeps it, since it builds the tile from it.
-    @Binding var heldControl: TileControl?
-    let editInSettings: (UUID) -> Void
     @State private var showsSessionLengthField = false
     @State private var output: String?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            control(tile)
-                .onHover { isInside in heldControl = isInside ? tile.control : nil }
+            firstLineButton(tile)
             if let detail = tile.detail {
                 detailView(detail, tile: tile)
             }
@@ -39,56 +34,25 @@ struct TileView: View {
         }
         .padding(8)
         .background(tint(tile), in: RoundedRectangle(cornerRadius: 8))
-        .contextMenu { actionItems(tile) }
         .onChange(of: tile.detail) { output = nil }
     }
 
     // MARK: First line
 
-    @ViewBuilder private func control(_ tile: TilePresentation) -> some View {
-        switch tile.control {
-        case .actionsMenu:
-            Menu {
-                actionItems(tile)
-            } label: {
-                firstLine(tile, showsEllipsis: true)
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .buttonStyle(TileButtonStyle())
-            .focused(focus, equals: .tile(tile.id))
-            .accessibilityLabel(tile.accessibilityLabel)
-            .accessibilityHint(tile.accessibilityHint)
-            .accessibilityActions { accessibilityActions(tile) }
-        case .logInButton:
-            HStack(spacing: 4) {
-                Button {
-                    if tile.clickLogsIn { perform(.logIn) }
-                } label: {
-                    firstLine(tile, showsEllipsis: false)
-                }
-                .buttonStyle(TileButtonStyle())
-                .returnKey(defaults.onReturn == .logIn(id: tile.id))
-                .focused(focus, equals: .tile(tile.id))
-                .accessibilityLabel(tile.accessibilityLabel)
-                .accessibilityHint(tile.accessibilityHint)
-                .accessibilityActions { accessibilityActions(tile) }
-                Menu {
-                    actionItems(tile)
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
-                // The whole-tile menu's style: with `.borderless`, Tab stopped on this menu.
-                .buttonStyle(TileButtonStyle())
-                .fixedSize()
-                .accessibilityLabel(tile.actionsLabel)
-            }
+    private func firstLineButton(_ tile: TilePresentation) -> some View {
+        Button {
+            if tile.clickLogsIn { logIn() }
+        } label: {
+            firstLine(tile)
         }
+        .buttonStyle(TileButtonStyle())
+        .returnKey(defaults.onReturn == .logIn(id: tile.id))
+        .focused(focus, equals: .tile(tile.id))
+        .accessibilityLabel(tile.accessibilityLabel)
+        .accessibilityHint(tile.accessibilityHint)
     }
 
-    private func firstLine(_ tile: TilePresentation, showsEllipsis: Bool) -> some View {
+    private func firstLine(_ tile: TilePresentation) -> some View {
         HStack(spacing: 8) {
             symbol(tile)
                 .frame(width: 20)
@@ -105,11 +69,6 @@ struct TileView: View {
             trailing(tile)
                 .fixedSize()
                 .layoutPriority(1)
-            if showsEllipsis {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(secondaryText(tile))
-                    .accessibilityHidden(true)
-            }
         }
         .contentShape(Rectangle())
     }
@@ -163,7 +122,7 @@ struct TileView: View {
                     Button("Open System Settings…") { NSWorkspace.shared.open(AppLinks.automationSettings) }
                 }
                 HStack {
-                    Button("Try Again") { perform(.logIn) }
+                    Button("Try Again") { logIn() }
                         .prominent(defaults.prominent == .tryAgain(id: tile.id))
                         .returnKey(defaults.onReturn == .tryAgain(id: tile.id))
                     if output == nil {
@@ -190,6 +149,7 @@ struct TileView: View {
                     Button(confirmTitle) { coordinator.confirmPossibleLogin(id: login.id) }
                         .prominent(defaults.prominent == .markAsLoggedInAt(id: tile.id))
                         .returnKey(defaults.onReturn == .markAsLoggedInAt(id: tile.id))
+                    Button("Log In") { logIn() }
                     Button("Set Timer…") { openSetTimer() }
                 }
             case .stillValid(let message):
@@ -236,52 +196,8 @@ struct TileView: View {
 
     // MARK: Actions
 
-    /// The "…" menu, which is also the tile's context menu.
-    @ViewBuilder private func actionItems(_ tile: TilePresentation) -> some View {
-        ForEach(tile.menuItems, id: \.self) { item in
-            switch item {
-            case .sessionLength:
-                Menu(item.title) {
-                    ForEach(sessionLengthOptions(current: login.sessionLength), id: \.self) { option in
-                        Toggle(option.title, isOn: Binding(
-                            get: { option.isSelected },
-                            set: { _ in choose(option.choice) }))
-                    }
-                }
-            case .cancelAll:
-                Divider()
-                Button(item.title) { perform(item) }
-            case .logIn, .setTimer, .markLoggedInNow, .editInSettings:
-                Button(item.title) { perform(item) }
-            }
-        }
-    }
-
-    /// The menu's items as VoiceOver actions, the Session Length submenu as one action per length.
-    @ViewBuilder private func accessibilityActions(_ tile: TilePresentation) -> some View {
-        ForEach(tile.menuItems, id: \.self) { item in
-            if item == .sessionLength {
-                ForEach(sessionLengthOptions(current: login.sessionLength), id: \.self) { option in
-                    Button("\(item.title): \(option.title)") { choose(option.choice) }
-                }
-            } else {
-                Button(item.title) { perform(item) }
-            }
-        }
-    }
-
-    /// The held control stays held, so acting on the tile can't change what the next click does.
-    private func perform(_ item: TileMenuItem) {
-        switch item {
-        case .logIn: coordinator.logIn([login.id])
-        case .setTimer: openSetTimer()
-        case .markLoggedInNow(opensSetTimer: true):
-            session.openSetTimerMarkingLoggedInNow(for: login.id, now: coordinator.now, newDraft: newSetTimerDraft)
-        case .markLoggedInNow(opensSetTimer: false): coordinator.markLoggedInNow(id: login.id)
-        case .sessionLength: break
-        case .editInSettings: editInSettings(login.id)
-        case .cancelAll: coordinator.cancelBatch()
-        }
+    private func logIn() {
+        coordinator.logIn([login.id])
     }
 
     private func choose(_ choice: SessionLengthChoice) {
@@ -303,7 +219,7 @@ struct TileView: View {
 
     // MARK: Colour
 
-    /// A 10% tint of the state's colour token, or the system's quietest fill for a state no token
+    /// The tile's fill: a tint of the state's colour token, or a system fill for a state no token
     /// means.
     private func tint(_ tile: TilePresentation) -> AnyShapeStyle {
         guard let colour = tile.colour else { return AnyShapeStyle(.quinary) }
@@ -316,7 +232,7 @@ struct TileView: View {
     }
 }
 
-/// A tile's first line, or its "…", as a control: the label alone, dimmed while pressed.
+/// A tile's first line as a control: the label alone, dimmed while pressed.
 private struct TileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -324,19 +240,16 @@ private struct TileButtonStyle: ButtonStyle {
     }
 }
 
-/// The visible Log In on a due tile, which the whole tile's button performs. Prominent, it takes
-/// the Accent fill under white text.
+/// The visible Log In on a due tile, which the whole tile's button performs, so it is plain text
+/// rather than a button's shape. Prominent, on
+/// the login Return logs in, it is bold.
 private struct LogInLabel: View {
     let isProminent: Bool
 
     var body: some View {
         Text("Log In")
-            .padding(.horizontal, 10)
-            .padding(.vertical, 3)
-            .foregroundStyle(isProminent ? Color.white : Color.primary)
-            .background(
-                isProminent ? AnyShapeStyle(Color("Accent")) : AnyShapeStyle(.quaternary),
-                in: RoundedRectangle(cornerRadius: 6))
+            .bold(isProminent)
+            .foregroundStyle(.primary)
     }
 }
 

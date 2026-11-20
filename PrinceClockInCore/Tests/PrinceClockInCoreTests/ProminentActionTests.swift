@@ -57,11 +57,8 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
             == .logIn(id: due.id))
     }
 
-    @Test func aHeldLogInButtonOnARunningTileIsNotProminent() {
-        let dev = login(remaining: 10 * 60, now: now, name: "dev")
-        let running = tilePresentation(
-            for: dev, now: now, leadTime: hour / 2, facts: TileFacts(activity: .running), holding: .logInButton,
-            locale: Locale(identifier: "en_GB"), calendar: Calendar(identifier: .gregorian))
+    @Test func aRunningDueTileIsNotProminent() {
+        let running = tile(remaining: 10 * 60, name: "dev", facts: TileFacts(activity: .running))
 
         #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [running], showsLogInToDue: false, isBatchRunning: true) == nil)
     }

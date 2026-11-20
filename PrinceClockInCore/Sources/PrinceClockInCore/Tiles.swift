@@ -61,7 +61,7 @@ public enum TileSubtitle: Equatable, Sendable {
     }
 }
 
-/// What a tile shows on its trailing side, before its "…".
+/// What a tile shows on its trailing side.
 public enum TileTrailing: Equatable, Sendable {
     case timeLeft(String)
     case stateWord(String)
@@ -69,20 +69,12 @@ public enum TileTrailing: Equatable, Sendable {
     case logIn
 }
 
-/// Which control a tile is.
-public enum TileControl: Equatable, Sendable {
-    /// The whole tile is a menu of its actions.
-    case actionsMenu
-    /// The tile is a button that logs in, beside a "…" menu of its actions.
-    case logInButton
-}
-
 /// What a tile shows below its first line, for the user to answer.
 public enum TileDetail: Equatable, Sendable {
     /// With Try Again and Show Output…, and Open System Settings… for System Settings → Privacy &
     /// Security → Automation when the failure is a denied permission to control Terminal.
     case failed(message: String, offersAutomationSettings: Bool = false)
-    /// "Logged in elsewhere?", with the confirming button's title and Set Timer….
+    /// "Logged in elsewhere?", with the confirming button's title, Log In and Set Timer….
     case possibleLogin(question: String, confirmTitle: String)
     /// With Edit Session Length….
     case stillValid(message: String)
@@ -92,30 +84,6 @@ public enum TileDetail: Equatable, Sendable {
     /// whether or not the user chose No timer: the prompt, with Set Timer's Session Length pop-up,
     /// whose length times the timer from that login.
     case needsSessionLength(prompt: String)
-}
-
-/// One item of a tile's "…" menu, which is also its context menu and its accessibility actions.
-public enum TileMenuItem: Hashable, Sendable {
-    case logIn
-    case setTimer
-    /// Opens Set Timer instead while the session length is unknown, to ask for it.
-    case markLoggedInNow(opensSetTimer: Bool)
-    /// A submenu of `sessionLengthOptions(current:)`.
-    case sessionLength
-    case editInSettings
-    case cancelAll
-
-    /// The item's title, in the glossary's title case.
-    public var title: String {
-        switch self {
-        case .logIn: "Log In"
-        case .setTimer: "Set Timer…"
-        case .markLoggedInNow: "Mark as Logged In Now"
-        case .sessionLength: "Session Length"
-        case .editInSettings: "Edit in Settings…"
-        case .cancelAll: "Cancel All"
-        }
-    }
 }
 
 /// Everything a tile draws and says, decided from one login.
@@ -128,42 +96,29 @@ public struct TilePresentation: Equatable, Identifiable, Sendable {
     public let colour: ColourToken?
     public let subtitle: TileSubtitle
     public let trailing: TileTrailing
-    public let control: TileControl
-    /// Whether clicking a `.logInButton` logs in: only while the tile is due and nothing is pending.
-    /// A held button does nothing once the tile is no longer due, or is running, queued, failed,
-    /// waiting for approval or asking.
+    /// Whether clicking the tile logs in: whenever nothing is pending. A click does nothing while
+    /// the tile is running, queued, failed, waiting for approval or asking.
     public let clickLogsIn: Bool
     public let detail: TileDetail?
     /// Whether the login is due: expiring or expired and not still valid.
     public let isDue: Bool
-    public let menuItems: [TileMenuItem]
     /// "name, kind, state, time", with durations in the wide style; a pending item's word is the state.
     public let accessibilityLabel: String
     /// What activating the tile does; empty when it does nothing.
     public let accessibilityHint: String
-    /// The "…" menu's label for VoiceOver.
-    public let actionsLabel: String
 }
 
 /// The tile for `login` at `now`. Running or queued comes first, then a failure, a command not yet
-/// approved and a possible login, in that order, then the timer. A due tile with nothing pending
-/// logs in when clicked; every other tile opens its actions. `heldControl`, the control the tile
-/// was when the pointer entered it, keeps the click's action while the pointer stays.
+/// approved and a possible login, in that order, then the timer. A tile with nothing pending logs
+/// in when clicked, due or not.
 public func tilePresentation(
-    for login: Login, now: Date, leadTime: TimeInterval, facts: TileFacts, holding heldControl: TileControl? = nil,
-    locale: Locale, calendar: Calendar
+    for login: Login, now: Date, leadTime: TimeInterval, facts: TileFacts, locale: Locale, calendar: Calendar
 ) -> TilePresentation {
     let timer = TileTimer(login, now: now, leadTime: leadTime)
     let pending = TilePending(facts, login: login)
     let due = isDue(login, now: now, leadTime: leadTime)
-    let control = heldControl ?? (due && pending == nil ? .logInButton : .actionsMenu)
-    let clickLogsIn = control == .logInButton && due && pending == nil
+    let clickLogsIn = pending == nil
     let kind = loginKindName(login.kind)
-    var menuItems: [TileMenuItem] = [
-        .logIn, .setTimer, .markLoggedInNow(opensSetTimer: login.sessionLength == nil), .sessionLength,
-        .editInSettings,
-    ]
-    if case .activity = pending { menuItems.append(.cancelAll) }
     let spokenParts = [
         login.displayName, kind, pending?.spokenWord ?? timer.spokenState, timer.spokenTime(locale: locale),
     ].compactMap { $0 }
@@ -173,18 +128,15 @@ public func tilePresentation(
         symbol: pending?.symbol ?? .systemImage(timer.symbolName),
         colour: pending.map(\.colour) ?? timer.colour,
         subtitle: timer.subtitle(kind: kind, locale: locale, calendar: calendar),
-        trailing: clickLogsIn ? .logIn : pending?.trailing ?? timer.trailing(locale: locale),
-        control: control,
+        trailing: clickLogsIn && due ? .logIn : pending?.trailing ?? timer.trailing(locale: locale),
         clickLogsIn: clickLogsIn,
         detail: detail(pending: pending, timer: timer, login: login, now: now, locale: locale, calendar: calendar),
         isDue: due,
-        menuItems: menuItems,
         accessibilityLabel: spokenParts.joined(separator: ", "),
-        accessibilityHint: clickLogsIn ? "Logs in" : control == .actionsMenu ? "Shows actions" : "",
-        actionsLabel: "Actions for \(login.displayName)")
+        accessibilityHint: clickLogsIn ? "Logs in" : "")
 }
 
-/// A choice in the Session Length submenu.
+/// A choice in the Session Length pop-up.
 public enum SessionLengthChoice: Hashable, Sendable {
     case length(TimeInterval)
     /// Any other number of hours or days, typed in.
@@ -193,29 +145,23 @@ public enum SessionLengthChoice: Hashable, Sendable {
     case noTimer
 }
 
-/// One item of the Session Length submenu, checked when it is the login's length.
+/// One item of the Session Length pop-up.
 public struct SessionLengthOption: Hashable, Sendable {
     public let choice: SessionLengthChoice
     public let title: String
-    public let isSelected: Bool
 }
 
-/// The one list of session lengths, for the panel's Session Length submenu, Set Timer and
-/// Settings: 8 hours, 12 hours, 1 day, 3 days, 7 days, Custom… and No timer. Custom… is checked
-/// for a length not listed.
-public func sessionLengthOptions(current: TimeInterval?) -> [SessionLengthOption] {
-    let listed = listedSessionLengths.map {
-        SessionLengthOption(choice: .length($0), title: sessionLengthText($0), isSelected: current == $0)
-    }
-    let isCustom = current.map { !isListedSessionLength($0) } ?? false
-    return listed + [
-        SessionLengthOption(choice: .custom, title: "Custom…", isSelected: isCustom),
-        SessionLengthOption(choice: .noTimer, title: "No timer", isSelected: current == nil),
+/// The one list of session lengths, for Set Timer and Settings: 8 hours, 12 hours, 1 day, 3 days,
+/// 7 days, Custom… and No timer.
+public func sessionLengthOptions() -> [SessionLengthOption] {
+    listedSessionLengths.map { SessionLengthOption(choice: .length($0), title: sessionLengthText($0)) } + [
+        SessionLengthOption(choice: .custom, title: "Custom…"),
+        SessionLengthOption(choice: .noTimer, title: "No timer"),
     ]
 }
 
 /// The choice a Session Length pop-up shows for a stored `length`: its own item when listed,
-/// Custom… when not, and No timer when unknown, as `sessionLengthOptions(current:)` checks them.
+/// Custom… when not, and No timer when unknown.
 public func sessionLengthChoice(for length: TimeInterval?) -> SessionLengthChoice {
     guard let length else { return .noTimer }
     return isListedSessionLength(length) ? .length(length) : .custom
@@ -223,7 +169,7 @@ public func sessionLengthChoice(for length: TimeInterval?) -> SessionLengthChoic
 
 private let listedSessionLengths: [TimeInterval] = [8, 12, 24, 72, 168].map { $0 * 3600 }
 
-/// Whether `length` has its own item in `sessionLengthOptions(current:)`, rather than Custom….
+/// Whether `length` has its own item in `sessionLengthOptions()`, rather than Custom….
 func isListedSessionLength(_ length: TimeInterval) -> Bool {
     listedSessionLengths.contains(length)
 }

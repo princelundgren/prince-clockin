@@ -11,21 +11,16 @@ struct PanelView: View {
     let updater: Updater
     let session: PanelSession
     let openSettings: () -> Void
-    /// Edit in Settings… on a tile: Settings on Logins, with that login selected.
-    let editInSettings: (UUID) -> Void
     /// Add Logins…: Settings on Logins, with its + menu open.
     let addLogins: () -> Void
     @FocusState private var focus: PanelFocus?
 
     private var coordinator: Coordinator { appModel.coordinator }
     private var logins: [Login] { coordinator.model.state.logins }
-    /// Each login's tile, in the order the panel took when it opened, built with the control
-    /// each tile holds.
+    /// Each login's tile, in the order the panel took when it opened.
     private var tilePresentations: [(login: Login, tile: TilePresentation)] {
         coordinator.model.logins(inOrder: session.order).compactMap { login in
-            coordinator.tile(
-                for: login.id, holding: session.heldControls[login.id], locale: .current, calendar: .current
-            ).map { (login, $0) }
+            coordinator.tile(for: login.id, locale: .current, calendar: .current).map { (login, $0) }
         }
     }
     private var dueCount: Int { coordinator.model.dueLogins(now: coordinator.now).count }
@@ -112,8 +107,7 @@ struct PanelView: View {
                 ForEach(tiles, id: \.tile.id) { entry in
                     TileView(
                         login: entry.login, tile: entry.tile, coordinator: coordinator, session: session,
-                        defaults: defaults, focus: $focus, heldControl: heldControl(for: entry.login.id),
-                        editInSettings: editInSettings)
+                        defaults: defaults, focus: $focus)
                 }
             }
             .onMoveCommand { move($0, keys: keys) }
@@ -132,10 +126,6 @@ struct PanelView: View {
         default: return
         }
         if case .focusTile(let id) = panelKeyResponse(to: key, in: keys) { focus = .tile(id) }
-    }
-
-    private func heldControl(for id: UUID) -> Binding<TileControl?> {
-        Binding(get: { session.heldControls[id] }, set: { session.heldControls[id] = $0 })
     }
 
     private func perform(_ action: BannerAction, on banner: Banner) {
@@ -200,10 +190,9 @@ private struct FooterIconButton: View {
 }
 
 /// What the panel keeps for one opening: its tiles' order, taken as it opens, what discovery found
-/// while no login is tracked, the control each tile held when the pointer entered it, the open Set
-/// Timer and its drafts, and whether the Notifications off banner was on screen. Closing the panel
-/// clears it and counts the closing, which gives the tiles new state for the next opening; each
-/// showing is counted too, for the focus it starts with.
+/// while no login is tracked, the open Set Timer and its drafts, and whether the Notifications off
+/// banner was on screen. Closing the panel clears it and counts the closing, which gives the tiles
+/// new state for the next opening; each showing is counted too, for the focus it starts with.
 @MainActor
 @Observable
 final class PanelSession {
@@ -212,7 +201,6 @@ final class PanelSession {
 
     private(set) var order: [UUID] = []
     private(set) var emptyPanel: EmptyPanel?
-    var heldControls: [UUID: TileControl] = [:]
     /// The login whose Set Timer is open; one at a time.
     private(set) var openSetTimer: UUID?
     /// Each login's Set Timer draft. Opening another login's form keeps this one's draft, so a
@@ -280,7 +268,6 @@ final class PanelSession {
     /// Returns whether the Notifications off banner was on screen during this opening, once its
     /// permission was read.
     func close() -> Bool {
-        heldControls = [:]
         openSetTimer = nil
         setTimerDrafts = [:]
         sessionLengthDrafts = [:]

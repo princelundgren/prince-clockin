@@ -14,7 +14,7 @@ public struct SetTimerDraft: Equatable, Sendable {
     public var hours: String
     public var minutes: String
     public var loggedInAt: Date
-    /// The Session Length pop-up's choice, from `sessionLengthOptions(current:)`.
+    /// The Session Length pop-up's choice, from `sessionLengthOptions()`.
     public var sessionLength: SessionLengthChoice
     /// Custom…'s number of hours, in the locale's number format.
     public var customHours: String

@@ -76,7 +76,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let panel = PanelView(
             appModel: appModel, updater: updater, session: panelSession,
             openSettings: { [weak self] in self?.showSettings() },
-            editInSettings: { [weak self] in self?.showSettings(selecting: $0) },
             addLogins: { [weak self] in self?.showSettingsOpeningAddMenu() })
         let hosting = PanelHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize

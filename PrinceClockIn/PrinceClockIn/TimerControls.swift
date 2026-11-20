@@ -102,7 +102,7 @@ struct SessionLengthPopUp: View {
 
     var body: some View {
         Picker("Session length", selection: $selection) {
-            ForEach(sessionLengthOptions(current: nil), id: \.choice) { option in
+            ForEach(sessionLengthOptions(), id: \.choice) { option in
                 Text(option.title).tag(option.choice)
             }
         }
