@@ -327,6 +327,50 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             message: "Its 1-day timer ran out, but Databricks says the login still works. The session length may be too short."))
     }
 
+    @Test func aDatabricksLoginWithNoSessionLengthAsksForIt() {
+        var loggedIn = noTimer()
+        loggedIn.loginTime = now.addingTimeInterval(-hour)
+
+        let asking = tile(loggedIn)
+
+        #expect(asking.detail == .needsSessionLength(prompt: "Choose a session length"))
+        #expect(asking.trailing == .stateWord("No timer"))
+    }
+
+    @Test func aDatabricksAccountProfileWithNoSessionLengthAsksForItToo() {
+        var account = Login(displayName: "analytics-account", kind: .databricksProfile(name: "analytics-account", accountLevel: true))
+        account.loginTime = now.addingTimeInterval(-hour)
+
+        #expect(tile(account).detail == .needsSessionLength(prompt: "Choose a session length"))
+    }
+
+    @Test func aStoredSessionLengthEndsTheAsk() {
+        var timed = noTimer()
+        timed.loginTime = now.addingTimeInterval(-hour)
+        timed.sessionLength = 72 * hour
+
+        #expect(tile(timed).detail == nil)
+    }
+
+    @Test func anInvalidatedDatabricksLoginDoesNotAskForItsSessionLength() {
+        var invalid = noTimer()
+        invalid.loginTime = now.addingTimeInterval(-hour)
+        invalid.invalidatedAt = now.addingTimeInterval(-60)
+
+        #expect(tile(invalid).detail == nil)
+    }
+
+    @Test func onlyALoggedInDatabricksLoginAsksForItsSessionLength() {
+        var custom = Login(displayName: "vpn", kind: .custom(command: nil))
+        custom.loginTime = now.addingTimeInterval(-hour)
+        var failed = noTimer()
+        failed.loginTime = now.addingTimeInterval(-hour)
+
+        #expect(tile(noTimer()).detail == nil)
+        #expect(tile(custom).detail == nil)
+        #expect(tile(failed, facts: TileFacts(failure: .timedOut)).detail == .failed(message: "The login timed out"))
+    }
+
     @Test func aCommandNotYetApprovedIsShown() {
         let vpn = Login(displayName: "vpn", kind: .custom(command: "vpn-login --user dev"), sessionLength: 8 * hour)
 

@@ -206,6 +206,12 @@ struct TileView: View {
                     Button("Run It") { coordinator.approveAndLogIn(login.id) }
                     Button("Not Now") { coordinator.dismissPendingApproval(id: login.id) }
                 }
+            case .needsSessionLength(let prompt):
+                Text(prompt)
+                SessionLengthPopUp(selection: Binding(
+                    get: { showsSessionLengthField ? .custom : .noTimer },
+                    set: { choose($0) }))
+                    .fixedSize()
             }
         }
         .font(.callout)

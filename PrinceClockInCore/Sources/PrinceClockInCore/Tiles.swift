@@ -88,6 +88,10 @@ public enum TileDetail: Equatable, Sendable {
     case stillValid(message: String)
     /// The command, with Run It and Not Now.
     case notYetApproved(command: String)
+    /// A Databricks login that logged in with no session length and hasn't been invalidated since,
+    /// whether or not the user chose No timer: the prompt, with Set Timer's Session Length pop-up,
+    /// whose length times the timer from that login.
+    case needsSessionLength(prompt: String)
 }
 
 /// One item of a tile's "…" menu, which is also its context menu and its accessibility actions.
@@ -270,6 +274,10 @@ private func detail(
         return .possibleLogin(
             question: "Its login changed \(changed). Was that you?", confirmTitle: "Mark as Logged In \(when)")
     case nil:
+        if case .databricksProfile = login.kind, login.loginTime != nil, login.sessionLength == nil,
+           !isInvalidated(login) {
+            return .needsSessionLength(prompt: "Choose a session length")
+        }
         guard case .stillValid = timer, let length = login.sessionLength else { return nil }
         return .stillValid(message: "Its \(sessionLengthAdjective(length)) timer ran out, but Databricks says the "
             + "login still works. The session length may be too short.")

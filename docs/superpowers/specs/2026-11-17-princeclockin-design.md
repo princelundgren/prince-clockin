@@ -346,6 +346,9 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
+  - **Session length:** a Databricks login that logged in with no session length asks for it (see
+    Running logins), until a length is stored or the login is invalidated. A No timer chosen on
+    purpose keeps it asking (owner, 2026-11-20).
   - **Set Timer**, opened inline in the tile, not as a sheet, since a sheet loses focus with the
     popover: Expires In (hours and minutes) or Logged In At, a Session Length pop-up, a caption
     ("Expires tomorrow at 03:55. The session length times its next login."), Cancel and Set. A
@@ -565,7 +568,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
   (checked by the owner, 2026-11-17).
 - A Databricks login run with no session length records its login time; its tile stays No timer
-  and asks for the session length inline, as Set Timer does, and the timer counts from that login.
+  and asks for the session length inline, as Set Timer does ("Choose a session length" over Set
+  Timer's Session Length pop-up), and the timer counts from that login.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.
