@@ -401,7 +401,8 @@ without its text, so no earlier text shows.
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
-    timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
+    timed out", "The login was stopped by signal 9" for a CLI ended by a signal the app didn't
+    send), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
     A denied permission to control Terminal also offers Open System Settings… (see Running logins).
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02, Log In and Set Timer…. A question the first check after the Mac wakes raises says

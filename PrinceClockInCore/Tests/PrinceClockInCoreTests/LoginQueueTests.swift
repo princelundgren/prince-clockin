@@ -335,6 +335,23 @@ private final class StepLog: @unchecked Sendable {
         #expect(await queue.lastOutput(id: UUID()) == nil)
     }
 
+    @Test func aSignalIsItsOwnFailureAndKeepsTheOutput() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let runner = FakeRunner { _ in .signalled(signal: 9, output: "Opening the browser") }
+        let queue = makeQueue(runner: runner, path: directory)
+        var events = EventReader(queue)
+        let dev = awsLogin("dev")
+
+        await queue.enqueue([dev], timeout: timeout)
+
+        #expect(await events.throughFinished() == [
+            .queued(ids: [dev.id], total: 1),
+            .started(id: dev.id, position: 1, total: 1), .failed(id: dev.id, reason: .signal(9)), .finished,
+        ])
+        #expect(await queue.lastOutput(id: dev.id) == "Opening the browser")
+    }
+
     @Test func timeoutIsFailedAndQueueContinues() async throws {
         let directory = try makeCLIDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -921,6 +938,7 @@ private final class StepLog: @unchecked Sendable {
 @Test func failureMessagesSayWhatWentWrong() {
     #expect(LoginFailure.cliNotFound("aws").message == "aws not found on your login shell's PATH")
     #expect(LoginFailure.exitCode(2).message == "The login exited with status 2")
+    #expect(LoginFailure.signal(9).message == "The login was stopped by signal 9")
     #expect(LoginFailure.timedOut.message == "The login timed out")
     #expect(LoginFailure.cancelled.message == "Cancelled")
     #expect(LoginFailure.launchFailed("aws: permission denied").message == "aws: permission denied")

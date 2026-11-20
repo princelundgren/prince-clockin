@@ -20,6 +20,8 @@ public enum LoginFailure: Equatable, Sendable {
     case cliNotFound(String)
     /// The CLI exited with this non-zero status.
     case exitCode(Int32)
+    /// The CLI was ended by this signal, not by the queue.
+    case signal(Int32)
     /// The login ran past its timeout: the CLI was ended, or a custom login got no Done.
     case timedOut
     /// The user cancelled the run while this login was running or waiting for Done.
@@ -38,6 +40,7 @@ extension LoginFailure {
         switch self {
         case .cliNotFound(let executable): "\(executable) not found on your login shell's PATH"
         case .exitCode(let code): "The login exited with status \(code)"
+        case .signal(let number): "The login was stopped by signal \(number)"
         case .timedOut: "The login timed out"
         case .cancelled: "Cancelled"
         case .launchFailed(let reason), .terminalFailed(let reason): reason
@@ -231,6 +234,9 @@ public actor LoginQueue {
         case .exited(let code, let output):
             outputs[id] = output
             return .failed(id: id, reason: .exitCode(code))
+        case .signalled(let signal, let output):
+            outputs[id] = output
+            return .failed(id: id, reason: .signal(signal))
         case .timedOut(let output):
             outputs[id] = output
             return .failed(id: id, reason: .timedOut)

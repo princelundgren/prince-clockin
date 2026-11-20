@@ -4,6 +4,9 @@ import Foundation
 public enum ProcessOutcome: Equatable, Sendable {
     /// The process exited by itself. `output` is the last 64 KB of stdout and stderr together.
     case exited(code: Int32, output: String)
+    /// The process was ended by a signal it didn't catch, not by the runner. `output` is as for
+    /// `exited`.
+    case signalled(signal: Int32, output: String)
     /// The process ran past the timeout and was terminated. `output` is what it had written, as for
     /// `exited`.
     case timedOut(output: String)
@@ -45,7 +48,8 @@ public final class FoundationProcessRunner: ProcessRunning {
             await withCheckedContinuation { continuation in
                 process.terminationHandler = { finished in
                     box.markFinished()
-                    continuation.resume(returning: .exited(finished.terminationStatus))
+                    let isSignal = finished.terminationReason == .uncaughtSignal
+                    continuation.resume(returning: .exited(finished.terminationStatus, bySignal: isSignal))
                 }
                 switch box.launch(process) {
                 case .launched:
@@ -71,20 +75,22 @@ public final class FoundationProcessRunner: ProcessRunning {
             drain.close(reader)
             try? pipe.fileHandleForWriting.close()
             return .launchFailed(message)
-        case .exited(let code):
+        case .exited(let status, let bySignal):
             await drain.finish(reader, within: .seconds(1))
             let output = drain.output
             switch box.stopReason {
             case .cancelled: return .cancelled
             case .timedOut: return .timedOut(output: output)
-            case nil: return .exited(code: code, output: output)
+            case nil where bySignal: return .signalled(signal: status, output: output)
+            case nil: return .exited(code: status, output: output)
             }
         }
     }
 }
 
 private enum Ended {
-    case exited(Int32)
+    /// `status` is the signal's number when `bySignal`, else the exit code.
+    case exited(Int32, bySignal: Bool)
     case cancelledBeforeLaunch
     case launchFailed(String)
 }

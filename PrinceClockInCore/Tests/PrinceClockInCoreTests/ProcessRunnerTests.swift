@@ -47,6 +47,11 @@ import PrinceClockInCore
         #expect(output.contains("out") && output.contains("err"))
     }
 
+    @Test func runnerReportsASignalApartFromAnExitCode() async {
+        let outcome = await run("/bin/sh", ["-c", "echo before; kill -9 $$"])
+        #expect(outcome == .signalled(signal: 9, output: "before\n"))
+    }
+
     @Test func runnerReportsLaunchFailure() async {
         let outcome = await run("/nonexistent/tool", [])
         guard case .launchFailed = outcome else {
