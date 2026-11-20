@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// How a run of an external process ended.
 public enum ProcessOutcome: Equatable, Sendable {
@@ -28,7 +29,16 @@ public protocol ProcessRunning: Sendable {
 /// pipe. A stop sends `SIGTERM` to the child's process group, or to the child alone if it shares a
 /// group, and `SIGKILL` to what is left 2 seconds later.
 public final class FoundationProcessRunner: ProcessRunning {
+    private let live = LiveProcesses()
+
     public init() {}
+
+    /// Sends `SIGKILL` now to every process this runner started that is still running, and to the
+    /// group of each stopped one whose `SIGKILL` is still pending. For the moment before the app
+    /// quits, when nothing will be left to send it later.
+    public func killAll() {
+        live.killAll()
+    }
 
     public func run(
         executable: URL, arguments: [String], environment: [String: String], timeout: Duration
@@ -43,7 +53,7 @@ public final class FoundationProcessRunner: ProcessRunning {
         process.standardError = pipe
         let reader = pipe.fileHandleForReading
         let drain = OutputDrain()
-        let box = ProcessBox()
+        let box = ProcessBox(live: live)
 
         let ended: Ended = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -119,6 +129,7 @@ private final class ProcessBox: @unchecked Sendable {
         case cancelledEarly
     }
 
+    private let live: LiveProcesses
     private let lock = NSLock()
     private var state = State.notLaunched
     private var reason: StopReason?
@@ -129,6 +140,10 @@ private final class ProcessBox: @unchecked Sendable {
     private var groupID: pid_t?
 
     var stopReason: StopReason? { lock.withLock { reason } }
+
+    init(live: LiveProcesses) {
+        self.live = live
+    }
 
     func launch(_ process: Process) -> Launch {
         lock.withLock {
@@ -141,6 +156,7 @@ private final class ProcessBox: @unchecked Sendable {
             state = .running(process)
             let pid = process.processIdentifier
             if getpgid(pid) == pid { groupID = pid }
+            live.insert(self)
             return .launched
         }
     }
@@ -159,6 +175,7 @@ private final class ProcessBox: @unchecked Sendable {
         lock.withLock {
             state = .finished
             timeoutTask?.cancel()
+            if reason == nil || groupID == nil { live.remove(self) }
         }
     }
 
@@ -170,7 +187,7 @@ private final class ProcessBox: @unchecked Sendable {
             case .running(let process):
                 if reason == nil {
                     reason = stopReason
-                    if let groupID { kill(-groupID, SIGTERM) } else { process.terminate() }
+                    if let groupID { Darwin.kill(-groupID, SIGTERM) } else { process.terminate() }
                     scheduleKill()
                 }
             case .finished, .cancelledEarly:
@@ -182,16 +199,40 @@ private final class ProcessBox: @unchecked Sendable {
     private func scheduleKill() {
         Task.detached { [self] in
             try? await Task.sleep(for: .seconds(2))
-            lock.withLock {
-                // Even once the child has exited, since a descendant can outlive it; the system
-                // doesn't reuse a group's ID while any process is left in the group.
-                if let groupID {
-                    kill(-groupID, SIGKILL)
-                } else if case .running(let process) = state, process.isRunning {
-                    kill(process.processIdentifier, SIGKILL)
-                }
+            killNow()
+            live.remove(self)
+        }
+    }
+
+    /// Sends `SIGKILL` to the child's group even once the child has exited, since a descendant can
+    /// outlive it. An emptied group's ID is free for reuse, but pids are handed out in sequence, so
+    /// reuse within the 2 seconds would take a wrap of the whole pid space.
+    func killNow() {
+        lock.withLock {
+            if let groupID {
+                Darwin.kill(-groupID, SIGKILL)
+            } else if case .running(let process) = state, process.isRunning {
+                Darwin.kill(process.processIdentifier, SIGKILL)
             }
         }
+    }
+}
+
+/// The runner's processes that may still need a `SIGKILL`: from launch until the child exits by
+/// itself, or until the `SIGKILL` that follows a stop.
+private final class LiveProcesses: Sendable {
+    private let boxes = Mutex<[ObjectIdentifier: ProcessBox]>([:])
+
+    func insert(_ box: ProcessBox) {
+        boxes.withLock { $0[ObjectIdentifier(box)] = box }
+    }
+
+    func remove(_ box: ProcessBox) {
+        _ = boxes.withLock { $0.removeValue(forKey: ObjectIdentifier(box)) }
+    }
+
+    func killAll() {
+        for box in boxes.withLock({ Array($0.values) }) { box.killNow() }
     }
 }
 

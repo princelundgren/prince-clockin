@@ -134,6 +134,58 @@ import PrinceClockInCore
         #expect(await isGone(grandchild, within: .seconds(4)))
     }
 
+    @Test func killAllEndsARunningChildAndWhatItStarted() async throws {
+        let runner = FoundationProcessRunner()
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let task = Task {
+            await runner.run(
+                executable: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", #"sleep 30 & echo $! > "$1"; wait"#, "sh", pidFile.path],
+                environment: ["PATH": "/usr/bin:/bin"], timeout: .seconds(30))
+        }
+        let grandchild = try await waitForPid(in: pidFile)
+
+        runner.killAll()
+
+        #expect(await task.value == .signalled(signal: SIGKILL, output: ""))
+        #expect(await isGone(grandchild, within: .seconds(1)))
+    }
+
+    @Test func killAllDoesntWaitForAStoppedGroupsPendingKill() async throws {
+        let runner = FoundationProcessRunner()
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let task = Task {
+            await runner.run(
+                executable: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", #"(trap "" TERM; exec sleep 30) & echo $! > "$1"; wait"#, "sh", pidFile.path],
+                environment: ["PATH": "/usr/bin:/bin"], timeout: .seconds(30))
+        }
+        let grandchild = try await waitForPid(in: pidFile)
+        task.cancel()
+        #expect(await task.value == .cancelled)
+
+        runner.killAll()
+
+        // Well inside the 2 seconds after which the stop's own SIGKILL would have come.
+        #expect(await isGone(grandchild, within: .milliseconds(500)))
+    }
+
+    /// The pid a script writes to `file`, once it has.
+    private func waitForPid(in file: URL) async throws -> pid_t {
+        for _ in 0..<100 {
+            if let text = try? String(contentsOf: file, encoding: .utf8),
+               let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return pid
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return try #require(nil as pid_t?, "no pid written to \(file.lastPathComponent)")
+    }
+
     @Test func runnerDrainsLargeOutput() async {
         let script = "i=0; while [ $i -lt 1024 ]; do printf '%01023d\\n' $i >&2; i=$((i+1)); done"
         let outcome = await run("/bin/sh", ["-c", script])

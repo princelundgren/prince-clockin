@@ -15,6 +15,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private static let notificationsBannerDismissedKey = "notificationsBannerDismissed"
 
     let coordinator: Coordinator
+    /// Runs every CLI the app starts, so quitting can kill what is left of them.
+    let runner: FoundationProcessRunner
     /// The user's home directory, which Settings abbreviates to `~` in a config file's path.
     let homeDirectory: URL
     /// Whether the user has denied notifications, so the panel and settings can say so.
@@ -42,6 +44,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     override init() {
         let environment = ProcessInfo.processInfo.environment
         let runner = FoundationProcessRunner()
+        self.runner = runner
         let pathResolver = ShellPathResolver(runner: runner, shell: Self.loginShell(), environment: environment)
         let queue = LoginQueue(runner: runner, pathResolver: pathResolver, terminal: TerminalOpener())
         let home = URL(

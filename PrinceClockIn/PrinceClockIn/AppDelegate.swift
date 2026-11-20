@@ -71,6 +71,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return .terminateLater
     }
 
+    /// Kills whatever the app's CLIs left running, which nothing could end after the app has gone.
+    func applicationWillTerminate(_ notification: Notification) {
+        appModel.runner.killAll()
+    }
+
     private func replyToQuit() {
         guard let quitTimer else { return }
         quitTimer.invalidate()

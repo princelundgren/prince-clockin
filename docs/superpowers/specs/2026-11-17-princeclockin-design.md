@@ -648,7 +648,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   running login cancels it, and the queue goes on.
 - Quitting while a batch runs cancels it, as Cancel All does, and the app quits once the batch has
   finished, or 3 seconds later if it hasn't. An update's relaunch postponed for the batch then
-  doesn't go ahead, so the app stays quit.
+  doesn't go ahead, so the app stays quit. As it quits, the app kills every CLI still running, with
+  its process group, and what is left of the group of each one it stopped.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser. A login runs with the stored timeout held between 2 minutes and 24 hours, or with the
   default if the stored value isn't finite, so a hand-edited state file can't end every login at
