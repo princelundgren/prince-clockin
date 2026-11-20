@@ -247,30 +247,54 @@ private struct GeneralSettings: View {
 
 // MARK: About
 
+/// Settings → About: the app's icon, name, version and tagline with Check for Updates…, its links,
+/// and what it connects to.
 private struct AboutSettings: View {
+    private static let iconSize: CGFloat = 64
+
     let updater: Updater
 
     var body: some View {
         Form {
             Section {
-                LabeledContent("PrinceClockIn", value: version)
-                Button("Check for Updates…") { updater.checkForUpdates() }
+                HStack(spacing: 16) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: Self.iconSize, height: Self.iconSize)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PrinceClockIn")
+                            .font(.title2.bold())
+                        Text(version)
+                            .foregroundStyle(.secondary)
+                        Text("Your command-line logins, before they expire.")
+                    }
+                    Spacer()
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                }
             }
             Section {
-                Link("Report an Issue…", destination: AppLinks.reportIssue)
-                Link("Website", destination: AppLinks.website)
-                Button("Third-Party Notices…", action: openThirdPartyNotices)
+                HStack(spacing: 16) {
+                    Link("Report an Issue…", destination: AppLinks.reportIssue)
+                    Link("Website", destination: AppLinks.website)
+                    Button("Third-Party Notices…", action: openThirdPartyNotices)
+                        .buttonStyle(.link)
+                }
+                .foregroundStyle(Color("Link"))
+                Text(
+                    "No analytics or crash reports. PrinceClockIn's only connection is the daily update check; "
+                        + "the CLIs it runs make their own.")
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
     }
 
-    /// "v1.0.0 (42)": the marketing version and the build number.
     private var version: String {
         let info = Bundle.main.infoDictionary
-        let marketing = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "v\(marketing) (\(build))"
+        return versionText(
+            marketingVersion: info?["CFBundleShortVersionString"] as? String ?? "?",
+            build: info?["CFBundleVersion"] as? String ?? "?")
     }
 
     /// Opens the bundled licenses in the user's text viewer.

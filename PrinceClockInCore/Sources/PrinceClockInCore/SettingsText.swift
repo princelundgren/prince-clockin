@@ -92,3 +92,8 @@ public func launchAtLoginSetting(status: LaunchAtLoginStatus, failure: LaunchAtL
     let change = failure.turningOn ? "on" : "off"
     return LaunchAtLoginSetting(isOn: isOn, note: .failed("Couldn't turn \(change) launch at login. \(failure.reason)"))
 }
+
+/// Settings → About's version: "v1.0.0 (42)", the marketing version and the build number.
+public func versionText(marketingVersion: String, build: String) -> String {
+    "v\(marketingVersion) (\(build))"
+}

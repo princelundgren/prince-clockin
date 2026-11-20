@@ -70,4 +70,10 @@ import PrinceClockInCore
         #expect(launchAtLoginSetting(status: .needsApproval, failure: failure).note
             == .needsApproval("Needs your approval in System Settings → General → Login Items."))
     }
+
+    // MARK: About
+
+    @Test func theVersionIsTheMarketingVersionThenTheBuildNumber() {
+        #expect(versionText(marketingVersion: "1.0.0", build: "42") == "v1.0.0 (42)")
+    }
 }
