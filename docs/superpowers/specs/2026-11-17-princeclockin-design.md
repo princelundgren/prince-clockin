@@ -605,7 +605,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   whether the profile is account-level, the time and result of its last check and of its last
   answer (valid or invalid), and, for AWS,
   the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
-- A file that is unreadable, or from a newer version, is set aside beside it and the app starts
+- A file that is unreadable, or from another version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Bundle ID `com.princelundgren.princeclockin`.
