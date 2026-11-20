@@ -17,22 +17,25 @@ one expires, and logs in to the ones you pick, one after another, when you click
   profiles (`databricks auth login`), and any other login as a custom login.
 - **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
   symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
-  in the order you set in Settings, with its time left.
-- **Notifies once** before a login expires, 30 minutes ahead by default. Logins that need it at the
-  same time, or while the Mac slept, share one notification, whose Log In button starts them.
+  in the order you drag them into in Settings → Logins, with its time left.
+- **Notifies once** before a login expires, 30 minutes ahead by default, which you change in
+  Settings → Notifications. Logins that need it at the same time, or while the Mac slept, share
+  one notification, whose Log In button starts them.
 - **Logs in when you click**: any tile that isn't running, queued, failed, awaiting approval or
-  asking, Log In to N Due when several are due, or a preset you define such as "AWS dev +
-  Databricks dev". Logins run one at a time, since several browser sign-ins at once conflict, and
-  a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs in on its own.
-- **Notices logins you do in a terminal**: an `aws sso login` is read from the AWS CLI's cache
-  file, and when the file can't tell a login from a renewal, the tile asks "Logged in
-  elsewhere?". A Databricks profile is checked with the Databricks CLI when it enters its
-  notification time, or when you click Check Databricks Now in Settings → Logins.
-- **Takes a timer by hand**: when a tile asks "Logged in elsewhere?", Set Timer… takes when the
-  login expires or when you logged in.
+  asking, Log In to N Due when several are due, or a preset you make in Settings → Presets, such
+  as "AWS dev + Databricks dev". Logins run one at a time, since several browser sign-ins at once
+  conflict, and a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs
+  in on its own.
+- **Notices logins you do in a terminal**: an `aws sso login` shows up as soon as the AWS CLI
+  writes its cache file, and when the file can't tell a login from a renewal, the tile asks "Its
+  login changed at <time>. Was that you?". A Databricks profile is checked with the Databricks CLI
+  when it enters its notification time, or when you click Check Databricks Now in Settings →
+  Logins.
+- **Takes a timer by hand**: when a tile asks "Was that you?", Set Timer… takes when the login
+  expires or when you logged in.
 - **Runs a custom login's command in Terminal**, so you can type passwords or MFA codes there, or
   waits while you log in your own way. Its timer starts when you click Done, within the login
-  timeout (5 minutes by default).
+  timeout (5 minutes by default, set in Settings → General).
 - **Works from the keyboard**: Return triggers the panel's one highlighted button, and Escape
   cancels an open Set Timer, else closes the panel. With Keyboard Navigation on, the arrow keys
   move between tiles.
