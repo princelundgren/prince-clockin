@@ -51,10 +51,11 @@ struct PanelView: View {
             if let card = coordinator.batchCard {
                 BatchCardView(card: card, coordinator: coordinator, defaults: defaults)
             }
-            if logins.isEmpty, let empty = session.emptyPanel {
-                EmptyPanelView(empty: empty, addLogins: addLogins)
+            if logins.isEmpty {
+                EmptyPanelView(empty: session.emptyPanel, defaults: defaults, addLogins: addLogins)
+            } else {
+                tileList(tiles, defaults: defaults, keys: keys)
             }
-            tileList(tiles, defaults: defaults, keys: keys)
             if showsLogInToDue {
                 Button("Log In to \(dueCount) Due") {
                     coordinator.logIn(coordinator.model.dueLogins(now: coordinator.now).map(\.id))
@@ -291,21 +292,22 @@ private struct EmptyPanelTrigger: Equatable {
     let hasNoLogins: Bool
 }
 
-/// No login tracked: what discovery found, and Add Logins….
+/// No login tracked: the system's empty state, with what discovery found once it answers, and
+/// Add Logins….
 private struct EmptyPanelView: View {
-    let empty: EmptyPanel
+    let empty: EmptyPanel?
+    let defaults: PanelDefaults
     let addLogins: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let title = empty.title {
-                Text(title)
-                    .font(.headline)
-            }
-            Text(empty.message)
-                .fixedSize(horizontal: false, vertical: true)
+        ContentUnavailableView {
+            Label(EmptyPanel.title, systemImage: "clock")
+        } description: {
+            if let empty { Text(empty.message) }
+        } actions: {
             Button("Add Logins…", action: addLogins)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .prominent(defaults.prominent == .addLogins)
+                .returnKey(defaults.onReturn == .addLogins)
         }
     }
 }
