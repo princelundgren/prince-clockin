@@ -13,14 +13,16 @@ public enum ProminentAction: Equatable, Sendable {
     case tryAgain(id: UUID)
     /// A question's Mark as Logged In at <time>.
     case markAsLoggedInAt(id: UUID)
+    /// Add Logins…, in the empty panel.
+    case addLogins
 }
 
 /// The prominent button for the panel's `tiles`, in panel order, in the design's order: Set in the
 /// Set Timer open on login `openSetTimer`, while its tile is shown; Done for custom login
 /// `waitingForDone`; Log In to N Due; the first due tile with an action of its own (a Log In its
 /// click runs, or Try Again when it failed); then the first question's Mark as Logged In at
-/// <time>. `nil` when nothing needs the user. Try Again is never prominent during a batch; Cancel
-/// All and Run It never are.
+/// <time>; with no tiles and no batch, Add Logins…. `nil` when nothing needs the user. Try Again is
+/// never prominent during a batch; Cancel All and Run It never are.
 public func prominentAction(
     openSetTimer: UUID?, waitingForDone: UUID?, tiles: [TilePresentation], showsLogInToDue: Bool,
     isBatchRunning: Bool
@@ -35,5 +37,6 @@ public func prominentAction(
     for tile in tiles {
         if case .possibleLogin = tile.detail { return .markAsLoggedInAt(id: tile.id) }
     }
+    if tiles.isEmpty, !isBatchRunning { return .addLogins }
     return nil
 }

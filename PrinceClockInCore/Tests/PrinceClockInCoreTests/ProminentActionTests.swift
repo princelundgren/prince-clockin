@@ -99,7 +99,15 @@ private func tile(remaining: TimeInterval, name: String, facts: TileFacts = Tile
         let running = tile(remaining: -hour, name: "prod", facts: TileFacts(activity: .running))
 
         #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [ok, running], showsLogInToDue: false, isBatchRunning: true) == nil)
-        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [], showsLogInToDue: false, isBatchRunning: false) == nil)
+    }
+
+    @Test func addLoginsIsProminentInTheEmptyPanel() {
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [], showsLogInToDue: false, isBatchRunning: false)
+            == .addLogins)
+    }
+
+    @Test func addLoginsIsNotProminentWhileABatchRuns() {
+        #expect(prominentAction(openSetTimer: nil, waitingForDone: nil, tiles: [], showsLogInToDue: false, isBatchRunning: true) == nil)
     }
 
     @Test func runItIsNeverProminent() {

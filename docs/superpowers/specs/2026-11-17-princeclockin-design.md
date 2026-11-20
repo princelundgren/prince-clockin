@@ -501,8 +501,9 @@ A token has only the meanings its row lists.
   use `.small`. One `.borderedProminent` per view: the state's single default, in this order: Set in
   an open Set Timer, Done while a custom login waits, Log In to N Due, the first due tile's own
   action (its Log In, drawn bold instead, or Try Again when it failed), else the first question's
-  Mark as Logged In at <time>. Nothing is prominent when nothing needs the user, and Cancel All, Try
-  Again during a batch, and Run It never are.
+  Mark as Logged In at <time>, and in the empty panel, with no batch running, Add Logins…. Nothing
+  is prominent when nothing needs the user, and Cancel All, Try Again during a batch, and Run It
+  never are.
 - **Return** triggers that default wherever focus is, except in a text field, where it commits
   the field; **Space** activates the focused control, such as a tile. **Escape** cancels an open
   Set Timer, else closes the panel.
