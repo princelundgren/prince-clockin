@@ -36,7 +36,8 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
-    /// The user's yes to "Logged in at <time>?": the login time becomes the rewrite's time.
+    /// The user's Mark as Logged In at <time>, answering "Its login changed at <time>. Was that you?":
+    /// the login time becomes the rewrite's time.
     public mutating func confirmPossibleLogin(id: UUID) {
         guard let possibleLogin = possibleLogins[id] else { return }
         setLoginTime(id: id, at: possibleLogin.time)

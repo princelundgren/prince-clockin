@@ -152,11 +152,11 @@ The login time comes from:
         only renews within 15 minutes of it. A rewrite at or after the timer's expiry is a login,
         since a renewal can't outlive the session.
      5. A rewrite while the timer is unknown, or within the notification time, could be either,
-        since the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with
-        the rewrite's time, and offers Mark as Logged In at <time>, Log In and Set Timer…; the
-        first sets the login time to the rewrite's time. There is no "No", since a wrong timer is
-        worse than an open question: the question stays until a time is set or the app logs the
-        login in (owner, 2026-11-19). Any other rewrite is a renewal.
+        since the CLI also renews a token that has lapsed. The tile asks "Its login changed at
+        <time>. Was that you?" with the rewrite's time, and offers Mark as Logged In at <time>, Log
+        In and Set Timer…; the first sets the login time to the rewrite's time. There is no "No",
+        since a wrong timer is worse than an open question: the question stays until a time is set
+        or the app logs the login in (owner, 2026-11-19). Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -362,7 +362,8 @@ AWS SSO sessions and 1 Databricks profile in your config files.") and Add Logins
 found, the text reads "No AWS SSO sessions or Databricks profiles in your config files. Log in once
 with the aws or databricks CLI, or add your own command." Add Logins… opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
-under +, since SwiftUI can't open a `Menu` programmatically.
+under +, since SwiftUI can't open a `Menu` programmatically. The presets are hidden while no login
+is tracked, since every preset is then empty.
 Discovery reads the config files again on each opening; while it runs, the empty state shows
 without its text, so no earlier text shows.
 
@@ -394,7 +395,7 @@ without its text, so no earlier text shows.
   actions, so there is no Mark as Logged In Now or Edit in Settings…. A SwiftUI menu in the panel
   closed on the first click after the panel opened, the app's activation arriving with that click
   (macOS 27.2.1), and the owner chose fewer actions over working around it. Session length is set
-  in Settings, and Set Timer opens from a "Logged in elsewhere?" question and from Settings'
+  in Settings, and Set Timer opens from a "Was that you?" question and from Settings'
   prompt after adding a login. A login whose timer is wrong with no question, or a custom login
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
@@ -450,7 +451,8 @@ without its text, so no earlier text shows.
 
 #### Settings window
 
-Its own window hosting SwiftUI: a native sidebar list with a symbol per pane,
+Its own window hosting SwiftUI: a native sidebar list with a symbol per pane (`person.badge.key`
+Logins, `list.bullet` Presets, `bell` Notifications, `gearshape` General, `info.circle` About),
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
 Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
 resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
@@ -477,8 +479,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
     notify you before it expires, or skip and log in from the panel later." with Skip and Set
-    Timer…, so a login the user has already done gets a known timer instead of the "Logged in
-    elsewhere?" question later. It is asked once: selecting another login or removing this one
+    Timer…, so a login the user has already done gets a known timer instead of the "Was that
+    you?" question later. It is asked once: selecting another login or removing this one
     ends it.
 - **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
   the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
@@ -553,7 +555,8 @@ A token has only the meanings its row lists.
   `panelKeyResponse(to:in:)` decides Return and the arrows, and
   `escapeResponse(openSetTimer:tiles:)` Escape.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
-  shows none.
+  shows none. It also carries File → Close (⌘W) and an Edit menu (Undo, Redo, Cut, Copy, Paste,
+  Select All), for the Settings window and its text fields.
 - **VoiceOver:** every login tile follows one template, a label of "name, kind, state, time" ("prod,
   AWS SSO session, expiring, 19 minutes left") and "Logs in" as its hint, with no hint while a click
   does nothing. A pending item's word (logging in, queued, failed, not yet approved, logged in
@@ -610,10 +613,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its notification time. Logins that do so close together, or
-  while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
-  notification time passed while the app wasn't running is announced once at the next launch, as
-  expired if it has.
+- One notification when a login enters its notification time. Logins that enter it at the same
+  moment, or while the Mac slept or the app wasn't running, are grouped into one notification. A
+  login whose notification time passed while the app wasn't running is announced once at the next
+  launch, as expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
@@ -680,7 +683,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 - Swift 6. An `NSStatusItem` with a transient `NSPopover` (about 320 pt) and a right-click
   `NSMenu`, their content in SwiftUI. The status item's behaviour is `terminationOnRemoval`.
-- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q.
+- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q, File →
+  Close (⌘W) and an Edit menu.
 - Colours come from the app's asset catalog, with light, dark and Increase Contrast variants.
 - Minimum macOS 26 (owner, 2026-11-17).
 - Not sandboxed (see Approaches). Hardened runtime, Developer ID signing, notarized.
@@ -799,8 +803,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
-- Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
-  these behaviours are unverified:
+- Not yet checked on a Mac with macOS 26; these behaviours stay unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
     image, which Apple documents as styled for the menu bar, looks right in a light menu bar, over a
     light wallpaper and on an inactive second display.
@@ -822,9 +825,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
     `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
     tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
-    `clock.badge.checkmark`,
-    `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud` and
-    `square.stack.3d.up`, the preset tiles' `rectangle.stack`, and the footer's `gear` and `power`.
+    `clock.badge.checkmark`, `checkmark.circle`, `questionmark.circle`, `terminal`, `cloud` and
+    `square.stack.3d.up`, the Settings sidebar's `person.badge.key`, `list.bullet`, `bell`,
+    `gearshape` and `info.circle`, Settings' + and − as `plus` and `minus`, the preset tiles'
+    `rectangle.stack`, and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in

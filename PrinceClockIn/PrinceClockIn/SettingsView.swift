@@ -182,7 +182,7 @@ private struct DurationPopUp: View {
 
 // MARK: General
 
-/// Settings → General: Launch at login, Login timeout, and what removing the menu bar icon does.
+/// Settings → General: Launch at login and Login timeout.
 /// The login item's status is read again when the pane appears and when the app becomes active,
 /// since the user can change it in System Settings.
 private struct GeneralSettings: View {

@@ -345,7 +345,7 @@ public final class Coordinator {
         await queue.lastOutput(id: id)
     }
 
-    /// The user's yes to "Logged in at <time>?".
+    /// The user's Mark as Logged In at <time>, answering "Its login changed at <time>. Was that you?".
     public func confirmPossibleLogin(id: UUID) {
         model.confirmPossibleLogin(id: id)
         saveIfChanged()
