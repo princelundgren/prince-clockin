@@ -245,6 +245,10 @@ never in colour; the panel has the times.
 - The symbol is an `NSImageView` in the status item's button, since in AppKit only an image view
   runs SF Symbol effects; Logging in adds the Pulse effect, repeating, and removes it when the
   state changes, rather than drawing frames by hand, which would imitate what macOS does natively.
+- The symbol is 16 pt, since the menu bar font's 13 pt drew it smaller than many menu bar icons,
+  and the system spaces the item as it spaces any menu bar icon: the button's own image is blank,
+  the size of the symbol and of the dot when shown, and the two are centred over it (owner,
+  2026-11-20).
 - When several apply, the highest row wins. A dot after the symbol means an update is waiting (see
   Release), in any state.
 - Still valid logins are skipped in every row, so Still valid and no-timer logins alone show the
@@ -714,11 +718,13 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     SSH session can't reach.
 - Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
   these behaviours are unverified:
-  - The menu bar symbol, an image view rather than the button's own image, which Apple documents
-    as styled for the menu bar, looks right in a light menu bar, over a light wallpaper and on an
-    inactive second display.
+  - The menu bar symbol, an image view over a blank button image rather than the button's own
+    image, which Apple documents as styled for the menu bar, looks right in a light menu bar, over a
+    light wallpaper and on an inactive second display.
   - Whether the system highlights the status item while the panel is open, as it does on macOS
     27.
+  - The item's spacing, beside other menu bar items, with and without the update dot; on macOS
+    27.2.1 the system's highlight sat 6 pt from each side of the clock without it.
   - A slow click and a tap-to-click on the icon while the panel is open close it and leave it
     closed; on macOS 27.2.1, holds of 0.25 to 1.2 s did.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
