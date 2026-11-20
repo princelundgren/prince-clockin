@@ -15,6 +15,22 @@ private final class TestClock: @unchecked Sendable {
     func read() -> Date { lock.withLock { now } }
 }
 
+/// A resolver that answers `path` and counts how often it was asked.
+private final class CountingResolver: PathResolving, @unchecked Sendable {
+    private let lock = NSLock()
+    private let path: ResolvedPath
+    private var calls = 0
+
+    init(_ path: ResolvedPath) { self.path = path }
+
+    var count: Int { lock.withLock { calls } }
+
+    func resolvePath() async -> ResolvedPath {
+        lock.withLock { calls += 1 }
+        return path
+    }
+}
+
 /// A checker whose `databricks` is found in a temporary directory and whose runs `respond` answers.
 private func makeChecker(
     clock: TestClock = TestClock(at("2026-11-17T09:00:00Z")),
@@ -130,6 +146,17 @@ private func makeChecker(
         let results = await [first, second]
         #expect(results.contains(.valid) && results.contains(.skipped))
         #expect(runner.calls.count == 1)
+    }
+
+    @Test func aCheckResolvesThePathOnce() async throws {
+        let bin = try makeTemporaryDirectory()
+        try makeExecutable(named: "databricks", in: bin)
+        let resolver = CountingResolver(ResolvedPath(directories: [bin], fromShell: false))
+        let runner = FakeRunner { _ in .exited(code: 0, output: "") }
+        let checker = DatabricksChecker(runner: runner, pathResolver: resolver)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
+        #expect(resolver.count == 1)
+        #expect(runner.calls[0].environment["PATH"] == bin.path)
     }
 
     @Test func databricksNotOnPathIsCouldntCheckAndLeavesTheIntervalFree() async {

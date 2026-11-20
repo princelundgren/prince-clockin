@@ -31,14 +31,14 @@ public actor DatabricksChecker {
     private static let authFailure = "error getting token: cache: no cached credentials"
 
     private let runner: ProcessRunning
-    private let pathResolver: ShellPathResolver
+    private let pathResolver: any PathResolving
     private let clock: @Sendable () -> Date
     private let minInterval: TimeInterval
     private let timeout: TimeInterval
     private var lastCheck: [String: Date] = [:]
 
     public init(
-        runner: ProcessRunning, pathResolver: ShellPathResolver,
+        runner: ProcessRunning, pathResolver: any PathResolving,
         clock: @escaping @Sendable () -> Date = Date.init,
         minInterval: TimeInterval = 300, timeout: TimeInterval = 30
     ) {
@@ -60,11 +60,12 @@ public actor DatabricksChecker {
         // this one waits would otherwise pass the interval check too.
         let previousCheck = lastCheck[profile]
         lastCheck[profile] = now
-        guard let executable = await pathResolver.locate("databricks") else {
+        let path = await pathResolver.resolvePath()
+        guard let executable = path.locate("databricks") else {
             lastCheck[profile] = previousCheck
             return .couldntCheck
         }
-        let environment = await pathResolver.childEnvironment(base: ProcessInfo.processInfo.environment)
+        let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.run(
             executable: executable, arguments: ["current-user", "me", "--profile", profile],
             environment: environment, timeout: .seconds(timeout))
