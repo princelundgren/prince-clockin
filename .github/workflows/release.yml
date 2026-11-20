@@ -8,7 +8,8 @@ on:
 
 permissions: {}
 
-# One group for every tag, so two releases can't race to write the appcast.
+# One group for every tag, so only one release runs at a time and two can't race to write the
+# appcast. A run still waiting for the group is cancelled when a newer tag's run joins it.
 concurrency:
   group: release
   cancel-in-progress: false
