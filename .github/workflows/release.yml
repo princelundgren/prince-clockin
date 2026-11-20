@@ -212,15 +212,23 @@ jobs:
           fi
 
       # The feed lists only this release, which is all Sparkle needs to update anyone.
+      # generate_appcast signs the feed because the app sets SURequireSignedFeed.
       - name: Generate the appcast
         env:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: |
+          sparkle_bin=build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin
           printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
-            | build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            | "$sparkle_bin/generate_appcast" \
               --ed-key-file - --maximum-deltas 0 --download-url-prefix "$UPDATE_URL_PREFIX" "$RELEASE_DIR"
+          # generate_appcast leaves out the DMG's signature, with only a warning, if the key isn't the app's.
           if ! grep -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"; then
             echo "::error::appcast.xml has no sparkle:edSignature"
+            exit 1
+          fi
+          if ! printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
+              | "$sparkle_bin/sign_update" --verify --ed-key-file - "$RELEASE_DIR/appcast.xml"; then
+            echo "::error::appcast.xml has no valid feed signature, which the app requires"
             exit 1
           fi
           cat "$RELEASE_DIR/appcast.xml"

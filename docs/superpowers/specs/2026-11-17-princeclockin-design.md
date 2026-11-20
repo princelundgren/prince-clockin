@@ -715,6 +715,16 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 - Sparkle 2 with EdDSA-signed updates: `SUPublicEDKey` in `Info.plist`, the private key only in
   the release environment. The signature protects users even if the update host is compromised.
+- The feed is signed too: the app sets `SURequireSignedFeed` and its prerequisite
+  `SUVerifyUpdateBeforeExtraction`, so it accepts only an appcast signed with that key, and checks
+  a downloaded DMG's signature before extracting it. `generate_appcast` signs the feed because the
+  app sets the key, and a release fails unless `sign_update --verify` passes on it. A build without
+  the keys reads the signature as a trailing XML comment and updates as before.
+- Once a user runs a build that requires a signed feed, every later feed must be signed with the
+  same key: an unsigned or badly signed one shows them no update until 20 days after the first
+  failure (`SUSignedFeedFailureExpirationInterval`'s default). A lost key is recovered the same way:
+  a feed signed with a new key reaches them after that wait, and only with a Developer ID signed
+  DMG, which every release is.
 - Sparkle checks daily without asking first (`SUEnableAutomaticChecks`), with system profiling
   off. A scheduled check that finds an update shows no window: through Sparkle's gentle-reminder
   delegate it puts a dot in the menu bar, the update line in the panel and Install Update <version>…
