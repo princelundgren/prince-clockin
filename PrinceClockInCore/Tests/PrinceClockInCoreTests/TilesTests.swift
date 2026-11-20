@@ -111,8 +111,8 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(custom).subtitle == .kind("Custom login"))
     }
 
-    @Test func aTileWithNoTimerSaysSo() {
-        #expect(tile(noTimer()).trailing == .stateWord("No timer"))
+    @Test func aTileWithNoTimerShowsNothingTrailing() {
+        #expect(tile(noTimer()).trailing == .empty)
     }
 
     @Test func aLoginWithNoSessionLengthShowsLoggedInOnceLoggedIn() {
@@ -133,7 +133,7 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
     @Test func aLoginWithNoSessionLengthNeverLoggedInStaysNoTimer() {
         let research = Login(displayName: "research", kind: .awsSSOSession(name: "research"))
 
-        #expect(tile(research).trailing == .stateWord("No timer"))
+        #expect(tile(research).trailing == .empty)
         #expect(tile(research).colour == nil)
     }
 
@@ -153,7 +153,7 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
             loginTime: now.addingTimeInterval(-hour))
 
-        #expect(tile(asking).trailing == .stateWord("No timer"))
+        #expect(tile(asking).trailing == .empty)
         #expect(tile(asking).colour == nil)
     }
 
@@ -347,7 +347,7 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         let asking = tile(loggedIn)
 
         #expect(asking.detail == .needsSessionLength(prompt: "Choose a session length"))
-        #expect(asking.trailing == .stateWord("No timer"))
+        #expect(asking.trailing == .empty)
     }
 
     @Test func aDatabricksAccountProfileWithNoSessionLengthAsksForItToo() {

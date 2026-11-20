@@ -182,7 +182,8 @@ Facts the timer design rests on:
   lifetime set in the account's token policy runs out.
 
 Each timer has a state: **ok**, **expiring** (within the notification time), **expired**, or
-**unknown** (no login time or no session length), shown as "No timer". An AWS SSO session or
+**unknown** (no login time or no session length), shown by the `timer` symbol with nothing
+trailing, and read to VoiceOver as "No timer". An AWS SSO session or
 custom login with an unknown timer that has been logged in to, and not invalidated since, shows
 as **logged in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS
 session stays so until the app sees a logout, which makes it "Logged out"; the app can't see a
@@ -362,10 +363,10 @@ without its text, so no earlier text shows.
 
 - **Content:** a state symbol in its colour token, the name on one line (truncated in the middle,
   shown in full in its help tag and to VoiceOver), a subtitle, and on the trailing side the time
-  left or a state word.
+  left or a state word, or nothing for an unknown timer.
   - A tile that isn't due: the kind as its subtitle ("AWS SSO session") and the time left
     ("5h 13m") or its state word trailing. It still logs in when clicked, and while the pointer is
-    on it, its time or state word gives way to a Log In, never bold.
+    on it, its time or state word, or the empty trailing side, gives way to a Log In, never bold.
   - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an
     AWS session seen logged out, as its subtitle, and a visible Log In trailing, unless it has a
     pending item (see below).
@@ -636,9 +637,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - AWS and Databricks logins need no Terminal: both CLIs, run with no controlling terminal and
   standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
   (checked by the owner, 2026-11-17).
-- A Databricks login run with no session length records its login time; its tile stays No timer
-  and asks for the session length inline, as Set Timer does ("Choose a session length" over Set
-  Timer's Session Length pop-up), and the timer counts from that login.
+- A Databricks login run with no session length records its login time; its tile keeps its unknown
+  timer, with nothing trailing, and asks for the session length inline, as Set Timer does
+  ("Choose a session length" over Set Timer's Session Length pop-up), and the timer counts from
+  that login.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.

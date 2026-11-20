@@ -106,6 +106,8 @@ struct TileView: View {
                 .monospacedDigit()
         case .stateWord(let word):
             Text(word)
+        case .empty:
+            EmptyView()
         case .logIn:
             LogInLabel(isProminent: defaults.prominent == .logIn(id: tile.id))
         }
