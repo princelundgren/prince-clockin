@@ -489,7 +489,8 @@ A token has only the meanings its row lists.
   actions"). A pending item's word (logging in, queued, failed, not yet approved, logged in
   elsewhere?) is the state, in place of the timer's, and the time stays: "qa, AWS SSO session,
   failed, 40 minutes ago" (owner, 2026-11-19). Each "…" is "Actions for <name>". VoiceOver reads
-  durations in the wide style and "No timer" for an unknown one.
+  durations in the wide style and "No timer" for an unknown one. In Settings, each list is named
+  for its section: "Logins", "Presets" and "Logs in to, in order".
 
 #### Wording and formats
 
