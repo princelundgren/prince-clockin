@@ -1,19 +1,10 @@
+import Carbon
 import Foundation
 import Testing
 import PrinceClockInCore
 
-/// Runs `argument` through a compiled `on echo…(x) / return x` handler, so what comes back is
-/// exactly what the handler received. Needs no other app, and no Automation permission.
-@MainActor
-private func echo(_ argument: String, handler: String = "echo") throws -> String? {
-    let script = try #require(NSAppleScript(source: "on \(handler)(x)\nreturn x\nend \(handler)"))
-    var compileError: NSDictionary?
-    let compiled = script.compileAndReturnError(&compileError)
-    #expect(compiled, "compile failed: \(String(describing: compileError))")
-    var runError: NSDictionary?
-    let result = script.executeAppleEvent(handlerCallEvent(handler: handler, argument: argument), error: &runError)
-    #expect(runError == nil, "handler call failed: \(String(describing: runError))")
-    return result.stringValue
+private func terminal() -> NSAppleEventDescriptor {
+    NSAppleEventDescriptor(bundleIdentifier: "com.apple.Terminal")
 }
 
 @Suite struct AppleEventsTests {
@@ -25,11 +16,21 @@ private func echo(_ argument: String, handler: String = "echo") throws -> String
         "echo $(whoami); rm -rf ~ `id`",
         "",
     ])
-    @MainActor func handlerReceivesArgumentVerbatim(argument: String) throws {
-        #expect(try echo(argument) == argument)
+    func doScriptCarriesTheCommandVerbatim(command: String) {
+        let event = doScriptEvent(command: command, target: terminal())
+
+        #expect(event.eventClass == AEEventClass(kAECoreSuite))
+        #expect(event.eventID == AEEventID(kAEDoScript))
+        #expect(event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue == command)
+        #expect(event.attributeDescriptor(forKeyword: AEKeyword(keyAddressAttr))?.data == terminal().data)
     }
 
-    @Test @MainActor func mixedCaseHandlerNameIsCalled() throws {
-        #expect(try echo("dev", handler: "openCommand") == "dev")
+    @Test func activateTargetsTheAppWithNoParameters() {
+        let event = activateEvent(target: terminal())
+
+        #expect(event.eventClass == AEEventClass(kAEMiscStandards))
+        #expect(event.eventID == AEEventID(kAEActivate))
+        #expect(event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject)) == nil)
+        #expect(event.attributeDescriptor(forKeyword: AEKeyword(keyAddressAttr))?.data == terminal().data)
     }
 }
