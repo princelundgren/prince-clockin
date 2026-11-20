@@ -263,7 +263,9 @@ never in colour; the panel has the times.
 
 A transient popover about 320 pt wide, on the system popover material with no fill, border or
 shadow of its own. It closes when a browser or Terminal takes focus, so a running batch never
-depends on it being open. From top to bottom:
+depends on it being open, and on any click outside it, in another app or menu bar item too. The
+app draws no highlight of its own on the status item. It opens and closes as the maintainer's
+other menu bar apps do (owner, 2026-11-20). From top to bottom:
 
 1. **Banners**, at most two, highest first; a third waits until one clears:
    1. **State set aside**: "PrinceClockIn couldn't use its saved logins (the file was unreadable
@@ -300,7 +302,10 @@ depends on it being open. From top to bottom:
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
-7. **The footer**: a `gearshape` button for Settings on the left, Quit on the right.
+7. **The footer**: a `gear` symbol for Settings on the left and a `power` symbol for Quit
+   PrinceClockIn on the right, each a plain secondary icon whose 30 pt square takes the click,
+   with its title as its VoiceOver label and help tag and the link pointer on hover, as in the
+   maintainer's other menu bar apps (owner, 2026-11-20).
 
 **Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
 files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
@@ -463,11 +468,11 @@ A token has only the meanings its row lists.
 
 #### Controls and keyboard
 
-- Panel buttons are `.bordered` at `controlSize(.regular)` (28 pt); Settings rows may use
-  `.small`. One `.borderedProminent` per view: the state's single default, in this order: Set in an
-  open Set Timer, Done while a custom login waits, Log In to N Due, the first due tile's own
-  action (its Log In, or Try Again when it failed), else the first question's Mark as Logged In
-  at <time>. Nothing is prominent when nothing needs the user, and
+- Panel buttons, except the footer's, are `.bordered` at `controlSize(.regular)` (28 pt);
+  Settings rows may use `.small`. One `.borderedProminent` per view: the state's single default,
+  in this order: Set in an open Set Timer, Done while a custom login waits, Log In to N Due, the
+  first due tile's own action (its Log In, or Try Again when it failed), else the first
+  question's Mark as Logged In at <time>. Nothing is prominent when nothing needs the user, and
   Cancel All, Try Again during a batch, and Run It never are.
 - **Return** triggers that default wherever focus is, except in a text field, where it commits
   the field; **Space** activates the focused control, such as a tile. **Escape** cancels an open
@@ -712,6 +717,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - The menu bar symbol, an image view rather than the button's own image, which Apple documents
     as styled for the menu bar, looks right in a light menu bar, over a light wallpaper and on an
     inactive second display.
+  - Whether the system highlights the status item while the panel is open, as it does on macOS
+    27.
+  - A slow click and a tap-to-click on the icon while the panel is open close it and leave it
+    closed; on macOS 27.2.1, holds of 0.25 to 1.2 s did.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
@@ -720,13 +729,14 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
     `clock.badge.checkmark`,
     `checkmark.circle`, `questionmark.circle`, `terminal`, `ellipsis`, `gearshape`, `cloud` and
-    `square.stack.3d.up`.
+    `square.stack.3d.up`, and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
-    order, on past each tile's "…"; Return and Escape while a tile or button has focus. With it
-    off, Return, Escape, and Escape from a text field were checked on macOS 27.2.1. In Settings'
-    prompt after adding a login, Return sets and Escape skips without closing the window.
+    order, on past each tile's "…" to the footer's two icons; Return and Escape while a tile or
+    button has focus. With it off, Return, Escape, and Escape from a text field were checked on
+    macOS 27.2.1. In Settings' prompt after adding a login, Return sets and Escape skips without
+    closing the window.
   - The session length field stores nothing while typing: "9000" then Return leaves the length
     and the tile as they were and shows the refusal; a valid length stores on Return and when
     focus leaves the field.

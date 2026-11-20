@@ -168,12 +168,34 @@ struct PanelView: View {
 
     private var footer: some View {
         HStack {
-            Button("Settings…", systemImage: "gearshape", action: openSettings)
-                .labelStyle(.iconOnly)
-                .help("Settings…")
+            FooterIconButton(title: "Settings…", systemImage: "gear", action: openSettings)
             Spacer()
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            FooterIconButton(title: "Quit PrinceClockIn", systemImage: "power") {
+                NSApplication.shared.terminate(nil)
+            }
         }
+    }
+}
+
+/// A footer button: a plain secondary symbol whose whole 30 pt square takes the click, with its
+/// title as the VoiceOver label and help tag.
+private struct FooterIconButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .pointerStyle(.link)
+        .accessibilityLabel(title)
+        .help(title)
     }
 }
 
