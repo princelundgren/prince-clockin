@@ -152,6 +152,9 @@ public final class Coordinator {
     @ObservationIgnored private var savedState: AppState
     /// The last state read of each AWS login's cache file, with its token hash, in memory only.
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
+    /// The expiry each login was last checked for at its notification time, in memory only, so a
+    /// notification waiting for the working hours is checked once, not on every tick.
+    @ObservationIgnored private var checkedForExpiry: [UUID: Date] = [:]
     private var runningDatabricksID: UUID?
     private var runningChecks = 0
     private var unseenFailures: Set<UUID> = []
@@ -221,10 +224,12 @@ public final class Coordinator {
 
     /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks logins
     /// among them and posts one grouped notification for those the check didn't find still valid;
-    /// a still-valid one stays marked as notified for its expiry. A tick that arrives while one
-    /// runs makes that one run once more when it ends, so a deadline that falls during a slow check
-    /// is still met.
-    public func tick() async {
+    /// a still-valid one stays marked as notified for its expiry. Outside the working hours, read in
+    /// `calendar`, a Databricks login due is still checked, once per launch for its notification
+    /// time, so the menu bar and panel show what the check finds, but nothing is taken, so the
+    /// notifications wait for the hours to start. A tick that arrives while one runs makes that one
+    /// run once more when it ends, so a deadline that falls during a slow check is still met.
+    public func tick(calendar: Calendar) async {
         guard !isTicking else {
             isTickPending = true
             return
@@ -235,9 +240,13 @@ public final class Coordinator {
             isTickPending = false
             refresh()
             let tickTime = now
-            let due = model.takeExpiryNotifications(now: tickTime)
+            let unchecked = expiryNotificationsDue(
+                model.state.logins, now: tickTime, leadTime: model.state.settings.notificationLeadTime
+            ).filter { id in login(id).flatMap(expiry(of:)) != checkedForExpiry[id] }
+            for id in unchecked { checkedForExpiry[id] = login(id).flatMap(expiry(of:)) }
+            let due = model.takeExpiryNotifications(now: tickTime, calendar: calendar)
             saveIfChanged()
-            await check(model.databricksLogins(among: due), now: tickTime)
+            await check(model.databricksLogins(among: unchecked), now: tickTime)
             let notified = due.compactMap(login).filter { !isStillValid($0, now: tickTime) }
             if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
         } while isTickPending
@@ -253,11 +262,11 @@ public final class Coordinator {
     }
 
     /// When the next tick is needed for the logins as they are at `now`; see
-    /// `nextTickDeadline(_:now:leadTime:shown:calendar:)`.
+    /// `nextTickDeadline(_:now:leadTime:workingHours:shown:calendar:)`.
     public func nextTickDeadline(shown: ShownTimes, calendar: Calendar) -> Date? {
         PrinceClockInCore.nextTickDeadline(
-            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime, shown: shown,
-            calendar: calendar)
+            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime,
+            workingHours: model.state.settings.workingHours, shown: shown, calendar: calendar)
     }
 
     /// Checks every tracked Databricks login, for Check Databricks Now.

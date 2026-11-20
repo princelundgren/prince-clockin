@@ -187,6 +187,8 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Seconds a login may wait on the user before it is ended, as stored; logins run with
     /// `appliedLoginTimeout`.
     public var loginTimeout: TimeInterval
+    /// When expiry notifications may be sent.
+    public var workingHours: WorkingHours
 
     /// The login timeouts a login runs with: from the shortest the pop-up lists to a day, which
     /// covers any time Settings has stored.
@@ -201,10 +203,20 @@ public struct Settings: Codable, Equatable, Sendable {
 
     public init(
         notificationLeadTime: TimeInterval = Settings.defaultNotificationLeadTime,
-        loginTimeout: TimeInterval = Settings.defaultLoginTimeout
+        loginTimeout: TimeInterval = Settings.defaultLoginTimeout,
+        workingHours: WorkingHours = WorkingHours()
     ) {
         self.notificationLeadTime = notificationLeadTime
         self.loginTimeout = loginTimeout
+        self.workingHours = workingHours
+    }
+
+    /// A file written before working hours existed has none, and reads as working hours off.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        notificationLeadTime = try container.decode(TimeInterval.self, forKey: .notificationLeadTime)
+        loginTimeout = try container.decode(TimeInterval.self, forKey: .loginTimeout)
+        workingHours = try container.decodeIfPresent(WorkingHours.self, forKey: .workingHours) ?? WorkingHours()
     }
 }
 
