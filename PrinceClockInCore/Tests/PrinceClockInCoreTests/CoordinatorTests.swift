@@ -45,6 +45,7 @@ private final class TestClock: @unchecked Sendable {
 private final class ArgumentRunner: ProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [[String]] = []
+    private var recordedTimeouts: [Duration] = []
     private let respond: @Sendable ([String]) async -> ProcessOutcome
 
     init(respond: @escaping @Sendable ([String]) async -> ProcessOutcome = { _ in .exited(code: 0, output: "") }) {
@@ -52,11 +53,15 @@ private final class ArgumentRunner: ProcessRunning, @unchecked Sendable {
     }
 
     var calls: [[String]] { lock.withLock { recorded } }
+    var timeouts: [Duration] { lock.withLock { recordedTimeouts } }
 
     func run(
         executable: URL, arguments: [String], environment: [String: String], timeout: Duration
     ) async -> ProcessOutcome {
-        lock.withLock { recorded.append(arguments) }
+        lock.withLock {
+            recorded.append(arguments)
+            recordedTimeouts.append(timeout)
+        }
         return await respond(arguments)
     }
 }
@@ -708,6 +713,20 @@ private final class GatedLogins: Sendable {
 
         #expect(await eventually { coordinator.login(prod.id)?.loginTime != nil })
         #expect(fixture.loginRunner.calls.map(\.last) == ["--sso-session=dev", "--sso-session=prod"])
+    }
+
+    @Test func aHugeStoredLoginTimeoutRunsAtTheLongestAndIsKept() async throws {
+        let dev = aws("dev")
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.updateSettings(Settings(loginTimeout: 1e30))
+
+        coordinator.logIn([dev.id])
+
+        #expect(await eventually { coordinator.login(dev.id)?.loginTime != nil })
+        #expect(fixture.loginRunner.timeouts == [.seconds(24 * hour)])
+        #expect(coordinator.model.state.settings.loginTimeout == 1e30)
     }
 
     @Test func cancelAfterLogInDoesNotOvertake() async throws {

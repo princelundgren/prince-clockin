@@ -277,7 +277,7 @@ public final class Coordinator {
             }
         }
         guard !ready.isEmpty else { return }
-        commandSink.yield(.enqueue(ready, timeout: model.state.settings.loginTimeout))
+        commandSink.yield(.enqueue(ready, timeout: model.state.settings.appliedLoginTimeout))
     }
 
     /// Whether login `id` is a custom login whose command isn't approved on this Mac, so it won't
