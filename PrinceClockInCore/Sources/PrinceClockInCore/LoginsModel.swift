@@ -88,16 +88,17 @@ public struct LoginsModel: Equatable, Sendable {
         state.logins.filter { isDue($0, now: now, leadTime: state.settings.notificationLeadTime) }
     }
 
-    /// The order of the panel's tiles at `now`: due logins by time left, so the expired come first,
-    /// the first to expire first; then the others with time left, by time left; then the still
-    /// valid; then those logged in with no expiry; then those with no timer. Ties keep the stored
-    /// order, since `sorted` is stable.
-    public func panelOrder(now: Date) -> [Login] {
-        let leadTime = state.settings.notificationLeadTime
-        return state.logins
-            .map { (key: panelSortKey($0, now: now, leadTime: leadTime), login: $0) }
-            .sorted { ($0.key.group, $0.key.timeLeft) < ($1.key.group, $1.key.timeLeft) }
-            .map(\.login)
+    /// Stores the tracked logins in the order `ids` gives, which Settings → Logins sets and the
+    /// panel's tiles follow. A login `ids` leaves out keeps its place after them; an id of no
+    /// tracked login is ignored.
+    public mutating func setLoginOrder(_ ids: [UUID]) {
+        state.logins = ordered(state.logins, by: ids)
+    }
+
+    /// Stores the presets in the order `ids` gives, which Settings → Presets sets and the panel's
+    /// preset tiles follow, as `setLoginOrder(_:)` does for logins.
+    public mutating func setPresetOrder(_ ids: [UUID]) {
+        state.presets = ordered(state.presets, by: ids)
     }
 
     /// The tracked logins in the order `ids` gives, which the panel took when it opened, so its
@@ -171,17 +172,11 @@ public struct LoginsModel: Equatable, Sendable {
     }
 }
 
-/// The panel's group for the login, 0 first, and its time left within the group: negative for an
-/// expired login, counted from when it expired.
-private func panelSortKey(_ login: Login, now: Date, leadTime: TimeInterval) -> (group: Int, timeLeft: TimeInterval) {
-    if isStillValid(login, now: now) { return (2, 0) }
-    if isLoggedInWithNoExpiry(login) { return (3, 0) }
-    switch timerState(for: login, now: now, leadTime: leadTime) {
-    case .expired: return (0, (expiredAt(login) ?? now).timeIntervalSince(now))
-    case .expiring(let remaining): return (0, remaining)
-    case .ok(let remaining): return (1, remaining)
-    case .unknown: return (4, 0)
-    }
+/// `items` in the order `ids` gives, each still once; those `ids` leaves out follow in their order
+/// in `items`, since `sorted` is stable.
+private func ordered<Item: Identifiable>(_ items: [Item], by ids: [UUID]) -> [Item] where Item.ID == UUID {
+    let rank = Dictionary(ids.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: min)
+    return items.sorted { rank[$0.id, default: .max] < rank[$1.id, default: .max] }
 }
 
 private func isDatabricks(_ login: Login) -> Bool {

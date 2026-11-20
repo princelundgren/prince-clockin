@@ -84,11 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.delegate = self
     }
 
-    /// The tiles take their order before the panel appears, so they don't re-sort once it is
-    /// shown, and keep it until it next opens.
+    /// The tiles take the stored order before the panel appears and keep it until it next opens.
     func popoverWillShow(_ notification: Notification) {
-        let coordinator = appModel.coordinator
-        panelSession.open(order: coordinator.model.panelOrder(now: coordinator.now).map(\.id))
+        panelSession.open(order: appModel.coordinator.model.state.logins.map(\.id))
     }
 
     /// The panel's content is built once, so what it shows from the system is read on each showing.

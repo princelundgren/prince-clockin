@@ -303,23 +303,22 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
      Terminal, then click Done." (without a command: "Log in your own way, then click Done."), with
      Done and Cancel All. The waiting login's notification also has Done.
    - No progress within a single login.
-3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left (an
-   expired login by when it expired, earliest first), then Still valid, then logged in with no
-   expiry, then No timer last. The order holds still while the panel is open, so nothing moves
-   under the pointer.
+3. **The tiles**, one per login, in the order Settings → Logins gives them, not sorted by state
+   (owner, 2026-11-20): a due login stands out by its colour and Log In to N Due, not by its place.
+   The order is taken when the panel opens and holds while it is open.
    Past about 420 pt the list scrolls with the system scroller.
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
-5. **Presets**, under a "Presets" header: one tile per preset, drawn as a login tile is, so the
-   panel reads as one piece (owner, 2026-11-20): the same frame, fill, hover and press, a
-   `rectangle.stack` symbol no login uses, the name, and under it the logins in order ("dev, prod,
-   staging"), each line truncated at the end. The help tag says "Logs in to dev, prod and
-   staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since `help(_:)`
-   sets both. Under the pointer the tile shows Log In, and a click starts the preset. An empty
-   preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to add
-   logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
-   tiles, the presets start fresh at each opening, so no hover carries over, and past about
-   230 pt, four and a half tiles, they scroll, so the panel's height stays bounded.
+5. **Presets**, under a "Presets" header: one tile per preset, in Settings → Presets' order, drawn
+   as a login tile is, so the panel reads as one piece (owner, 2026-11-20): the same frame, fill,
+   hover and press, a `rectangle.stack` symbol no login uses, the name, and under it the logins in
+   order ("dev, prod, staging"), each line truncated at the end. The help tag says "Logs in to dev,
+   prod and staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since
+   `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts the preset. An
+   empty preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to
+   add logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
+   tiles, the presets start fresh at each opening, so no hover carries over, and past about 230 pt,
+   four and a half tiles, they scroll, so the panel's height stays bounded.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
@@ -427,13 +426,13 @@ resizable, with zoom available, as in the maintainer's other menu bar apps (owne
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
 - **Logins:** the tracked logins, each with a `.secondary` kind symbol (`cloud` AWS,
-  `square.stack.3d.up` Databricks, `terminal` custom) and a subtitle with its kind, session
-  length ("No timer" when unknown) and last check ("Databricks profile · 3-day session · Checked
-  14:02 · valid"; an account profile's ends "Not checked"). Check Databricks Now in the pane's
-  header. + is the + menu; − removes the selected login at once, or, for a login in a preset,
-  first asks "Remove vpn? It also leaves the presets Morning and Night shift." with Remove
-  (destructive) and Cancel (owner, 2026-11-19); it is disabled with nothing selected. The
-  selected login's form:
+  `square.stack.3d.up` Databricks, `terminal` custom) and a subtitle with its kind, session length
+  ("No timer" when unknown) and last check ("Databricks profile · 3-day session · Checked 14:02 ·
+  valid"; an account profile's ends "Not checked"). Check Databricks Now in the pane's header.
+  Dragging a login reorders the list, and the panel's tiles with it. + is the + menu; − removes the
+  selected login at once, or, for a login in a preset, first asks "Remove vpn? It also leaves the
+  presets Morning and Night shift." with Remove (destructive) and Cancel (owner, 2026-11-19); it is
+  disabled with nothing selected. The selected login's form:
   - every kind: Name, which is only what PrinceClockIn shows, and Session length, Set Timer's
     pop-up of the one list, on No timer while the length is unknown; Custom… shows the hours
     field, which stores and refuses as Timers says (owner, 2026-11-19);
@@ -450,10 +449,13 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     Timer…, so a login the user has already done gets a known timer instead of the "Logged in
     elsewhere?" question later. It is asked once: selecting another login or removing this one
     ends it.
-- **Presets:** the presets with +/−; the selected preset's Name and "Logs in to, in order", a list
-  with + (a menu of the tracked logins not in it), −, Move Up and Move Down. Drag also reorders;
-  Move Up and Move Down are the keyboard and VoiceOver way. + adds an empty preset, "New preset"
-  ("New preset 2" and on while that name is taken), and selects it; − removes the selected preset at once.
+- **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
+  the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
+  the tracked logins not in it) and −. Drag is the only way to reorder, with no Move Up or Move Down
+  (owner, 2026-11-20): the owner found drag enough, accepting that reordering, which also sets the
+  order a preset logs in, takes a pointer unless VoiceOver offers a move. + adds an empty preset,
+  "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
+  selected preset at once.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
   hours (30 minutes by default), and Notifications: their state, Open System Settings…, and, while
   they're off, "With notifications off, only the menu bar shows that a login is about to expire."
@@ -780,3 +782,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     time is cut off.
   - Text meets 4.5:1 on the real popover material and tile tints, hovered or not, in light,
     dark and Increase Contrast.
+  - Dragging reorders Settings → Logins and Settings → Presets, each a `List` inside a grouped
+    `Form`, and the panel's tiles follow at its next opening; a preset's "Logs in to, in order"
+    reorders by drag too.
+  - Whether VoiceOver can reorder these lists without Move Up and Move Down.

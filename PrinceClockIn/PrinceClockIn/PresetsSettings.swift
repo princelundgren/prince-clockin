@@ -1,8 +1,8 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// Settings → Presets: the presets with + and − below them, then the selected preset's Name and
-/// the logins it logs in to, in order.
+/// Settings → Presets: the presets, which a drag reorders, with + and − below them, then the
+/// selected preset's Name and the logins it logs in to, in order.
 struct PresetsSettings: View {
     let coordinator: Coordinator
     @State private var selection: UUID?
@@ -18,6 +18,11 @@ struct PresetsSettings: View {
                         Text(preset.name)
                             .lineLimit(1)
                             .tag(preset.id)
+                    }
+                    .onMove { offsets, destination in
+                        var order = ListOrder(presets.map(\.id))
+                        order.move(fromOffsets: offsets, toOffset: destination)
+                        coordinator.setPresetOrder(order.ids)
                     }
                 }
                 .frame(minHeight: 120)
@@ -60,16 +65,15 @@ struct PresetsSettings: View {
     }
 }
 
-/// The selected preset's Name, and "Logs in to, in order": its logins with + (the tracked logins
-/// not in it), −, Move Up and Move Down below them. Dragging a login also reorders them; Move Up
-/// and Move Down are the keyboard's and VoiceOver's way.
+/// The selected preset's Name, and "Logs in to, in order": its logins, which a drag reorders, with
+/// + (the tracked logins not in it) and − below them.
 private struct PresetForm: View {
     let preset: Preset
     let coordinator: Coordinator
     @State private var selection: UUID?
 
     private var logins: [Login] { coordinator.model.logins(in: preset) }
-    private var members: PresetMembers { PresetMembers(logins.map(\.id)) }
+    private var members: ListOrder { ListOrder(logins.map(\.id)) }
 
     var body: some View {
         Section(preset.name) {
@@ -129,22 +133,10 @@ private struct PresetForm: View {
             .disabled(selection == nil)
             .help("Remove the selected login from this preset.")
             Spacer()
-            Button("Move Up") {
-                guard let selection else { return }
-                edit { $0.moveUp(selection) }
-            }
-            .controlSize(.small)
-            .disabled(!members.canMoveUp(selection))
-            Button("Move Down") {
-                guard let selection else { return }
-                edit { $0.moveDown(selection) }
-            }
-            .controlSize(.small)
-            .disabled(!members.canMoveDown(selection))
         }
     }
 
-    private func edit(_ change: (inout PresetMembers) -> Void) {
+    private func edit(_ change: (inout ListOrder) -> Void) {
         var edited = members
         change(&edited)
         var saved = preset

@@ -801,6 +801,23 @@ private final class GatedLogins: Sendable {
         #expect(fixture.stored?.presets.map(\.loginIDs) == [[prod.id]])
     }
 
+    @Test func reorderingLoginsAndPresetsSaves() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let morning = Preset(name: "Morning", loginIDs: [dev.id])
+        let night = Preset(name: "Night shift", loginIDs: [prod.id])
+        let fixture = try Fixture(logins: [dev, prod])
+        let coordinator = fixture.makeCoordinator()
+        coordinator.savePreset(morning)
+        coordinator.savePreset(night)
+
+        coordinator.setLoginOrder([prod.id, dev.id])
+        coordinator.setPresetOrder([night.id, morning.id])
+
+        #expect(fixture.stored?.logins.map(\.id) == [prod.id, dev.id])
+        #expect(fixture.stored?.presets.map(\.id) == [night.id, morning.id])
+    }
+
     @Test func removingALoginForgetsItsFailure() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in .exited(code: 1, output: "") })

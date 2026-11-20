@@ -17,7 +17,7 @@ one expires, and logs in to the ones you pick, one after another, when you click
   profiles (`databricks auth login`), and any other login as a custom login.
 - **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
   symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
-  with its time left, the due ones first.
+  in the order you set in Settings, with its time left.
 - **Notifies once** before a login expires, 30 minutes ahead by default. Logins that need it at the
   same time, or while the Mac slept, share one notification, whose Log In button starts them.
 - **Logs in when you click**: any tile that isn't running, queued, failed, awaiting approval or
