@@ -21,6 +21,7 @@ struct PresetsSettings: View {
                     }
                 }
                 .frame(minHeight: 120)
+                .accessibilityLabel("Presets")
                 listButtons
             }
             if let selected {
@@ -93,6 +94,7 @@ private struct PresetForm: View {
                 }
             }
             .frame(minHeight: 120)
+            .accessibilityLabel("Logs in to, in order")
             memberButtons
         }
     }

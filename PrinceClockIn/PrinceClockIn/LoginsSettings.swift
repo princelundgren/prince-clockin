@@ -31,6 +31,7 @@ struct LoginsSettings: View {
                     }
                 }
                 .frame(minHeight: 160)
+                .accessibilityLabel("Logins")
                 listButtons
             } header: {
                 header
