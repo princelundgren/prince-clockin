@@ -2,7 +2,7 @@ import Foundation
 
 /// A preset's logins, in order, as Settings → Presets edits them. Each edit keeps the order of the
 /// rest; `ids` is what the preset stores afterwards.
-public struct PresetMembers: Equatable, Sendable {
+public struct ListOrder: Equatable, Sendable {
     public private(set) var ids: [UUID]
 
     /// `ids` are the preset's tracked logins in its order (`LoginsModel.logins(in:)`).

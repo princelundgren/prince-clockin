@@ -69,7 +69,7 @@ private struct PresetForm: View {
     @State private var selection: UUID?
 
     private var logins: [Login] { coordinator.model.logins(in: preset) }
-    private var members: PresetMembers { PresetMembers(logins.map(\.id)) }
+    private var members: ListOrder { ListOrder(logins.map(\.id)) }
 
     var body: some View {
         Section(preset.name) {
@@ -144,7 +144,7 @@ private struct PresetForm: View {
         }
     }
 
-    private func edit(_ change: (inout PresetMembers) -> Void) {
+    private func edit(_ change: (inout ListOrder) -> Void) {
         var edited = members
         change(&edited)
         var saved = preset
