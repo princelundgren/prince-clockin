@@ -783,8 +783,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
-- Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
-  these behaviours are unverified:
+- Not yet checked on a Mac with macOS 26; these behaviours stay unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
     image, which Apple documents as styled for the menu bar, looks right in a light menu bar, over a
     light wallpaper and on an inactive second display.
