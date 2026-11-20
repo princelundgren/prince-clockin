@@ -879,6 +879,37 @@ private final class GatedLogins: Sendable {
         #expect(fixture.stored?.presets.map(\.loginIDs) == [[prod.id]])
     }
 
+    @Test func renamingAPresetKeepsItsLoginsAndSaves() async throws {
+        let dev = aws("dev")
+        let prod = aws("prod")
+        let preset = Preset(name: "Morning", loginIDs: [dev.id])
+        let fixture = try Fixture(logins: [dev, prod])
+        let coordinator = fixture.makeCoordinator()
+        coordinator.savePreset(preset)
+        var grown = preset
+        grown.loginIDs = [dev.id, prod.id]
+        coordinator.savePreset(grown)
+
+        coordinator.renamePreset(id: preset.id, to: "Early")
+
+        #expect(fixture.stored?.presets.map(\.name) == ["Early"])
+        #expect(fixture.stored?.presets.map(\.loginIDs) == [[dev.id, prod.id]])
+    }
+
+    @Test func renamingARemovedPresetLeavesItRemoved() async throws {
+        let dev = aws("dev")
+        let preset = Preset(name: "Morning", loginIDs: [dev.id])
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        coordinator.savePreset(preset)
+        coordinator.removePreset(id: preset.id)
+
+        coordinator.renamePreset(id: preset.id, to: "Early")
+
+        #expect(coordinator.model.state.presets.isEmpty)
+        #expect(fixture.stored?.presets.isEmpty == true)
+    }
+
     @Test func reorderingLoginsAndPresetsSaves() async throws {
         let dev = aws("dev")
         let prod = aws("prod")

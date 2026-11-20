@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         appModel = AppModel()
         updater = Updater(coordinator: appModel.coordinator)
         super.init()
+        appModel.openPanel = { [weak self] in self?.showPanel() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,6 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             coordinator: appModel.coordinator, updater: updater,
             togglePanel: { [weak self] in self?.togglePanel() }, openSettings: { [weak self] in self?.showSettings() })
         setUpPopover()
+    }
+
+    /// Opening the app again while it runs, from Finder or Applications, puts its item back in the
+    /// menu bar if it isn't there and opens the panel under it, in place of AppKit's default handling.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        statusItem?.makeVisible()
+        showPanel()
+        return false
     }
 
     /// The menu bar an `LSUIElement` app never shows, there so its key equivalents work while the

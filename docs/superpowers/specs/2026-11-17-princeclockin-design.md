@@ -292,7 +292,8 @@ never in colour; the panel has the times.
 - A left click opens the panel and a right click opens the right-click menu.
 - Removing the icon from the menu bar quits the app, which stops timers and notifications.
   Opening the app again from Applications brings it back: at launch
-  the app makes its status item visible.
+  the app makes its status item visible. Opened again while it runs, it makes the status item
+  visible and opens the panel.
 
 #### Panel
 
@@ -454,7 +455,8 @@ without its text, so no earlier text shows.
 Its own window hosting SwiftUI: a native sidebar list with a symbol per pane (`person.badge.key`
 Logins, `list.bullet` Presets, `bell` Notifications, `gearshape` General, `info.circle` About),
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
-Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
+Return or when focus leaves the field; a Name or Command field also commits when the window
+closes or its pane or form is replaced. One title, "PrinceClockIn Settings", whatever the pane, and
 resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
@@ -618,10 +620,15 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   login whose notification time passed while the app wasn't running is announced once at the next
   launch, as expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
+- Clicking a notification itself, rather than one of its buttons, opens the panel while the app
+  runs and logs nothing in. A click that launches the app opens no panel: the status item's window
+  has no place in the menu bar yet, and the popover doesn't show.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
   "vpn is waiting for you" and "Log in your own way, then click Done."
 - A failed save posts a notification (see Panel).
+- Every notification has the default sound, also when it arrives while the panel or Settings is
+  open.
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.
 - If notification permission is denied, the menu bar label carries the expiry alone (the
@@ -848,3 +855,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     `Form`, and the panel's tiles follow at its next opening; a preset's "Logs in to, in order"
     reorders by drag too.
   - Whether VoiceOver can reorder these lists without Move Up and Move Down.
+  - Clicking a notification opens the panel under the icon while the app runs.
+  - Opening the app from Finder while it runs opens the panel, and no other window.
+  - A login's or preset's name, or a custom login's Command, typed in Settings and left without
+    Return is kept on ⌘W and on choosing another pane, login or preset. On macOS 27.0.1, closing a
+    hosted SwiftUI window ran no focus change before teardown, even after `makeFirstResponder(nil)`
+    in `windowShouldClose`, but did run `onDisappear` with the text.
