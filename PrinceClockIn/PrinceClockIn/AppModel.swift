@@ -104,11 +104,12 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: UNUserNotificationCenterDelegate
 
-    /// Shown even while the panel is open, which makes the app active and would otherwise hide it.
+    /// Shown, with its sound, even while the panel or Settings is open, which makes the app active
+    /// and would otherwise hide it.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list]
+        [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(

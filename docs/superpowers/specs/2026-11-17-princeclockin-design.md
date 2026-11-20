@@ -623,6 +623,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
   "vpn is waiting for you" and "Log in your own way, then click Done."
 - A failed save posts a notification (see Panel).
+- Every notification has the default sound, also when it arrives while the panel or Settings is
+  open.
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.
 - If notification permission is denied, the menu bar label carries the expiry alone (the
