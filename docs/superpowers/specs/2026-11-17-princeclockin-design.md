@@ -340,12 +340,14 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    as a login tile is, so the panel reads as one piece (owner, 2026-11-20): the same frame, fill,
    hover and press, a `rectangle.stack` symbol no login uses, the name, and under it the logins in
    order ("dev, prod, staging"), each line truncated at the end. The help tag says "Logs in to dev,
-   prod and staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since
-   `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts the preset. An
-   empty preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to
-   add logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
-   tiles, the presets start fresh at each opening, so no hover carries over. The list is as tall as
-   its tiles, up to five; past five it shows half of the sixth and scrolls.
+   prod and staging", the list in the locale's own form, as every list in the copy is, so en_US and
+   en_SE read "dev, prod, and staging". VoiceOver reads "Morning preset" with the help tag as its
+   hint, since `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts
+   the preset. An empty preset reads "No logins" under its name, is dimmed and disabled, and its
+   help tag says to add logins in Settings → Presets; VoiceOver reads "Night shift preset, no
+   logins". Like the login tiles, the presets start fresh at each opening, so no hover carries
+   over. The list is as tall as its tiles, up to five; past five it shows half of the sixth and
+   scrolls.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
