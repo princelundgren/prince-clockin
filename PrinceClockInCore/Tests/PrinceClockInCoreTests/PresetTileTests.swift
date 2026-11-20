@@ -8,13 +8,13 @@ private func named(_ name: String) -> Login {
     Login(displayName: name, kind: .awsSSOSession(name: name))
 }
 
-@Suite struct PresetButtonTests {
+@Suite struct PresetTileTests {
     @Test func aPresetListsItsLoginsUnderItsNameAndInItsHelpTag() {
         let preset = Preset(name: "Morning", loginIDs: [])
 
-        let tile = presetButton(for: preset, logins: [named("dev"), named("prod"), named("staging")], locale: gb)
+        let tile = presetTile(for: preset, logins: [named("dev"), named("prod"), named("staging")], locale: gb)
 
-        #expect(tile == PresetButton(
+        #expect(tile == PresetTile(
             id: preset.id, title: "Morning", subtitle: "dev, prod, staging",
             helpTag: "Logs in to dev, prod and staging",
             accessibilityLabel: "Morning preset", isEnabled: true))
@@ -23,7 +23,7 @@ private func named(_ name: String) -> Login {
     @Test func aPresetOfOneLoginNamesIt() {
         let preset = Preset(name: "Prod only", loginIDs: [])
 
-        let tile = presetButton(for: preset, logins: [named("prod")], locale: gb)
+        let tile = presetTile(for: preset, logins: [named("prod")], locale: gb)
 
         #expect(tile.subtitle == "prod")
         #expect(tile.helpTag == "Logs in to prod")
@@ -32,9 +32,9 @@ private func named(_ name: String) -> Login {
     @Test func anEmptyPresetIsDisabledSaysNoLoginsAndPointsToSettings() {
         let preset = Preset(name: "Night shift", loginIDs: [])
 
-        let tile = presetButton(for: preset, logins: [], locale: gb)
+        let tile = presetTile(for: preset, logins: [], locale: gb)
 
-        #expect(tile == PresetButton(
+        #expect(tile == PresetTile(
             id: preset.id, title: "Night shift", subtitle: "No logins",
             helpTag: "Add logins to it in Settings → Presets.",
             accessibilityLabel: "Night shift preset, no logins", isEnabled: false))

@@ -149,7 +149,7 @@ struct PanelView: View {
                 .foregroundStyle(.secondary)
             ScrollView {
                 VStack(spacing: 6) {
-                    ForEach(presetButtons) { tile in
+                    ForEach(presetTiles) { tile in
                         PresetTileView(tile: tile) { logIn(toPreset: tile.id) }
                     }
                 }
@@ -164,9 +164,9 @@ struct PanelView: View {
         coordinator.logIn(coordinator.model.logins(in: preset).map(\.id))
     }
 
-    private var presetButtons: [PresetButton] {
+    private var presetTiles: [PresetTile] {
         coordinator.model.state.presets.map { preset in
-            presetButton(for: preset, logins: coordinator.model.logins(in: preset), locale: .current)
+            presetTile(for: preset, logins: coordinator.model.logins(in: preset), locale: .current)
         }
     }
 
@@ -341,7 +341,7 @@ private struct BannerView: View {
 /// name, and Log In under the pointer. An empty preset's tile is dimmed and takes no click. Its
 /// help tag is also its VoiceOver hint.
 private struct PresetTileView: View {
-    let tile: PresetButton
+    let tile: PresetTile
     let logIn: () -> Void
     @State private var isHovered = false
 

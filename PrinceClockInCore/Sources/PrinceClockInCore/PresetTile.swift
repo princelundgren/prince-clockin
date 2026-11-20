@@ -1,7 +1,7 @@
 import Foundation
 
 /// A preset's tile in the panel.
-public struct PresetButton: Equatable, Identifiable, Sendable {
+public struct PresetTile: Equatable, Identifiable, Sendable {
     public let id: UUID
     /// The preset's name, which the view truncates at the end.
     public let title: String
@@ -28,9 +28,9 @@ public struct PresetButton: Equatable, Identifiable, Sendable {
 /// The tile for `preset`, whose tracked `logins` are given in its order: its subtitle lists them as
 /// `locale` writes a short list, and its help tag as it writes a sentence. An empty preset is
 /// disabled and its help tag says where to add logins.
-public func presetButton(for preset: Preset, logins: [Login], locale: Locale) -> PresetButton {
+public func presetTile(for preset: Preset, logins: [Login], locale: Locale) -> PresetTile {
     guard !logins.isEmpty else {
-        return PresetButton(
+        return PresetTile(
             id: preset.id, title: preset.name, subtitle: "No logins",
             helpTag: "Add logins to it in Settings → Presets.",
             accessibilityLabel: "\(preset.name) preset, no logins", isEnabled: false)
@@ -38,7 +38,7 @@ public func presetButton(for preset: Preset, logins: [Login], locale: Locale) ->
     let names = logins.map(\.displayName)
     let shortList = names.formatted(.list(type: .and, width: .narrow).locale(locale))
     let sentenceList = names.formatted(.list(type: .and).locale(locale))
-    return PresetButton(
+    return PresetTile(
         id: preset.id, title: preset.name, subtitle: shortList, helpTag: "Logs in to \(sentenceList)",
         accessibilityLabel: "\(preset.name) preset", isEnabled: true)
 }
