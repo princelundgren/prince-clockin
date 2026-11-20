@@ -26,6 +26,7 @@ final class StatusItemController: NSObject {
     private let dotView = MenuBarImageView()
     /// The symbol and the dot, centred in the button, where the button would draw its own image.
     private let contentView = MenuBarContentView()
+    private var shownLabel: MenuBarLabel?
     private var shownSymbolName: String?
     private var isPulseRunning = false
 
@@ -121,7 +122,10 @@ final class StatusItemController: NSObject {
         }
     }
 
+    /// `Observations` yields after every tick, most often with the label unchanged.
     private func show(_ label: MenuBarLabel) {
+        guard label != shownLabel else { return }
+        shownLabel = label
         if label.symbolName != shownSymbolName {
             symbolView.image = NSImage(systemSymbolName: label.symbolName, accessibilityDescription: nil)?
                 .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: Self.symbolPointSize, weight: .regular))
