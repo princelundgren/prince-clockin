@@ -9,7 +9,8 @@ import PrinceClockInCore
 final class StatusItemController: NSObject {
     private static let spacing: CGFloat = 4
     private static let dotDiameter: CGFloat = 5
-    private static let horizontalPadding: CGFloat = 8
+    /// A design choice: the menu bar font's 13 pt drew the clock smaller than many menu bar icons.
+    private static let symbolPointSize: CGFloat = 16
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let coordinator: Coordinator
@@ -20,10 +21,11 @@ final class StatusItemController: NSObject {
     private var menuItems: [RightClickMenuItem] = []
     /// The due logins the open menu's Log In to N Due counts, so a click starts the ones it named.
     private var menuDueIDs: [UUID] = []
-    private let symbolPointSize = NSFont.menuBarFont(ofSize: 0).pointSize
     /// An image view, since in AppKit only it runs SF Symbol effects.
     private let symbolView = MenuBarImageView()
     private let dotView = MenuBarImageView()
+    /// The symbol and the dot, centred in the button, where the button would draw its own image.
+    private let contentView = MenuBarContentView()
     private var shownSymbolName: String?
     private var isPulseRunning = false
 
@@ -45,8 +47,19 @@ final class StatusItemController: NSObject {
         statusItem.button?.action = #selector(buttonClicked)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         dotView.image = Self.dotImage()
-        statusItem.button?.addSubview(symbolView)
-        statusItem.button?.addSubview(dotView)
+        if let button = statusItem.button {
+            contentView.orientation = .horizontal
+            contentView.alignment = .centerY
+            contentView.spacing = Self.spacing
+            contentView.addArrangedSubview(symbolView)
+            contentView.addArrangedSubview(dotView)
+            contentView.translatesAutoresizingMaskIntoConstraints = false
+            button.addSubview(contentView)
+            NSLayoutConstraint.activate([
+                contentView.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+                contentView.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            ])
+        }
         Task { [weak self] in
             let labels = Observations {
                 menuBarLabel(
@@ -111,7 +124,7 @@ final class StatusItemController: NSObject {
     private func show(_ label: MenuBarLabel) {
         if label.symbolName != shownSymbolName {
             symbolView.image = NSImage(systemSymbolName: label.symbolName, accessibilityDescription: nil)?
-                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: symbolPointSize, weight: .regular))
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: Self.symbolPointSize, weight: .regular))
             shownSymbolName = label.symbolName
         }
         if label.isPulsing != isPulseRunning {
@@ -123,21 +136,10 @@ final class StatusItemController: NSObject {
             isPulseRunning = label.isPulsing
         }
         dotView.isHidden = !label.showsUpdateDot
-        layOut()
+        // A blank image of the content's size: the system pads the item around it as around any
+        // menu bar icon, and draws nothing, so the content view shows through.
+        statusItem.button?.image = NSImage(size: contentView.fittingSize)
         statusItem.button?.setAccessibilityLabel(label.accessibilityLabel)
-    }
-
-    /// Sizes the item to the symbol, and the dot when shown, and places both in the button.
-    private func layOut() {
-        let height = NSStatusBar.system.thickness
-        let symbolWidth = symbolView.image?.size.width ?? 0
-        var width = symbolWidth
-        if !dotView.isHidden { width += Self.spacing + Self.dotDiameter }
-        statusItem.length = ceil(width) + 2 * Self.horizontalPadding
-        symbolView.frame = NSRect(x: Self.horizontalPadding, y: 0, width: symbolWidth, height: height)
-        dotView.frame = NSRect(
-            x: Self.horizontalPadding + symbolWidth + Self.spacing, y: (height - Self.dotDiameter) / 2,
-            width: Self.dotDiameter, height: Self.dotDiameter)
     }
 
     private static func dotImage() -> NSImage {
@@ -151,8 +153,13 @@ final class StatusItemController: NSObject {
     }
 }
 
-/// An image in the status item's button that leaves clicks and VoiceOver to the button, which
-/// carries the item's one label.
+/// The status item's content, which leaves clicks to the button.
+private final class MenuBarContentView: NSStackView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// An image in the status item's button that leaves VoiceOver to the button, which carries the
+/// item's one label. It lays out by the whole image's width.
 private final class MenuBarImageView: NSImageView {
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -163,5 +170,12 @@ private final class MenuBarImageView: NSImageView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    /// A badged symbol's alignment rect leaves out the badge, which would make the item too narrow
+    /// and push the dot into the badge.
+    override var alignmentRectInsets: NSEdgeInsets {
+        var insets = super.alignmentRectInsets
+        insets.left = 0
+        insets.right = 0
+        return insets
+    }
 }
