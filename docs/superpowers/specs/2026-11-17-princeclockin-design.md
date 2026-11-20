@@ -648,7 +648,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser. A login runs with the stored timeout held between 2 minutes and 24 hours, or with the
   default if the stored value isn't finite, so a hand-edited state file can't end every login at
-  once or crash the app; the stored value itself is kept as it is.
+  once or crash the app; the stored value itself is kept as it is. For a custom login it covers
+  opening Terminal and the wait for Done together, and the timeout and Cancel All end either step,
+  even a Terminal that never answers.
 - AWS and Databricks logins run as an executable plus an argument list, never through a shell
   string, so a session or profile name can't inject a command. The name is joined to its flag
   (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or

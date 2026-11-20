@@ -4,6 +4,8 @@ import Foundation
 public protocol TerminalOpening: Sendable {
     /// Returns once Terminal has the command. Throws `TerminalNotPermitted` when the user has denied
     /// the permission to control Terminal, and any other error when it can't be opened otherwise.
+    /// The queue stops waiting at the login's timeout or a cancel and then cancels the call, which
+    /// should not hand Terminal the command after that.
     func open(command: String) async throws
 }
 
@@ -239,34 +241,67 @@ public actor LoginQueue {
         }
     }
 
+    /// One timeout covers both opening Terminal and the wait for Done.
     private func performCustom(
         id: UUID, command: String?, timeout: TimeInterval
     ) async -> QueueEvent {
+        let deadline = ContinuousClock.now + .seconds(timeout)
         if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
         if let command {
-            do {
-                try await terminal.open(command: command)
-            } catch is TerminalNotPermitted {
-                if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
-                return .failed(id: id, reason: .terminalNotPermitted)
-            } catch {
-                if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
-                return .failed(id: id, reason: .terminalFailed(error.localizedDescription))
+            switch await openTerminal(command: command, until: deadline) {
+            case .opened: break
+            case .failed(let reason): return .failed(id: id, reason: reason)
             }
             if Task.isCancelled { return .failed(id: id, reason: .cancelled) }
         }
-        switch await waitForDone(id: id, timeout: timeout) {
+        switch await waitForDone(id: id, until: deadline) {
         case .done: return .succeeded(id: id, at: clock())
         case .timedOut: return .failed(id: id, reason: .timedOut)
         case .cancelled: return .failed(id: id, reason: .cancelled)
         }
     }
 
-    private func waitForDone(id: UUID, timeout: TimeInterval) async -> DoneOutcome {
+    private enum OpenOutcome: Sendable {
+        case opened
+        case failed(LoginFailure)
+    }
+
+    /// Opens Terminal in a task of its own and returns at whichever comes first: the open ending,
+    /// `deadline`, or the calling task's cancellation. On the last two the open is cancelled but
+    /// not waited for, since a Terminal that never answers must not hold the queue.
+    private func openTerminal(
+        command: String, until deadline: ContinuousClock.Instant
+    ) async -> OpenOutcome {
+        let first = FirstOutcome<OpenOutcome>()
+        let opening = Task { [terminal] in
+            do {
+                try await terminal.open(command: command)
+                first.offer(.opened)
+            } catch is TerminalNotPermitted {
+                first.offer(.failed(.terminalNotPermitted))
+            } catch {
+                first.offer(.failed(.terminalFailed(error.localizedDescription)))
+            }
+        }
+        let timer = Task {
+            try await Task.sleep(until: deadline, clock: .continuous)
+            first.offer(.failed(.timedOut))
+        }
+        let outcome = await withTaskCancellationHandler {
+            await first.value
+        } onCancel: {
+            first.offer(.failed(.cancelled))
+        }
+        opening.cancel()
+        timer.cancel()
+        return outcome
+    }
+
+    private func waitForDone(id: UUID, until deadline: ContinuousClock.Instant) async -> DoneOutcome {
         let token = UUID()
         let timer = Task {
             do {
-                try await Task.sleep(for: .seconds(timeout))
+                try await Task.sleep(until: deadline, clock: .continuous)
             } catch {
                 return
             }
@@ -299,5 +334,34 @@ private extension LoginKind {
     /// A custom login's command; `nil` for one without a command and for every other kind.
     var terminalCommand: String? {
         if case .custom(let command) = self { command } else { nil }
+    }
+}
+
+/// The first value offered to it, for one waiter; later offers are ignored.
+private final class FirstOutcome<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var result: Value?
+    private var waiter: CheckedContinuation<Value, Never>?
+
+    var value: Value {
+        get async {
+            await withCheckedContinuation { continuation in
+                let ready: Value? = lock.withLock {
+                    if result == nil { waiter = continuation }
+                    return result
+                }
+                if let ready { continuation.resume(returning: ready) }
+            }
+        }
+    }
+
+    func offer(_ value: Value) {
+        let waiting: CheckedContinuation<Value, Never>? = lock.withLock {
+            guard result == nil else { return nil }
+            result = value
+            defer { waiter = nil }
+            return waiter
+        }
+        waiting?.resume(returning: value)
     }
 }

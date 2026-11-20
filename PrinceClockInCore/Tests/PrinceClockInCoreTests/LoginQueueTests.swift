@@ -29,7 +29,7 @@ private func makeCLIDirectory() throws -> URL {
 
 /// A queue whose login shell reports `path` as its only `PATH` directory.
 private func makeQueue(
-    runner: FakeRunner, terminal: FakeTerminal = FakeTerminal(), path: URL,
+    runner: FakeRunner, terminal: any TerminalOpening = FakeTerminal(), path: URL,
     clock: @escaping @Sendable () -> Date = { now }
 ) -> LoginQueue {
     let resolver = ShellPathResolver(
@@ -106,6 +106,21 @@ private final class FakeTerminal: TerminalOpening, @unchecked Sendable {
 
 private struct TerminalNotStarted: LocalizedError {
     var errorDescription: String? { "Terminal couldn't be started" }
+}
+
+/// A terminal whose `open` returns only once it is cancelled, and records that it was.
+private final class CancelWaitingTerminal: TerminalOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var sawCancel: Bool {
+        lock.withLock { cancelled }
+    }
+
+    func open(command: String) async throws {
+        await waitUntilCancelled()
+        lock.withLock { cancelled = true }
+    }
 }
 
 private final class StepLog: @unchecked Sendable {
@@ -612,6 +627,86 @@ private final class StepLog: @unchecked Sendable {
             .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1), .failed(id: custom.id, reason: .cancelled), .finished,
         ])
+    }
+
+    @Test func aTerminalThatNeverAnswersTimesOut() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let release = Gate()
+        let terminal = FakeTerminal(hold: (Gate(), release))
+        let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: "az login")
+        let dev = awsLogin("dev")
+
+        await queue.enqueue([custom, dev], timeout: shortTimeout)
+
+        #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id, dev.id], total: 2), .started(id: custom.id, position: 1, total: 2),
+            .failed(id: custom.id, reason: .timedOut),
+            .started(id: dev.id, position: 2, total: 2), .succeeded(id: dev.id, at: now), .finished,
+        ])
+        await release.open()
+    }
+
+    @Test func cancelEndsATerminalThatNeverAnswers() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let entered = Gate()
+        let release = Gate()
+        let terminal = FakeTerminal(hold: (entered, release))
+        let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: "az login")
+
+        await queue.enqueue([custom], timeout: timeout)
+        await entered.wait()
+        await queue.cancel()
+
+        #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
+            .started(id: custom.id, position: 1, total: 1), .failed(id: custom.id, reason: .cancelled), .finished,
+        ])
+        await release.open()
+    }
+
+    @Test func oneTimeoutCoversOpeningTerminalAndTheWaitForDone() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let release = Gate()
+        let terminal = FakeTerminal(hold: (Gate(), release))
+        let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: "az login")
+        let started = ContinuousClock.now
+
+        await queue.enqueue([custom], timeout: 3)
+        try await Task.sleep(for: .milliseconds(1500))
+        await release.open()
+
+        #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1), .started(id: custom.id, position: 1, total: 1),
+            .waitingForDone(id: custom.id), .failed(id: custom.id, reason: .timedOut), .finished,
+        ])
+        // A wait for Done that restarted the timeout after the open would end near 4.5 s.
+        #expect(ContinuousClock.now - started < .milliseconds(3750))
+    }
+
+    @Test func anAbandonedOpenIsCancelled() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let terminal = CancelWaitingTerminal()
+        let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: "az login")
+
+        await queue.enqueue([custom], timeout: shortTimeout)
+        _ = await events.throughFinished()
+
+        for _ in 0..<50 where !terminal.sawCancel {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(terminal.sawCancel)
     }
 
     @Test func removingAQueuedLoginShrinksTheTotal() async throws {
