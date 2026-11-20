@@ -2,7 +2,31 @@ import Foundation
 import Testing
 import PrinceClockInCore
 
+private let minute: TimeInterval = 60
+
 @Suite struct SettingsTextTests {
+    // MARK: Duration pop-ups
+
+    @Test func eachSettingsDefaultIsOnItsPopUpsList() {
+        #expect(listedNotificationLeadTimes.contains(Settings.defaultNotificationLeadTime))
+        #expect(listedLoginTimeouts.contains(Settings.defaultLoginTimeout))
+    }
+
+    @Test func aListedDurationShowsTheListAsItIs() {
+        #expect(durationOptions(listedLoginTimeouts, showing: 10 * minute) == listedLoginTimeouts)
+    }
+
+    @Test func anUnlistedStoredDurationIsAddedInOrderSoItStaysShown() {
+        #expect(
+            durationOptions(listedNotificationLeadTimes, showing: 45 * minute)
+                == [5, 10, 15, 30, 45, 60, 120].map { $0 * minute })
+    }
+
+    @Test func aStoredDurationAboveTheListComesLast() {
+        #expect(durationOptions(listedLoginTimeouts, showing: 30 * minute) == [2, 5, 10, 15, 30].map { $0 * minute })
+    }
+
+
     // MARK: Presets
 
     @Test func aNewPresetIsNamedNewPresetWhenThatNameIsFree() {

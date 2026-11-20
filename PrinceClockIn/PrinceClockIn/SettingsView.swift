@@ -130,9 +130,9 @@ private struct NotificationsSettings: View {
         let notifications = notificationsSetting(areOff: appModel.notificationsAreOff)
         Form {
             Section {
-                MinutesField(
-                    title: "Notify before a login expires", value: \.notificationLeadTime,
-                    coordinator: appModel.coordinator)
+                DurationPopUp(
+                    title: "Notify before a login expires", listed: listedNotificationLeadTimes,
+                    value: \.notificationLeadTime, coordinator: appModel.coordinator)
             }
             Section {
                 VStack(alignment: .leading, spacing: 4) {
@@ -155,28 +155,28 @@ private struct NotificationsSettings: View {
     }
 }
 
-/// A setting in minutes, from 5 minutes to a day, stored in the settings in seconds.
-private struct MinutesField: View {
-    private static let secondsPerMinute: Double = 60
-
+/// A setting chosen from a short list of times, stored in the settings in seconds.
+private struct DurationPopUp: View {
     let title: String
+    let listed: [TimeInterval]
     let value: WritableKeyPath<PrinceClockInCore.Settings, TimeInterval>
     let coordinator: Coordinator
 
     var body: some View {
-        let minutes = Binding<Double>(
-            get: { coordinator.model.state.settings[keyPath: value] / Self.secondsPerMinute },
-            set: { minutes in
+        let stored = coordinator.model.state.settings[keyPath: value]
+        let selection = Binding<TimeInterval>(
+            get: { stored },
+            set: { duration in
                 var settings = coordinator.model.state.settings
-                settings[keyPath: value] = (minutes * Self.secondsPerMinute).rounded(.down)
+                settings[keyPath: value] = duration
                 coordinator.updateSettings(settings)
             })
-        LabeledContent(title) {
-            Stepper(value: minutes, in: 5...24 * 60, step: 5) {
-                Text(sessionLengthText(coordinator.model.state.settings[keyPath: value]))
-                    .monospacedDigit()
+        Picker(title, selection: selection) {
+            ForEach(durationOptions(listed, showing: stored), id: \.self) { duration in
+                Text(sessionLengthText(duration)).tag(duration)
             }
         }
+        .pickerStyle(.menu)
     }
 }
 
@@ -211,7 +211,9 @@ private struct GeneralSettings: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
+                    DurationPopUp(
+                        title: "Login timeout", listed: listedLoginTimeouts, value: \.loginTimeout,
+                        coordinator: appModel.coordinator)
                     SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
                 }
             }

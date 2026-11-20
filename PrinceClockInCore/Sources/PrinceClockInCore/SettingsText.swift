@@ -20,6 +20,18 @@ public func removePresetHelp(for preset: Preset?) -> String {
     return "Remove \(preset.name)."
 }
 
+/// The times Settings → Notifications' "Notify before a login expires" pop-up offers.
+public let listedNotificationLeadTimes: [TimeInterval] = [5, 10, 15, 30, 60, 120].map { $0 * 60 }
+
+/// The times Settings → General's "Login timeout" pop-up offers.
+public let listedLoginTimeouts: [TimeInterval] = [2, 5, 10, 15].map { $0 * 60 }
+
+/// The times a settings pop-up shows, in ascending order: `listed`, plus `stored` when it isn't
+/// listed, so a stored time keeps showing, unchanged, until the user picks another.
+public func durationOptions(_ listed: [TimeInterval], showing stored: TimeInterval) -> [TimeInterval] {
+    listed.contains(stored) ? listed : (listed + [stored]).sorted()
+}
+
 /// The Notifications row in Settings → Notifications.
 public struct NotificationsSetting: Equatable, Sendable {
     /// "On" or "Off".
