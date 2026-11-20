@@ -698,6 +698,11 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   on the maintainer's self-hosted pool `prince-clockin-macos`: a fresh macOS VM per job with Xcode
   26.6, no secrets and no local network. A fork's pull request runs on GitHub's `macos-26`, since
   the pool refuses a fork's job.
+- CodeQL scans the app, the core package and the workflows on GitHub-hosted runners, on every push
+  to `main`, weekly, and on each pull request that changes Swift, `project.yml` or a workflow. It
+  builds the generated project itself, since CodeQL's autobuild looks for a committed Xcode project
+  and finds only the core package. It stays off the pool, which runs one job at a time, so a scan
+  would hold up CI.
 - The appcast and DMGs are served from `https://updates.princelundgren.com/princeclockin/`, the
   maintainer's update host, whose address belongs to no website, so it stays stable whatever the
   website becomes (owner, 2026-11-17). Feed URL:
