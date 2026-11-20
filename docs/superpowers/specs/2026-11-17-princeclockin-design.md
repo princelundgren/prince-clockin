@@ -268,8 +268,8 @@ never in colour; the panel has the times.
   A failed save keeps its symbol until a save succeeds.
 - VoiceOver reads one label, such as "PrinceClockIn, prod expiring in 19 minutes".
 - A left click opens the panel and a right click opens the right-click menu.
-- Removing the icon from the menu bar quits the app, which stops timers and notifications;
-  Settings → General says so. Opening the app again from Applications brings it back: at launch
+- Removing the icon from the menu bar quits the app, which stops timers and notifications.
+  Opening the app again from Applications brings it back: at launch
   the app makes its status item visible.
 
 #### Panel
@@ -461,9 +461,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
   the change happened); Login timeout, a pop-up of 2, 5, 10 and 15 minutes (5 minutes by default;
-  "A login that takes longer than the login timeout is stopped and marked failed."); and "Removing
-  PrinceClockIn's icon from the menu bar quits it, which stops its timers and notifications. Open
-  PrinceClockIn from Applications to bring it back."
+  "A login that takes longer than the login timeout is stopped and marked failed."). It carries no
+  note that removing the icon from the menu bar quits the app, which wasn't needed (owner,
+  2026-11-20).
 - Both time pop-ups replace steppers, which took many clicks to cross their range (owner,
   2026-11-20). A stored time that isn't listed, such as one set with the old stepper, is shown in
   its place in order, unchanged, until another is picked.
