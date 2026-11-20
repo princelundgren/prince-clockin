@@ -155,6 +155,18 @@ import PrinceClockInCore
         ])
     }
 
+    @Test(arguments: ["[sso-session dev] # note", "[sso-session dev] ; note", "[sso-session dev]trailing"])
+    func textAfterAnAWSHeaderIsIgnored(header: String) {
+        let config = "\(header)\nsso_region = eu-north-1\n"
+        #expect(parseINI(config).first?.values == ["sso_region": "eu-north-1"])
+        #expect(discoverAWSSessions(configText: config) == ["dev"])
+    }
+
+    @Test func aCommentAfterADatabricksHeaderIsIgnored() {
+        let config = "[analytics-dev] # note\nauth_type = databricks-cli\n"
+        #expect(discoverDatabricksProfiles(configText: config).map(\.name) == ["analytics-dev"])
+    }
+
     @Test func crlfLinesAndEqualsInValuesAreParsed() {
         let config = "[sso-session dev]\r\nsso_start_url = https://example.awsapps.com/start?a=b\r\n"
         let sections = parseINI(config)
