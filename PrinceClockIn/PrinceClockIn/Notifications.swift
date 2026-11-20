@@ -27,9 +27,9 @@ struct SystemNotifier: Notifying {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
     }
 
-    func postWarning(logins: [Login]) async {
-        let warning = warningContent(logins, now: Date(), locale: .current)
-        await post(title: warning.title, body: warning.body, category: Self.expiringCategory, ids: warning.ids)
+    func postExpiryNotification(logins: [Login]) async {
+        let content = expiryNotificationContent(logins, now: Date(), locale: .current)
+        await post(title: content.title, body: content.body, category: Self.expiringCategory, ids: content.ids)
     }
 
     func postCustomDone(login: Login) async {

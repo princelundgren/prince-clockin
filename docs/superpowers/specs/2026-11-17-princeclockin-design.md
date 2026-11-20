@@ -6,8 +6,8 @@ verified: 2026-11-20
 
 # PrinceClockIn: design
 
-A macOS menu bar app that shows how long each command-line cloud login has left, warns before one
-expires, and logs in to the ones you pick, one after another, when you click.
+A macOS menu bar app that shows how long each command-line cloud login has left, notifies you before
+one expires, and logs in to the ones you pick, one after another, when you click.
 
 ## Why
 
@@ -58,9 +58,9 @@ arrives before it does, and one click logs in to the logins you choose, in seque
 ## Prior art
 
 - **Leapp**: a desktop app for many cloud logins (AWS, Azure, Google Cloud, Alibaba). No release
-  since v0.26.1 (June 2024). No Databricks support and no expiry warnings of this kind.
+  since v0.26.1 (June 2024). No Databricks support and no expiry notifications of this kind.
 - **Granted** and **aws-sso-cli**: AWS command-line tools that manage and hand out credentials.
-  That is this app's non-goal, and neither covers Databricks or warns before a session ends.
+  That is this app's non-goal, and neither covers Databricks or notifies before a session ends.
 - **SwiftBar**: a host for script-driven menu bar items. It can show the timers, but see
   Approaches.
 
@@ -98,7 +98,7 @@ and a timer. The kinds are:
   MFA codes or choices; the timer starts when the user clicks Done (owner, 2026-11-17). Without a
   command, logging in is the same step with nothing opened: the user logs in their own way and
   clicks Done, and nothing in its copy mentions Terminal (owner, 2026-11-18). Either way it is due,
-  warned about and queued like any other login. Custom logins never run in the background. In a
+  notified about and queued like any other login. Custom logins never run in the background. In a
   batch they're a step that waits for Done, and that wait times out like any other login, so a
   forgotten Done can't block the queue; a user who finishes later logs in again from the tile,
   which has no way to mark it logged in (see Tiles, No actions menu).
@@ -151,12 +151,12 @@ The login time comes from:
         while the previous `expiresAt` was more than 15 minutes away is a login, since the CLI
         only renews within 15 minutes of it. A rewrite at or after the timer's expiry is a login,
         since a renewal can't outlive the session.
-     5. A rewrite while the timer is unknown, or within the warning time, could be either, since
-        the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with the
-        rewrite's time, and offers Mark as Logged In at <time>, Log In and Set Timer…; the first
-        sets the login time to the rewrite's time. There is no "No", since a wrong timer is worse
-        than an open question: the question stays until a time is set or the app logs the login in
-        (owner, 2026-11-19). Any other rewrite is a renewal.
+     5. A rewrite while the timer is unknown, or within the notification time, could be either,
+        since the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with
+        the rewrite's time, and offers Mark as Logged In at <time>, Log In and Set Timer…; the
+        first sets the login time to the rewrite's time. There is no "No", since a wrong timer is
+        worse than an open question: the question stays until a time is set or the app logs the
+        login in (owner, 2026-11-19). Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -166,7 +166,7 @@ The login time comes from:
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
 without a token. Set too short, a renewal after the timer's expiry is taken for a login, so the
 timer restarts from it. Set too long, it shows ok after the real session has ended, and a re-login
-before the warning time can be taken for a renewal, so it keeps counting from the old login (a
+before the notification time can be taken for a renewal, so it keeps counting from the old login (a
 rewrite more than 15 minutes before the token's `expiresAt` is still caught). Setting the right
 session length fixes both.
 
@@ -181,7 +181,7 @@ Facts the timer design rests on:
 - The Databricks CLI's OAuth access token lasts an hour and renews itself until the refresh-token
   lifetime set in the account's token policy runs out.
 
-Each timer has a state: **ok**, **expiring** (within the warning time), **expired**, or
+Each timer has a state: **ok**, **expiring** (within the notification time), **expired**, or
 **unknown** (no login time or no session length), shown as "No timer". An AWS SSO session or
 custom login with an unknown timer that has been logged in to, and not invalidated since, shows
 as **logged in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS
@@ -203,13 +203,13 @@ has, unknown until a login is recorded. A login done while the app wasn't runnin
 the AWS file-time rule above, or set by hand.
 
 Times are recomputed every 30 seconds, on wake from sleep, on a clock change and on a time-zone
-change. Each recomputation also reads the AWS cache files and sends any warning now due.
+change. Each recomputation also reads the AWS cache files and sends any notification now due.
 
 #### The Databricks live check
 
 The check asks the Databricks CLI whether a tracked profile is still valid, one profile at a time,
 for tracked profiles only, at most every 5 minutes per profile, and never while a `databricks`
-login is running. It runs when a Databricks login enters its warning time, and when the user
+login is running. It runs when a Databricks login enters its notification time, and when the user
 clicks Check Databricks Now in Settings → Logins.
 
 - A profile reported invalid moves its timer to expired, even if time remains.
@@ -287,7 +287,7 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    2. **Save failed**: "Your changes couldn't be saved", then the reason on its own line, then
       "They'll be lost when PrinceClockIn quits." With Try Again, which calls the core's public
       `retrySave()`. It clears itself after a good save, and also posts a notification and puts
-      the failure symbol in the menu bar, since a popover must not be the only place a warning
+      the failure symbol in the menu bar, since a popover must not be the only place a failure
       appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar shows that a login is
       about to expire." With Open System Settings…, which opens System Settings → Notifications. It
@@ -470,7 +470,7 @@ A token has only the meanings its row lists.
 | Token | Means | Light | Dark | Increase Contrast light | Increase Contrast dark |
 |---|---|---|---|---|---|
 | Expired | a login past its time, or a login that failed | `#B3261E` | `#FF6961` | `#8C1D18` | `#FF9A94` |
-| Expiring | inside the warning time | `#8A5A00` | `#E0B359` | `#6E4700` | `#F0CC85` |
+| Expiring | inside the notification time | `#8A5A00` | `#E0B359` | `#6E4700` | `#F0CC85` |
 | Logged in | a login with time left, still valid, or logged in with no expiry | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
 | Running | a login in progress or queued | `#5B45B5` | `#B8A8F0` | `#47358F` | `#D2C8F8` |
 | Accent | the one prominent button's fill, under white text | `#3A78AC` | `#3A78AC` | `#2F6797` | `#2F6797` |
@@ -564,9 +564,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its warning time. Logins that do so close together, or
+- One notification when a login enters its notification time. Logins that do so close together, or
   while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
-  warning time passed while the app wasn't running is announced once at the next launch, as
+  notification time passed while the app wasn't running is announced once at the next launch, as
   expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
@@ -575,7 +575,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - A failed save posts a notification (see Panel).
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.
-- If notification permission is denied, the menu bar label carries the warning alone (the
+- If notification permission is denied, the menu bar label carries the expiry alone (the
   notice: see Panel).
 
 ### Running logins
@@ -640,10 +640,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Settings, logins, presets and timers are stored as JSON in
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
-  check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
-  whether the profile is account-level (as last read from its config), the time and result of
-  its last check and of its last answer (valid or invalid), and, for AWS, the cache file's
-  last-seen modified and `expiresAt` times. Fingerprints are never stored.
+  check, the expiry the last notification was for (so a relaunch doesn't notify twice), for
+  Databricks, whether the profile is account-level (as last read from its config), the time and
+  result of its last check and of its last answer (valid or invalid), and, for AWS, the cache
+  file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
 - The file is `state.json`, with a format version. One that won't decode, or has another format
   version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
   app starts empty and says so in the panel (State set aside). A save that fails keeps the state

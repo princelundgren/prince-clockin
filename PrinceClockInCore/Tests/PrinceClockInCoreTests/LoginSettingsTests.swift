@@ -125,7 +125,7 @@ private func form(_ login: Login) -> LoginSettingsForm {
         #expect(databricksForm.source?.value == "analytics-dev in /Users/someoneelse/.databrickscfg")
     }
 
-    @Test func aCustomLoginHasNoSourceAndTheCommandsWarning() {
+    @Test func aCustomLoginHasNoSourceAndTheCommandsNote() {
         let customForm = form(custom())
 
         #expect(customForm.source == nil)
@@ -134,7 +134,7 @@ private func form(_ login: Login) -> LoginSettingsForm {
             == "The command runs in Terminal and is saved as plain text, so don't put a secret in it.")
     }
 
-    @Test func onlyACustomLoginHasTheCommandsWarning() {
+    @Test func onlyACustomLoginHasTheCommandsNote() {
         #expect(form(aws()).commandNote == nil)
         #expect(form(databricks()).commandNote == nil)
     }

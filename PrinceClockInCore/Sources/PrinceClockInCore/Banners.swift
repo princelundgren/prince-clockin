@@ -1,6 +1,6 @@
 import Foundation
 
-/// A warning at the top of the panel, highest priority first in declaration order.
+/// A banner at the top of the panel, highest priority first in declaration order.
 public enum Banner: Hashable, Sendable {
     /// The state file was unreadable or from a newer version, so it was set aside as `backup`.
     case stateSetAside(backup: URL)

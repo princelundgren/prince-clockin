@@ -3,8 +3,8 @@ import Observation
 
 /// Posts the app's notifications.
 public protocol Notifying: Sendable {
-    /// One grouped notification for logins that entered their warning time, with a "Log In" action.
-    func postWarning(logins: [Login]) async
+    /// One grouped notification for logins that entered their notification time, with a "Log In" action.
+    func postExpiryNotification(logins: [Login]) async
     /// A custom login waits for the user's Done; the notification carries a "Done" action.
     func postCustomDone(login: Login) async
     /// Saving stopped working; `reason` is the system's.
@@ -113,7 +113,7 @@ public final class Coordinator {
     /// whether or not the panel has been shown.
     public var menuBarStatus: MenuBarStatus {
         PrinceClockInCore.menuBarStatus(
-            model.state.logins, now: now, leadTime: model.state.settings.warningLeadTime, batch: batch,
+            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime, batch: batch,
             hasFailure: hasUnseenFailure || saveFailure != nil)
     }
 
@@ -126,7 +126,7 @@ public final class Coordinator {
         }
     }
 
-    /// Whether a Databricks check runs now, from the warning time or Check Databricks Now.
+    /// Whether a Databricks check runs now, from the notification time or Check Databricks Now.
     public var isCheckingDatabricks: Bool { runningChecks > 0 }
     /// Whether Check Databricks Now can run: no check or Databricks login runs, and a workspace
     /// profile, which unlike an account profile can be checked, is tracked.
@@ -218,8 +218,9 @@ public final class Coordinator {
         await rereadAccountLevels()
     }
 
-    /// Reads the AWS cache files, takes and saves the warnings due, checks the Databricks logins
-    /// among them and posts one grouped notification. A tick that arrives while one runs is skipped.
+    /// Reads the AWS cache files, takes and saves the expiry notifications due, checks the
+    /// Databricks logins among them and posts one grouped notification. A tick that arrives while
+    /// one runs is skipped.
     public func tick() async {
         guard !isTicking else { return }
         isTicking = true
@@ -228,11 +229,11 @@ public final class Coordinator {
         now = tickTime
         observeAWSCaches(now: tickTime, isFirstCheckAfterWake: isFirstCheckAfterWake)
         isFirstCheckAfterWake = false
-        let due = model.takeWarnings(now: tickTime)
+        let due = model.takeExpiryNotifications(now: tickTime)
         saveIfChanged()
         await check(model.databricksLogins(among: due), now: tickTime)
-        let warned = due.compactMap(login)
-        if !warned.isEmpty { await notifier.postWarning(logins: warned) }
+        let notified = due.compactMap(login)
+        if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
     }
 
     /// Checks every tracked Databricks login, for Check Databricks Now.
@@ -311,7 +312,7 @@ public final class Coordinator {
             possibleLoginAt: model.possibleLogins[id]?.time,
             isPossibleLoginFoundOnWake: model.possibleLogins[id]?.isFoundOnWake ?? false)
         return tilePresentation(
-            for: login, now: now, leadTime: model.state.settings.warningLeadTime, facts: facts,
+            for: login, now: now, leadTime: model.state.settings.notificationLeadTime, facts: facts,
             locale: locale, calendar: calendar)
     }
 
@@ -489,7 +490,7 @@ public final class Coordinator {
             let current = aws.state(session: session, previous: previous)
             let observation = observe(
                 previous: previous, current: current, timerExpiry: expiry(of: login),
-                leadTime: model.state.settings.warningLeadTime)
+                leadTime: model.state.settings.notificationLeadTime)
             model.apply(observation, login: login.id, now: now, isFirstCheckAfterWake: isFirstCheckAfterWake)
             awsStates[login.id] = current
             switch current {

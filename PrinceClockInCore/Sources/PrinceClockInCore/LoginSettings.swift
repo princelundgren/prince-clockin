@@ -64,7 +64,7 @@ public struct LoginSettingsForm: Equatable, Sendable {
     public let commandNote: String?
 }
 
-/// The warning under a custom login's Command, in its form and in New custom login.
+/// The note under a custom login's Command, in its form and in New custom login.
 public let customCommandNote = "The command runs in Terminal and is saved as plain text, so don't put a secret in it."
 
 /// The form for `login`. A config file under `home` is shown with `~` in its place.
