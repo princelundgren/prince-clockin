@@ -1,5 +1,5 @@
 ---
-status: building
+status: live
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
 verified: 2026-11-20
 ---
@@ -158,7 +158,8 @@ The login time comes from:
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
-   - **Databricks**: a tracked profile that goes from invalid to valid.
+   - **Databricks**: a tracked profile that goes from invalid to valid. The login time is the
+     check's time, the best the app knows.
 
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
 without a token. Set too short, a renewal after the timer's expiry is taken for a login, so the
@@ -616,9 +617,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   whether the profile is account-level (as last read from its config), the time and result of
   its last check and of its last answer (valid or invalid), and, for AWS, the cache file's
   last-seen modified and `expiresAt` times. Fingerprints are never stored.
-- A file that is unreadable, or from another version, is set aside beside it and the app starts
-  empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
-  change saves it.
+- The file is `state.json`, with a format version. One that won't decode, or has another format
+  version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
+  app starts empty and says so in the panel (State set aside). A save that fails keeps the state
+  in memory until the core's `retrySave()` or the next change saves it.
 - Bundle ID `com.princelundgren.princeclockin`.
 
 ### Privacy and support
@@ -647,8 +649,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   This departs on purpose from Sparkle's example for dockless apps, which brings back the Dock
   icon: the menu bar is where this app is looked at.
 - An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty.
-- Sparkle's license ships in the app as `ThirdPartyNotices.txt`, a copy of the pinned release's
-  `LICENSE`.
+- Sparkle's license ships in the app from `PrinceClockIn/PrinceClockIn/ThirdPartyNotices.txt`, a
+  copy of the pinned release's `LICENSE`; a release fails if the two differ.
 - The release workflow lives in this repository. Its build, signing and upload jobs run on
   GitHub-hosted runners; its test job reuses the CI workflow, in the pool below. A public
   repository can call only public reusable workflows, and by the maintainer's policy a public
@@ -700,7 +702,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
-- Checks to run on a Mac with macOS 26, on the prototype, before the design is final:
+- Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
+  these behaviours are unverified:
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
