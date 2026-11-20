@@ -152,11 +152,11 @@ The login time comes from:
         only renews within 15 minutes of it. A rewrite at or after the timer's expiry is a login,
         since a renewal can't outlive the session.
      5. A rewrite while the timer is unknown, or within the notification time, could be either,
-        since the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with
-        the rewrite's time, and offers Mark as Logged In at <time>, Log In and Set Timer…; the
-        first sets the login time to the rewrite's time. There is no "No", since a wrong timer is
-        worse than an open question: the question stays until a time is set or the app logs the
-        login in (owner, 2026-11-19). Any other rewrite is a renewal.
+        since the CLI also renews a token that has lapsed. The tile asks "Its login changed at
+        <time>. Was that you?" with the rewrite's time, and offers Mark as Logged In at <time>, Log
+        In and Set Timer…; the first sets the login time to the rewrite's time. There is no "No",
+        since a wrong timer is worse than an open question: the question stays until a time is set
+        or the app logs the login in (owner, 2026-11-19). Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -394,7 +394,7 @@ without its text, so no earlier text shows.
   actions, so there is no Mark as Logged In Now or Edit in Settings…. A SwiftUI menu in the panel
   closed on the first click after the panel opened, the app's activation arriving with that click
   (macOS 27.2.1), and the owner chose fewer actions over working around it. Session length is set
-  in Settings, and Set Timer opens from a "Logged in elsewhere?" question and from Settings'
+  in Settings, and Set Timer opens from a "Was that you?" question and from Settings'
   prompt after adding a login. A login whose timer is wrong with no question, or a custom login
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
@@ -477,8 +477,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
     notify you before it expires, or skip and log in from the panel later." with Skip and Set
-    Timer…, so a login the user has already done gets a known timer instead of the "Logged in
-    elsewhere?" question later. It is asked once: selecting another login or removing this one
+    Timer…, so a login the user has already done gets a known timer instead of the "Was that
+    you?" question later. It is asked once: selecting another login or removing this one
     ends it.
 - **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
   the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
