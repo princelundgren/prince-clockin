@@ -356,11 +356,6 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    public func markLoggedInNow(id: UUID) {
-        model.markLoggedInNow(id: id, now: clock())
-        saveIfChanged()
-    }
-
     /// Tracks `login`. A custom command added here was typed by the user, so it is approved.
     public func addLogin(_ login: Login) {
         guard self.login(login.id) == nil else { return }

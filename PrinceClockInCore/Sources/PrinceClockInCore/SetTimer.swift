@@ -47,13 +47,6 @@ public struct SetTimerDraft: Equatable, Sendable {
         }
     }
 
-    /// Mark as Logged In Now while the session length is unknown, on a new draft or one already
-    /// open: Logged In At `now`, keeping the rest, so the form asks for the length.
-    public mutating func markLoggedInNow(at now: Date) {
-        mode = .loggedInAt
-        loggedInAt = now
-    }
-
     /// What the draft tells Set Timer, or `nil` while a field it needs is empty or not a number,
     /// Expires In's hours are negative or its minutes outside 0 to 59, or no finite session length
     /// is chosen. An empty hours or minutes field counts as zero, as long as the other isn't empty

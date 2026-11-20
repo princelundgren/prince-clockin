@@ -114,10 +114,10 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(byLoggedInAt.state.logins[0].loginTime == at("2026-11-17T10:00:00Z"))
         #expect(byLoggedInAt.possibleLogins.isEmpty)
 
-        var byLoggedInNow = asked
-        byLoggedInNow.markLoggedInNow(id: dev.id, now: now)
-        #expect(byLoggedInNow.state.logins[0].loginTime == now)
-        #expect(byLoggedInNow.possibleLogins.isEmpty)
+        var bySetLoginTime = asked
+        bySetLoginTime.setLoginTime(id: dev.id, at: now)
+        #expect(bySetLoginTime.state.logins[0].loginTime == now)
+        #expect(bySetLoginTime.possibleLogins.isEmpty)
 
         var bySucceeded = asked
         bySucceeded.apply(.succeeded(id: dev.id, at: now))
@@ -382,7 +382,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         stillValid.apply(.valid, login: prod.id, now: now)
 
         var loggedIn = stillValid
-        loggedIn.markLoggedInNow(id: prod.id, now: now)
+        loggedIn.setLoginTime(id: prod.id, at: now)
         #expect(!isStillValid(loggedIn.state.logins[0], now: now))
 
         var lengthened = stillValid

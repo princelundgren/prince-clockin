@@ -174,12 +174,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate()
     }
 
-    /// Edit in Settings…: Settings on Logins, with the tile's login selected.
-    private func showSettings(selecting loginID: UUID) {
-        loginsPaneRequest.loginToSelect = loginID
-        showSettings(on: .logins)
-    }
-
     /// Add Logins…: Settings on Logins, whose pane opens its + menu once it has read the config
     /// files.
     private func showSettingsOpeningAddMenu() {

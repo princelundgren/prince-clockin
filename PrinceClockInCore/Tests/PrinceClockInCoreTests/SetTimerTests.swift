@@ -60,18 +60,6 @@ private func draft(_ login: Login = aws(), _ edit: (inout SetTimerDraft) -> Void
         #expect(unlisted.entry(locale: british) == .expiresIn(hour, sessionLength: 10 * hour))
     }
 
-    @Test func markAsLoggedInNowAsksForTheLengthWithLoggedInAtNow() {
-        var marking = draft(aws(sessionLength: nil, loginTime: at("2026-11-18T09:00:00Z")))
-
-        marking.markLoggedInNow(at: now)
-
-        #expect(marking.mode == .loggedInAt)
-        #expect(marking.loggedInAt == now)
-        #expect(marking.check(now: now, locale: british) == .noSessionLength)
-    }
-
-    // MARK: The entry
-
     @Test func expiresInTakesHoursAndMinutes() {
         let entry = draft { $0.hours = "4"; $0.minutes = "30" }.entry(locale: british)
 
@@ -156,19 +144,6 @@ private func draft(_ login: Login = aws(), _ edit: (inout SetTimerDraft) -> Void
         #expect(draft { $0.hours = "-1"; $0.minutes = "30" }.entry(locale: british) == nil)
         #expect(draft { $0.hours = "0"; $0.minutes = "59" }.entry(locale: british)
             == .expiresIn(59 * minute, sessionLength: 8 * hour))
-    }
-
-    // MARK: Mark as Logged In Now on an open draft
-
-    @Test func markAsLoggedInNowOnADraftSwitchesItToLoggedInAtNowAndKeepsTheRest() {
-        var open = draft(aws(sessionLength: nil)) { $0.hours = "3"; $0.sessionLength = .length(12 * hour) }
-
-        open.markLoggedInNow(at: now)
-
-        #expect(open.mode == .loggedInAt)
-        #expect(open.loggedInAt == now)
-        #expect(open.sessionLength == .length(12 * hour))
-        #expect(open.hours == "3")
     }
 
     // MARK: The check: a login time and a session length

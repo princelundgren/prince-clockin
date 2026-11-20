@@ -252,13 +252,6 @@ final class PanelSession {
         openSetTimer = id
     }
 
-    /// Mark as Logged In Now while login `id`'s length is unknown: opens its Set Timer on Logged In
-    /// At `now`, keeping the rest of a draft from earlier in this opening, else from `newDraft`.
-    func openSetTimerMarkingLoggedInNow(for id: UUID, now: Date, newDraft: () -> SetTimerDraft) {
-        openSetTimer(for: id, newDraft: newDraft)
-        setTimerDrafts[id]?.markLoggedInNow(at: now)
-    }
-
     /// Cancel or Set on login `id`'s Set Timer: closes it and discards its draft.
     func closeSetTimer(for id: UUID) {
         setTimerDrafts[id] = nil

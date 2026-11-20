@@ -141,11 +141,6 @@ public struct LoginsModel: Equatable, Sendable {
         setSessionLengthAndLoginTime(id: id, length: setting.sessionLength, loginTime: setting.loginTime)
     }
 
-    /// The user's Mark as Logged In Now.
-    public mutating func markLoggedInNow(id: UUID, now: Date) {
-        setLoginTime(id: id, at: now)
-    }
-
     private mutating func setSessionLengthAndLoginTime(id: UUID, length: TimeInterval, loginTime: Date) {
         guard let index = index(of: id) else { return }
         state.logins[index].sessionLength = length
