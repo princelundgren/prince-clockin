@@ -550,7 +550,8 @@ public final class Coordinator {
         for login in logins.compactMap({ login($0.id) }) {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
             let check = await checker.check(
-                profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
+                profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil,
+                lastAnswerAt: login.lastDatabricksAnswer?.at)
             if let result = check.result { model.apply(result, login: login.id, now: now) }
         }
         saveIfChanged()

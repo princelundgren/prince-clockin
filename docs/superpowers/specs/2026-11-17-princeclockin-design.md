@@ -248,6 +248,10 @@ clicks Check Databricks Now in Settings → Logins.
   publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
 - A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
   which keeps its last check, so a skip never reads as a fresh result.
+- The 5 minutes hold across launches: they count from the stored time of the profile's last valid
+  or invalid answer. A stored couldn't check doesn't count, since it may be a check that never
+  ran the CLI, and neither does a stored time after the clock's, so a clock set back never blocks
+  checks until it catches up.
 - Check Databricks Now is disabled while a check runs, while a Databricks login runs, and when no
   workspace profile is tracked.
 

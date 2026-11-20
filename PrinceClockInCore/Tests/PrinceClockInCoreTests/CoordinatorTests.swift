@@ -613,6 +613,33 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.count == 1)
     }
 
+    @Test func aStoredAnswerHoldsTheIntervalAcrossLaunches() async throws {
+        var dev = databricks("analytics-dev", remaining: 5 * hour)
+        let answer = DatabricksCheckRecord(at: launch.addingTimeInterval(-60), result: .valid)
+        dev.lastDatabricksCheck = answer
+        dev.lastDatabricksAnswer = answer
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.isEmpty)
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == answer)
+    }
+
+    @Test func aStoredCouldntCheckLeavesTheIntervalFreeAfterARelaunch() async throws {
+        var dev = databricks("analytics-dev", remaining: 5 * hour)
+        dev.lastDatabricksCheck = DatabricksCheckRecord(at: launch.addingTimeInterval(-60), result: .couldntCheck)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.count == 1)
+    }
+
     @Test func theAccountFlagIsReadFromTheConfigBeforeACheck() async throws {
         var workspace = databricks("analytics-dev", remaining: 5 * hour)
         workspace.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)

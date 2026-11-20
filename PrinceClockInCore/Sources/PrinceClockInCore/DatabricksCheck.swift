@@ -51,11 +51,21 @@ public actor DatabricksChecker {
 
     /// `.valid` on exit 0 and `.invalid` on the CLI's no-credentials error; any other failure is
     /// `.couldntCheck`, so an offline or VPN-down failure never reads as invalid. Only a check that
-    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`.
-    public func check(profile: String, accountLevel: Bool, loginRunning: Bool) async -> DatabricksCheck {
+    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`, as does
+    /// `lastAnswerAt`, the stored time of the profile's last valid or invalid answer, so the
+    /// interval holds across launches. A `lastAnswerAt` after the clock's time is ignored, so a
+    /// clock set back never blocks checks until it catches up.
+    public func check(
+        profile: String, accountLevel: Bool, loginRunning: Bool, lastAnswerAt: Date? = nil
+    ) async -> DatabricksCheck {
         guard !accountLevel, !loginRunning else { return .skipped }
         let now = clock()
-        if let last = lastCheck[profile], now.timeIntervalSince(last) < minInterval { return .skipped }
+        let storedAnswer = lastAnswerAt.flatMap { $0 <= now ? $0 : nil }
+        if let last = [lastCheck[profile], storedAnswer].compactMap({ $0 }).max(),
+           now.timeIntervalSince(last) < minInterval
+        {
+            return .skipped
+        }
         // Reserved before the first await: the actor is reentrant, so a second call arriving while
         // this one waits would otherwise pass the interval check too.
         let previousCheck = lastCheck[profile]
