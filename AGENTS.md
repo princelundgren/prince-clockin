@@ -13,13 +13,15 @@ Everything in this repository is public: code, docs, commit messages, issues and
 - **Logins never run through a shell string.** Run `aws` and `databricks` as an executable plus an
   argument list, so a session or profile name can't inject a command.
 - **Changes land through a pull request**, with signed commits. The Claude review comments on each
-  pull request a person opens.
+  pull request a person opens from a branch of this repository, once it is out of draft; a fork's
+  or a bot's gets none.
 - **CI runs on the maintainer's self-hosted pool `prince-clockin-macos`**, a fresh macOS VM per
   job with Xcode 26.6, no secrets and no local network. A fork's pull request runs on GitHub's
-  `macos-26` instead, and the release and CodeQL jobs run on GitHub-hosted runners. Every action is
-  pinned by full commit SHA, except the Claude review: it calls the shared reusable workflow at its
-  moving `v1` tag, since only that repository's maintainer can move its `v*` tags and each release
-  then reaches this repository without a pull request here.
+  `macos-26` instead. The release's build, signing and upload jobs and CodeQL run on GitHub-hosted
+  runners; the release's test job reuses CI, in the pool. Every action is pinned by full commit
+  SHA, except the Claude review: it calls the shared reusable workflow at its moving `v1` tag,
+  since only that repository's maintainer can move its `v*` tags and each release then reaches
+  this repository without a pull request here.
 - **Build and test** from the repository root:
   - `swift test --package-path PrinceClockInCore`
   - `scripts/install-xcodegen.sh`, then in `PrinceClockIn/`:
