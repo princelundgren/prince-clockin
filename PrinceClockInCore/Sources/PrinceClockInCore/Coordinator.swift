@@ -423,6 +423,18 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Stores the tracked logins in the order `ids` gives; see `LoginsModel.setLoginOrder(_:)`.
+    public func setLoginOrder(_ ids: [UUID]) {
+        model.setLoginOrder(ids)
+        saveIfChanged()
+    }
+
+    /// Stores the presets in the order `ids` gives; see `LoginsModel.setPresetOrder(_:)`.
+    public func setPresetOrder(_ ids: [UUID]) {
+        model.setPresetOrder(ids)
+        saveIfChanged()
+    }
+
     public func removePreset(id: UUID) {
         model.state.presets.removeAll { $0.id == id }
         saveIfChanged()

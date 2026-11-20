@@ -2,8 +2,8 @@ import AppKit
 import PrinceClockInCore
 import SwiftUI
 
-/// Settings → Logins: the tracked logins with + and − below them and Check Databricks Now in the
-/// header, then the selected login's form, or New custom login.
+/// Settings → Logins: the tracked logins, which a drag reorders for the panel, with + and − below
+/// them and Check Databricks Now in the header, then the selected login's form, or New custom login.
 struct LoginsSettings: View {
     let appModel: AppModel
     let request: LoginsPaneRequest
@@ -28,6 +28,11 @@ struct LoginsSettings: View {
                     ForEach(logins) { login in
                         LoginRow(login: login, coordinator: coordinator)
                             .tag(login.id)
+                    }
+                    .onMove { offsets, destination in
+                        var order = ListOrder(logins.map(\.id))
+                        order.move(fromOffsets: offsets, toOffset: destination)
+                        coordinator.setLoginOrder(order.ids)
                     }
                 }
                 .frame(minHeight: 160)

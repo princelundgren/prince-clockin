@@ -1,8 +1,8 @@
 import PrinceClockInCore
 import SwiftUI
 
-/// Settings → Presets: the presets with + and − below them, then the selected preset's Name and
-/// the logins it logs in to, in order.
+/// Settings → Presets: the presets, which a drag reorders, with + and − below them, then the
+/// selected preset's Name and the logins it logs in to, in order.
 struct PresetsSettings: View {
     let coordinator: Coordinator
     @State private var selection: UUID?
@@ -18,6 +18,11 @@ struct PresetsSettings: View {
                         Text(preset.name)
                             .lineLimit(1)
                             .tag(preset.id)
+                    }
+                    .onMove { offsets, destination in
+                        var order = ListOrder(presets.map(\.id))
+                        order.move(fromOffsets: offsets, toOffset: destination)
+                        coordinator.setPresetOrder(order.ids)
                     }
                 }
                 .frame(minHeight: 120)

@@ -1,21 +1,22 @@
 import Foundation
 
-/// A preset's logins, in order, as Settings → Presets edits them. Each edit keeps the order of the
-/// rest; `ids` is what the preset stores afterwards.
+/// A list Settings orders: the tracked logins, the presets, or a preset's logins. Each edit keeps
+/// the order of the rest; `ids` is the order stored afterwards. `add`, `remove` and
+/// `loginsToAdd(from:)` serve a preset's logins; the other lists only `move`.
 public struct ListOrder: Equatable, Sendable {
     public private(set) var ids: [UUID]
 
-    /// `ids` are the preset's tracked logins in its order (`LoginsModel.logins(in:)`).
+    /// `ids` are the list's items in their current order.
     public init(_ ids: [UUID]) {
         self.ids = ids
     }
 
-    /// The + menu: the tracked `logins` not in the preset, in their stored order.
+    /// A preset's + menu: the tracked `logins` not in the list, in their stored order.
     public func loginsToAdd(from logins: [Login]) -> [Login] {
         logins.filter { !ids.contains($0.id) }
     }
 
-    /// Adds login `id` last, unless it is already in the preset.
+    /// Adds `id` last, unless it is already in the list.
     public mutating func add(_ id: UUID) {
         guard !ids.contains(id) else { return }
         ids.append(id)
@@ -51,7 +52,7 @@ public struct ListOrder: Equatable, Sendable {
         ids.swapAt(index, index + 1)
     }
 
-    /// A drag: moves the logins at `offsets` to before the one at `destination`, an offset in the
+    /// A drag: moves the items at `offsets` to before the one at `destination`, an offset in the
     /// order before the move (`ids.count` puts them last), keeping their order, as a list's
     /// `onMove` reports it.
     public mutating func move(fromOffsets offsets: IndexSet, toOffset destination: Int) {

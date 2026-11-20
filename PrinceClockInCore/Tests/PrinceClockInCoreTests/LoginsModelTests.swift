@@ -451,54 +451,50 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(due.map(\.id) == [expiring.id, expired.id, loggedOut.id])
     }
 
-    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoExpiryThenNoTimer() {
+    @Test func setLoginOrderStoresTheLoginsInTheGivenOrder() {
         let now = at("2026-11-17T12:00:00Z")
-        let unknown = databricks("analytics-prod", sessionLength: nil)
-        let noExpiry = Login(
-            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
-        var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
-        stillValid.lastDatabricksAnswer = DatabricksCheckRecord(at: now, result: .valid)
-        let okLater = login(remaining: 5 * hour, now: now, name: "prod")
-        let okSooner = login(remaining: 2 * hour, now: now, name: "dev")
-        let expiring = login(remaining: 10 * 60, now: now, name: "qa")
-        let expiredRecently = login(remaining: -hour, now: now, name: "analytics-dev")
-        let expiredLongAgo = login(remaining: -3 * hour, now: now, name: "sandbox")
-        var loggedOut = login(remaining: 4 * hour, now: now, name: "billing")
-        loggedOut.invalidatedAt = now.addingTimeInterval(-30 * 60)
-        let logins = model([
-            unknown, noExpiry, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
-        ])
+        let dev = login(remaining: 2 * hour, now: now, name: "dev")
+        let prod = login(remaining: -hour, now: now, name: "prod")
+        let qa = databricks("qa", sessionLength: nil)
+        var logins = model([dev, prod, qa])
 
-        let order = logins.panelOrder(now: now)
+        logins.setLoginOrder([qa.id, dev.id, prod.id])
 
-        #expect(order.map(\.id) == [
-            expiredLongAgo.id, expiredRecently.id, loggedOut.id, expiring.id, okSooner.id, okLater.id,
-            stillValid.id, noExpiry.id, unknown.id,
-        ])
+        #expect(logins.state.logins.map(\.id) == [qa.id, dev.id, prod.id])
     }
 
-    @Test func panelOrderKeepsStoredOrderOnTies() {
+    @Test func setLoginOrderKeepsLoginsItLeavesOutAfterTheOthersAndIgnoresUntrackedIDs() {
         let now = at("2026-11-17T12:00:00Z")
-        let first = login(remaining: 2 * hour, now: now, name: "dev")
-        let second = login(remaining: 2 * hour, now: now, name: "prod")
-        let noTimerFirst = databricks("analytics-dev", sessionLength: nil)
-        let noTimerSecond = databricks("analytics-prod", sessionLength: nil)
+        let dev = login(remaining: hour, now: now, name: "dev")
+        let prod = login(remaining: hour, now: now, name: "prod")
+        let qa = login(remaining: hour, now: now, name: "qa")
+        var logins = model([dev, prod, qa])
 
-        let order = model([noTimerFirst, first, noTimerSecond, second]).panelOrder(now: now)
+        logins.setLoginOrder([qa.id, UUID()])
 
-        #expect(order.map(\.id) == [first.id, second.id, noTimerFirst.id, noTimerSecond.id])
+        #expect(logins.state.logins.map(\.id) == [qa.id, dev.id, prod.id])
     }
 
-    @Test func aTakenOrderHoldsAsTimersChange() {
+    @Test func setPresetOrderStoresThePresetsInTheGivenOrder() {
+        let morning = Preset(name: "Morning", loginIDs: [])
+        let night = Preset(name: "Night shift", loginIDs: [])
+        let all = Preset(name: "All", loginIDs: [])
+        var logins = model([], presets: [morning, night, all])
+
+        logins.setPresetOrder([all.id, morning.id])
+
+        #expect(logins.state.presets.map(\.id) == [all.id, morning.id, night.id])
+    }
+
+    @Test func aTakenOrderHoldsWhileTheStoredOrderChanges() {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: 2 * hour, now: now, name: "dev")
         let prod = login(remaining: 5 * hour, now: now, name: "prod")
         var logins = model([dev, prod])
-        let order = logins.panelOrder(now: now).map(\.id)
+        let order = logins.state.logins.map(\.id)
 
-        logins.setLoginTime(id: prod.id, at: now.addingTimeInterval(-8 * hour + 10 * 60))
+        logins.setLoginOrder([prod.id, dev.id])
 
-        #expect(logins.panelOrder(now: now).map(\.id) == [prod.id, dev.id])
         #expect(logins.logins(inOrder: order).map(\.id) == [dev.id, prod.id])
     }
 
