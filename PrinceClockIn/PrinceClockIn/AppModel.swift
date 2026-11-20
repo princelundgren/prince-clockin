@@ -45,7 +45,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             configPaths: .standard(environment: environment),
             clock: Date.init)
         activity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and warning before they expire")
+            options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and notifying before they expire")
         super.init()
         // Set before launch finishes, so a notification button that launched the app isn't lost.
         UNUserNotificationCenter.current().delegate = self

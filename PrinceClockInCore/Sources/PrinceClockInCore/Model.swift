@@ -110,9 +110,9 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Why `invalidatedAt` was set. `nil` in a file written before the reason was stored, which
     /// `isLoggedOut` reads by the kind's only earlier cause.
     public var invalidationReason: InvalidationReason?
-    /// The expiry the last warning was for, so a relaunch doesn't warn twice. A new login or a
-    /// longer session changes the expiry and so re-arms the warning.
-    public var warnedForExpiry: Date?
+    /// The expiry the last notification was for, so a relaunch doesn't notify twice. A new login or
+    /// a longer session changes the expiry and so re-arms the notification.
+    public var notifiedForExpiry: Date?
     public var lastAWSCache: AWSCacheRecord?
     public var lastDatabricksCheck: DatabricksCheckRecord?
     /// The last check that answered, valid or invalid; a couldn't-check result leaves it as it was.
@@ -128,7 +128,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         loginTime: Date? = nil,
         invalidatedAt: Date? = nil,
         invalidationReason: InvalidationReason? = nil,
-        warnedForExpiry: Date? = nil,
+        notifiedForExpiry: Date? = nil,
         lastAWSCache: AWSCacheRecord? = nil,
         lastDatabricksCheck: DatabricksCheckRecord? = nil,
         lastDatabricksAnswer: DatabricksCheckRecord? = nil
@@ -140,7 +140,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.loginTime = loginTime?.wholeSeconds
         self.invalidatedAt = invalidatedAt?.wholeSeconds
         self.invalidationReason = invalidationReason
-        self.warnedForExpiry = warnedForExpiry?.wholeSeconds
+        self.notifiedForExpiry = notifiedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
         self.lastDatabricksCheck = lastDatabricksCheck
         self.lastDatabricksAnswer = lastDatabricksAnswer
@@ -159,7 +159,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         Login(
             id: id, displayName: displayName, kind: kind, sessionLength: sessionLength,
             loginTime: loginTime, invalidatedAt: invalidatedAt, invalidationReason: invalidationReason,
-            warnedForExpiry: warnedForExpiry,
+            notifiedForExpiry: notifiedForExpiry,
             lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
             lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) },
             lastDatabricksAnswer: lastDatabricksAnswer.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
@@ -179,26 +179,26 @@ public struct Preset: Codable, Identifiable, Hashable, Sendable {
 }
 
 public struct Settings: Codable, Equatable, Sendable {
-    public static let defaultWarningLeadTime: TimeInterval = 30 * 60
+    public static let defaultNotificationLeadTime: TimeInterval = 30 * 60
     public static let defaultLoginTimeout: TimeInterval = 5 * 60
 
     /// Seconds before expiry at which a login counts as expiring.
-    public var warningLeadTime: TimeInterval
+    public var notificationLeadTime: TimeInterval
     /// Seconds a login may wait on the user before it is ended.
     public var loginTimeout: TimeInterval
 
     public init(
-        warningLeadTime: TimeInterval = Settings.defaultWarningLeadTime,
+        notificationLeadTime: TimeInterval = Settings.defaultNotificationLeadTime,
         loginTimeout: TimeInterval = Settings.defaultLoginTimeout
     ) {
-        self.warningLeadTime = warningLeadTime
+        self.notificationLeadTime = notificationLeadTime
         self.loginTimeout = loginTimeout
     }
 }
 
 public struct AppState: Codable, Equatable, Sendable {
     /// The file-format version this build reads and writes.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var version = AppState.currentVersion
     public var logins: [Login]

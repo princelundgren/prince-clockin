@@ -1,7 +1,7 @@
 import Foundation
 
-/// One grouped notification for the logins that entered their warning time.
-public struct WarningContent: Equatable, Sendable {
+/// One grouped notification for the logins that entered their notification time.
+public struct ExpiryNotificationContent: Equatable, Sendable {
     public let title: String
     public let body: String
     /// The logins the notification's "Log In" action starts, in the order given.
@@ -14,15 +14,15 @@ public struct WarningContent: Equatable, Sendable {
     }
 }
 
-/// The logins, in the order given, that have reached their warning time and haven't been warned
-/// for their current expiry. That includes ones that expired while the Mac slept or the app wasn't
-/// running. An unknown timer, a login invalidated since its last login time, or a Still valid
-/// login never warns.
-public func warningsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) -> [UUID] {
+/// The logins, in the order given, that have reached their notification time and haven't been
+/// notified for their current expiry. That includes ones that expired while the Mac slept or the app
+/// wasn't running. An unknown timer, a login invalidated since its last login time, or a Still
+/// valid login is never notified.
+public func expiryNotificationsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) -> [UUID] {
     logins.filter { login in
         guard let expiry = expiry(of: login), !isInvalidated(login), !isStillValid(login, now: now)
         else { return false }
-        return now >= expiry.addingTimeInterval(-leadTime) && login.warnedForExpiry != expiry
+        return now >= expiry.addingTimeInterval(-leadTime) && login.notifiedForExpiry != expiry
     }
     .map(\.id)
 }
@@ -30,15 +30,15 @@ public func warningsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) ->
 /// One login is named in the title. Several are counted in the title and listed in the body, one
 /// per line. Each is described by its state at `now`: "expires in 25m", with the time left in
 /// `locale`'s narrow form, or "expired".
-public func warningContent(_ logins: [Login], now: Date, locale: Locale) -> WarningContent {
+public func expiryNotificationContent(_ logins: [Login], now: Date, locale: Locale) -> ExpiryNotificationContent {
     let ids = logins.map(\.id)
     if logins.count == 1, let login = logins.first {
-        return WarningContent(
+        return ExpiryNotificationContent(
             title: "\(login.displayName) \(describe(login, now: now, locale: locale))", body: "Log in to renew it.",
             ids: ids)
     }
     let lines = logins.map { "\($0.displayName): \(describe($0, now: now, locale: locale))" }
-    return WarningContent(
+    return ExpiryNotificationContent(
         title: "\(logins.count) logins need logging in", body: lines.joined(separator: "\n"), ids: ids)
 }
 
@@ -74,7 +74,7 @@ public func customDoneContent(_ login: Login) -> NotificationText {
 
 /// The identifiers of the notification buttons the app registers.
 public enum NotificationActionID {
-    /// "Log In", on a warning: starts the logins it names.
+    /// "Log In", on an expiry notification: starts the logins it names.
     public static let logIn = "logIn"
     /// "Done", on a custom login waiting for the user.
     public static let done = "customDone"

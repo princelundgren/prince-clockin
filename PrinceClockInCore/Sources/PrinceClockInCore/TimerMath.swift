@@ -2,7 +2,7 @@ import Foundation
 
 public enum TimerState: Equatable, Sendable {
     case ok(remaining: TimeInterval)
-    /// Within the warning lead time, and not yet expired.
+    /// Within the notification lead time, and not yet expired.
     case expiring(remaining: TimeInterval)
     case expired
     /// No login time or no session length is known.

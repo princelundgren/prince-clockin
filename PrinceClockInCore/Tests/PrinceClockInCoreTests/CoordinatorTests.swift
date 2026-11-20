@@ -81,7 +81,7 @@ private final class FakeAWSReader: AWSCacheReading, @unchecked Sendable {
 
 private final class FakeNotifier: Notifying, @unchecked Sendable {
     private let lock = NSLock()
-    private var postedWarnings: [[Login]] = []
+    private var postedExpiryNotifications: [[Login]] = []
     private var postedDone: [Login] = []
     /// Each save-failed post's reason, as it is posted.
     let saveFailures: AsyncStream<String>
@@ -91,10 +91,10 @@ private final class FakeNotifier: Notifying, @unchecked Sendable {
         (saveFailures, saveFailureSink) = AsyncStream.makeStream(of: String.self)
     }
 
-    var warnings: [[Login]] { lock.withLock { postedWarnings } }
+    var expiryNotifications: [[Login]] { lock.withLock { postedExpiryNotifications } }
     var customDone: [Login] { lock.withLock { postedDone } }
 
-    func postWarning(logins: [Login]) async { lock.withLock { postedWarnings.append(logins) } }
+    func postExpiryNotification(logins: [Login]) async { lock.withLock { postedExpiryNotifications.append(logins) } }
     func postCustomDone(login: Login) async { lock.withLock { postedDone.append(login) } }
     func postSaveFailed(reason: String) async { saveFailureSink.yield(reason) }
 }
@@ -369,37 +369,37 @@ private final class GatedLogins: Sendable {
         #expect(fixture.stored?.logins.first?.loginTime == loggedIn)
     }
 
-    @Test func tickPostsOneGroupedWarning() async throws {
+    @Test func tickPostsOneGroupedNotification() async throws {
         let dev = login(remaining: 3 * hour + 600, now: launch, name: "dev")
         let prod = login(remaining: 3 * hour + 1200, now: launch, name: "prod")
         let fixture = try Fixture(logins: [dev, prod])
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
         await coordinator.tick()
-        #expect(fixture.notifier.warnings.isEmpty)
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
 
         fixture.clock.advance(by: 3 * hour)
         await coordinator.tick()
 
-        #expect(fixture.notifier.warnings.map { $0.map(\.id) } == [[dev.id, prod.id]])
+        #expect(fixture.notifier.expiryNotifications.map { $0.map(\.id) } == [[dev.id, prod.id]])
     }
 
-    @Test func relaunchDoesNotRewarn() async throws {
+    @Test func relaunchDoesNotNotifyAgain() async throws {
         let dev = login(remaining: 600, now: launch, name: "dev")
         let fixture = try Fixture(logins: [dev])
         let first = fixture.makeCoordinator()
         await first.start()
         await first.tick()
-        #expect(fixture.notifier.warnings.count == 1)
+        #expect(fixture.notifier.expiryNotifications.count == 1)
 
         let relaunched = fixture.makeCoordinator()
         await relaunched.start()
         await relaunched.tick()
 
-        #expect(fixture.notifier.warnings.count == 1)
+        #expect(fixture.notifier.expiryNotifications.count == 1)
     }
 
-    @Test func tickChecksDatabricksOnlyWhenWarning() async throws {
+    @Test func tickChecksDatabricksOnlyAtNotificationTime() async throws {
         let expiring = databricks("analytics-dev", remaining: 600)
         let fine = databricks("analytics-prod", remaining: 5 * hour)
         let fixture = try Fixture(logins: [expiring, fine])
@@ -413,7 +413,7 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
     }
 
-    @Test func invalidDatabricksCheckBeforeWarningPostsExpired() async throws {
+    @Test func invalidDatabricksCheckBeforeNotificationTimePostsExpired() async throws {
         let expiring = databricks("analytics-dev", remaining: 600)
         let fixture = try Fixture(logins: [expiring], checkRunner: ArgumentRunner { _ in authError })
         let coordinator = fixture.makeCoordinator()
@@ -421,9 +421,10 @@ private final class GatedLogins: Sendable {
 
         await coordinator.tick()
 
-        let posted = try #require(fixture.notifier.warnings.first)
+        let posted = try #require(fixture.notifier.expiryNotifications.first)
         #expect(posted.first?.invalidatedAt == launch)
-        #expect(warningContent(posted, now: launch, locale: Locale(identifier: "en_GB")).title == "analytics-dev expired")
+        let title = expiryNotificationContent(posted, now: launch, locale: Locale(identifier: "en_GB")).title
+        #expect(title == "analytics-dev expired")
     }
 
     @Test func overlappingTickIsSkipped() async throws {
@@ -449,7 +450,7 @@ private final class GatedLogins: Sendable {
         await coordinator.tick()
         #expect(coordinator.now == launch.addingTimeInterval(30))
         #expect(fixture.checkRunner.calls.count == 1)
-        #expect(fixture.notifier.warnings.count == 1)
+        #expect(fixture.notifier.expiryNotifications.count == 1)
     }
 
     @Test func noDatabricksCheckWhileDatabricksLoginRuns() async throws {
@@ -463,7 +464,7 @@ private final class GatedLogins: Sendable {
         await coordinator.tick()
 
         #expect(fixture.checkRunner.calls.isEmpty)
-        #expect(fixture.notifier.warnings.count == 1)
+        #expect(fixture.notifier.expiryNotifications.count == 1)
         coordinator.cancelBatch()
     }
 
@@ -499,7 +500,7 @@ private final class GatedLogins: Sendable {
         #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
     }
 
-    @Test func theWarningTimeCheckIsPublishedWhileItRuns() async throws {
+    @Test func theNotificationTimeCheckIsPublishedWhileItRuns() async throws {
         let gate = Gate()
         let expiring = databricks("analytics-dev", remaining: 600)
         let fixture = try Fixture(logins: [expiring], checkRunner: ArgumentRunner { _ in
@@ -1320,14 +1321,14 @@ private final class GatedLogins: Sendable {
         coordinator.removeLogin(id: prod.id)
         let preset = Preset(name: "Morning", loginIDs: [dev.id])
         coordinator.savePreset(preset)
-        coordinator.updateSettings(Settings(warningLeadTime: 600, loginTimeout: 120))
+        coordinator.updateSettings(Settings(notificationLeadTime: 600, loginTimeout: 120))
 
         let stored = try #require(fixture.stored)
         #expect(stored.logins.map(\.displayName) == ["Dev account"])
         #expect(stored.logins.first?.sessionLength == 4 * hour)
         #expect(stored.logins.first?.loginTime == launch)
         #expect(stored.presets == [preset])
-        #expect(stored.settings == Settings(warningLeadTime: 600, loginTimeout: 120))
+        #expect(stored.settings == Settings(notificationLeadTime: 600, loginTimeout: 120))
 
         coordinator.removePreset(id: preset.id)
         #expect(fixture.stored?.presets.isEmpty == true)

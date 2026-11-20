@@ -213,7 +213,7 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
 
     @Test func thePromptAfterAddingNamesTheLogin() {
         #expect(addedLoginPrompt(name: "qa")
-            == "Already logged in to qa? Set its timer now so it can warn you before it expires, or skip and log in "
+            == "Already logged in to qa? Set its timer now so it can notify you before it expires, or skip and log in "
             + "from the panel later.")
     }
 }
