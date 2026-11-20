@@ -197,7 +197,7 @@ public struct Settings: Codable, Equatable, Sendable {
 }
 
 public struct AppState: Codable, Equatable, Sendable {
-    /// The file-format version this build reads and writes.
+    /// The file-format version this build writes. `StateStore.load` also reads version 1.
     public static let currentVersion = 2
 
     public var version = AppState.currentVersion

@@ -691,8 +691,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   Databricks, whether the profile is account-level (as last read from its config), the time and
   result of its last check and of its last answer (valid or invalid), and, for AWS, the cache
   file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
-- The file is `state.json`, with a format version. One that won't decode, or has another format
-  version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
+- The file is `state.json`, with a format version. A format-1 file, as v1.0.0 to v1.0.2 wrote it,
+  loads with its two renamed keys read as `notifiedForExpiry` and `notificationLeadTime`, and is
+  written in format 2 at the next save. One that won't decode, or has a format version other than 1
+  or 2, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
   app starts empty and says so in the panel (State set aside). A save that fails keeps the state
   in memory until the core's `retrySave()` or the next change saves it.
 - Bundle ID `com.princelundgren.princeclockin`.
