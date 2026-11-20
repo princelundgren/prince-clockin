@@ -98,10 +98,17 @@ private func draft(_ login: Login = aws(), _ edit: (inout SetTimerDraft) -> Void
         #expect(swedishDraft.entry(locale: swedish) == .expiresIn(hour, sessionLength: 1.5 * hour))
     }
 
-    @Test func aCustomSessionLengthThatIsEmptyOrNotPositiveIsIncomplete() {
+    @Test func anEmptyCustomSessionLengthIsIncomplete() {
         #expect(draft { $0.sessionLength = .custom; $0.customHours = "" }.entry(locale: british) == nil)
-        #expect(draft { $0.sessionLength = .custom; $0.customHours = "0" }.entry(locale: british) == nil)
-        #expect(draft { $0.sessionLength = .custom; $0.customHours = "-8" }.entry(locale: british) == nil)
+        #expect(draft { $0.sessionLength = .custom; $0.customHours = " " }.check(now: now, locale: british)
+            == .incomplete)
+    }
+
+    @Test func aCustomSessionLengthOfZeroOrLessIsRefused() {
+        for hours in ["0", "-8", "-0"] {
+            #expect(draft { $0.sessionLength = .custom; $0.customHours = hours }.check(now: now, locale: british)
+                == .refused(.sessionLengthNotPositive), "\(hours)")
+        }
     }
 
     @Test func aCustomSessionLengthWithAnythingAfterTheNumberIsIncomplete() {

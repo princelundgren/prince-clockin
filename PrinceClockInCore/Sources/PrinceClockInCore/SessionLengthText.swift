@@ -41,13 +41,14 @@ public func sessionLengthHoursText(_ length: TimeInterval?, locale: Locale) -> S
         .number.grouping(.never).precision(.fractionLength(0...6)).locale(locale))
 }
 
-/// `text` as a positive, finite number of hours in `locale`'s format, in seconds rounded to the
-/// nearest, since a decimal number of hours such as a third is never exact; `nil` otherwise.
+/// `text` as a finite number of hours in `locale`'s format, zero or less included, in seconds
+/// rounded to the nearest, since a decimal number of hours such as a third is never exact; `nil`
+/// otherwise.
 func sessionLengthFromHours(_ text: String, locale: Locale) -> TimeInterval? {
     // A whole match, since parsing takes a leading number and ignores what follows it.
     let text = text.trimmingCharacters(in: .whitespaces)
     guard let hours = text.wholeMatch(of: FloatingPointFormatStyle<Double>(locale: locale))?.output,
-          hours.isFinite, hours > 0
+          hours.isFinite
     else { return nil }
     return (hours * secondsPerHour).rounded()
 }
