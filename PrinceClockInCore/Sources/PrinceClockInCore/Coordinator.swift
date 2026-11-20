@@ -445,6 +445,14 @@ public final class Coordinator {
         saveIfChanged()
     }
 
+    /// Renames the preset with `id`, keeping its logins as they are now. A preset since removed
+    /// stays removed.
+    public func renamePreset(id: UUID, to name: String) {
+        guard let index = model.state.presets.firstIndex(where: { $0.id == id }) else { return }
+        model.state.presets[index].name = name
+        saveIfChanged()
+    }
+
     /// Stores the tracked logins in the order `ids` gives; see `LoginsModel.setLoginOrder(_:)`.
     public func setLoginOrder(_ ids: [UUID]) {
         model.setLoginOrder(ids)

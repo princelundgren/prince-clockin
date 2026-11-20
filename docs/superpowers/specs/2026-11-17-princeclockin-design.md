@@ -453,7 +453,8 @@ without its text, so no earlier text shows.
 
 Its own window hosting SwiftUI: a native sidebar list with a symbol per pane,
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
-Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
+Return or when focus leaves the field; a Name or Command field also commits when the window
+closes or its pane or form is replaced. One title, "PrinceClockIn Settings", whatever the pane, and
 resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
@@ -834,3 +835,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - Whether VoiceOver can reorder these lists without Move Up and Move Down.
   - Clicking a notification opens the panel under the icon while the app runs.
   - Opening the app from Finder while it runs opens the panel, and no other window.
+  - A login's or preset's name, or a custom login's Command, typed in Settings and left without
+    Return is kept on ⌘W and on choosing another pane, login or preset. On macOS 27.0.1, closing a
+    hosted SwiftUI window ran no focus change before teardown, even after `makeFirstResponder(nil)`
+    in `windowShouldClose`, but did run `onDisappear` with the text.

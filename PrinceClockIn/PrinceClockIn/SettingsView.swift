@@ -66,10 +66,11 @@ struct SettingsView: View {
 
 // MARK: Fields
 
-/// A text field that hands its trimmed text to `commit` when submitted or when it loses focus,
-/// not on every keystroke, so a command is approved and saved only once it is typed out. `commit`
-/// returns whether it took the text; if not, the field shows `text` again. `prompt`, when given,
-/// is the empty field's placeholder.
+/// A text field that hands its trimmed text to `commit` when submitted, when it loses focus, or
+/// when it goes away (its window closes, or its pane or form is replaced), not on every keystroke,
+/// so a command is approved and saved only once it is typed out. `commit` returns whether it took
+/// the text; if not, the field shows `text` again. `prompt`, when given, is the empty field's
+/// placeholder.
 struct CommitField: View {
     let title: String
     let text: String
@@ -93,6 +94,8 @@ struct CommitField: View {
             .onChange(of: isFocused) { _, isFocused in
                 if !isFocused { save() }
             }
+            // Closing the window while the field is focused ends no focus first.
+            .onDisappear(perform: save)
             .onChange(of: text) { _, text in draft = text }
     }
 
