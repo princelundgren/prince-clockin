@@ -220,8 +220,10 @@ public final class Coordinator {
     }
 
     /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks logins
-    /// among them and posts one grouped notification. A tick that arrives while one runs makes that
-    /// one run once more when it ends, so a deadline that falls during a slow check is still met.
+    /// among them and posts one grouped notification for those the check didn't find still valid;
+    /// a still-valid one stays marked as notified for its expiry. A tick that arrives while one
+    /// runs makes that one run once more when it ends, so a deadline that falls during a slow check
+    /// is still met.
     public func tick() async {
         guard !isTicking else {
             isTickPending = true
@@ -236,7 +238,7 @@ public final class Coordinator {
             let due = model.takeExpiryNotifications(now: tickTime)
             saveIfChanged()
             await check(model.databricksLogins(among: due), now: tickTime)
-            let notified = due.compactMap(login)
+            let notified = due.compactMap(login).filter { !isStillValid($0, now: tickTime) }
             if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
         } while isTickPending
     }
@@ -275,7 +277,7 @@ public final class Coordinator {
             }
         }
         guard !ready.isEmpty else { return }
-        commandSink.yield(.enqueue(ready, timeout: model.state.settings.loginTimeout))
+        commandSink.yield(.enqueue(ready, timeout: model.state.settings.appliedLoginTimeout))
     }
 
     /// Whether login `id` is a custom login whose command isn't approved on this Mac, so it won't

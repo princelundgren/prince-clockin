@@ -184,8 +184,20 @@ public struct Settings: Codable, Equatable, Sendable {
 
     /// Seconds before expiry at which a login counts as expiring.
     public var notificationLeadTime: TimeInterval
-    /// Seconds a login may wait on the user before it is ended.
+    /// Seconds a login may wait on the user before it is ended, as stored; logins run with
+    /// `appliedLoginTimeout`.
     public var loginTimeout: TimeInterval
+
+    /// The login timeouts a login runs with: from the shortest the pop-up lists to a day, which
+    /// covers any time Settings has stored.
+    public static let loginTimeoutRange: ClosedRange<TimeInterval> = 2 * 60...24 * 60 * 60
+
+    /// The timeout a login runs with: `loginTimeout` held within `loginTimeoutRange`, or the
+    /// default when it isn't a finite number. The stored value is left as it is.
+    public var appliedLoginTimeout: TimeInterval {
+        guard loginTimeout.isFinite else { return Settings.defaultLoginTimeout }
+        return min(max(loginTimeout, Settings.loginTimeoutRange.lowerBound), Settings.loginTimeoutRange.upperBound)
+    }
 
     public init(
         notificationLeadTime: TimeInterval = Settings.defaultNotificationLeadTime,
