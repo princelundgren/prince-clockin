@@ -182,7 +182,12 @@ Facts the timer design rests on:
   lifetime set in the account's token policy runs out.
 
 Each timer has a state: **ok**, **expiring** (within the warning time), **expired**, or
-**unknown** (no login time or no session length), shown as "No timer". A Databricks login whose
+**unknown** (no login time or no session length), shown as "No timer". An AWS SSO session or
+custom login with an unknown timer that has been logged in to, and not invalidated since, shows
+as **logged in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS
+session stays so until the app sees a logout, which makes it "Logged out"; the app can't see a
+custom login log out, so it stays so (owner, 2026-11-20). A Databricks login in that state asks
+for its session length instead (see Running logins). A Databricks login whose
 timer says expired but whose last check that answered (valid or invalid) since that expiry found
 it valid is **still valid** (owner, 2026-11-19).
 
@@ -239,10 +244,12 @@ never in colour; the panel has the times.
 | Any login expired | `clock.badge.xmark` |
 | A login expiring | `clock.badge.exclamationmark` |
 | Every timer ok | `clock` |
+| No timer, but a login logged in with no expiry | `clock` |
 | No timer at all | `clock` |
 
-- A failure looks like an expiry, and Every timer ok looks like No timer at all, because each pair
-  asks the same of the user and the panel says which (owner, 2026-11-20).
+- A failure looks like an expiry, and Every timer ok, a login logged in with no expiry and No
+  timer at all share `clock`, because each group asks the same of the user and the panel says
+  which (owner, 2026-11-20).
 - The symbol is an `NSImageView` in the status item's button, since in AppKit only an image view
   runs SF Symbol effects; Logging in adds the Pulse effect, repeating, and removes it when the
   state changes, rather than drawing frames by hand, which would imitate what macOS does natively.
@@ -253,7 +260,8 @@ never in colour; the panel has the times.
 - When several apply, the highest row wins. A dot after the symbol means an update is waiting (see
   Release), in any state.
 - Still valid logins are skipped in every row, so Still valid and no-timer logins alone show the
-  No timer at all row.
+  No timer at all row. A login logged in with no expiry shows only when no login has a timer, the
+  first stored if several: VoiceOver reads "PrinceClockIn, sandbox logged in".
 - With several expired, the label is about the one that expired first, an invalidated login
   counting from when it was invalidated if that came first; a tie goes to the first stored.
 - A failure is seen once the panel has been shown after it (`NSPopover`'s did-show notification).
@@ -296,8 +304,9 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
      Done and Cancel All. The waiting login's notification also has Done.
    - No progress within a single login.
 3. **The tiles**, one per login, sorted when the panel opens: due first, then by time left (an
-   expired login by when it expired, earliest first), then Still valid, then No timer last. The
-   order holds still while the panel is open, so nothing moves under the pointer.
+   expired login by when it expired, earliest first), then Still valid, then logged in with no
+   expiry, then No timer last. The order holds still while the panel is open, so nothing moves
+   under the pointer.
    Past about 420 pt the list scrolls with the system scroller.
 4. **Log In to N Due**, which starts every due login. Hidden when no login is due or only one is,
    since a single due tile's own Log In is the action then.
@@ -334,10 +343,10 @@ Discovery reads the config files again on each opening; while it runs, no earlie
   - Log In is plain `.primary` text, not a chip, since the whole tile is the button; on the tile
     Return logs in, it is bold (owner, 2026-11-20).
   - State and time are never cut off at 320 pt; a subtitle that doesn't fit drops the kind first.
-- **Symbols:** expired `xmark.circle`; expiring `clock`; ok `checkmark.circle`; no timer `timer`;
-  a question `questionmark.circle`; running or queued a small `ProgressView`; failed
-  `exclamationmark.triangle` in Expired; still valid `clock.badge.checkmark` in Logged in; not
-  yet approved `terminal`.
+- **Symbols:** expired `xmark.circle`; expiring `clock`; ok and logged in with no expiry
+  `checkmark.circle`; no timer `timer`; a question `questionmark.circle`; running or queued a small
+  `ProgressView`; failed `exclamationmark.triangle` in Expired; still valid `clock.badge.checkmark`
+  in Logged in; not yet approved `terminal`.
 - **A tile is one button:**
   - with nothing pending, due or not, a click logs it in, so a login can be renewed before it is
     due;
@@ -462,7 +471,7 @@ A token has only the meanings its row lists.
 |---|---|---|---|---|---|
 | Expired | a login past its time, or a login that failed | `#B3261E` | `#FF6961` | `#8C1D18` | `#FF9A94` |
 | Expiring | inside the warning time | `#8A5A00` | `#E0B359` | `#6E4700` | `#F0CC85` |
-| Logged in | a login with time left, or still valid | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
+| Logged in | a login with time left, still valid, or logged in with no expiry | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
 | Running | a login in progress or queued | `#5B45B5` | `#B8A8F0` | `#47358F` | `#D2C8F8` |
 | Accent | the one prominent button's fill, under white text | `#3A78AC` | `#3A78AC` | `#2F6797` | `#2F6797` |
 | Link | About's inline links only | `#2F6797` | `#8FC3EA` | `#24557F` | `#B5D8F3` |
@@ -505,7 +514,8 @@ A token has only the meanings its row lists.
   does nothing. A pending item's word (logging in, queued, failed, not yet approved, logged in
   elsewhere?) is the state, in place of the timer's, and the time stays: "qa, AWS SSO session,
   failed, 40 minutes ago" (owner, 2026-11-19). VoiceOver reads
-  durations in the wide style and "No timer" for an unknown one. In Settings, each list is named
+  durations in the wide style, "No timer" for an unknown one and "logged in" for one logged in
+  with no expiry. In Settings, each list is named
   for its section: "Logins", "Presets" and "Logs in to, in order".
 
 #### Wording and formats
@@ -518,7 +528,7 @@ title case for buttons and menu items.
 | Log In · Log In to 2 Due | Log in · Log In to 2 Expiring |
 | Logged in elsewhere? | Signed in elsewhere? · renewed outside the app |
 | Mark as Logged In at 14:02 | Yes |
-| Expired · Expiring · Logged out · No timer · Queued · Logging in · Failed · Still valid · Not yet approved | Unknown · Timer ended · No known expiry |
+| Expired · Expiring · Logged out · No timer · Logged in · Queued · Logging in · Failed · Still valid · Not yet approved | Unknown · Timer ended · No known expiry |
 | AWS SSO session · Databricks profile · Databricks account profile · Custom login | AWS SSO · Custom · Custom command |
 | Set Timer… · Show Output… · Report an Issue… (an ellipsis on every item that opens a window, a form or a browser page) | Set Time… · Report an issue |
 | Login timeout · Cancel All (stops a batch) · Check Databricks Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now |

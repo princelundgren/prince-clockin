@@ -115,6 +115,48 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(noTimer()).trailing == .stateWord("No timer"))
     }
 
+    @Test func aLoginWithNoSessionLengthShowsLoggedInOnceLoggedIn() {
+        let research = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
+        let vpn = Login(displayName: "vpn", kind: .custom(command: nil), loginTime: now.addingTimeInterval(-hour))
+
+        for loggedIn in [tile(research), tile(vpn)] {
+            #expect(loggedIn.symbol == .systemImage("checkmark.circle"))
+            #expect(loggedIn.colour == .loggedIn)
+            #expect(loggedIn.trailing == .stateWord("Logged in"))
+            #expect(!loggedIn.isDue)
+        }
+        #expect(tile(research).subtitle == .kind("AWS SSO session"))
+        #expect(tile(research).accessibilityLabel == "research, AWS SSO session, logged in")
+    }
+
+    @Test func aLoginWithNoSessionLengthNeverLoggedInStaysNoTimer() {
+        let research = Login(displayName: "research", kind: .awsSSOSession(name: "research"))
+
+        #expect(tile(research).trailing == .stateWord("No timer"))
+        #expect(tile(research).colour == nil)
+    }
+
+    @Test func aLoginWithNoSessionLengthShowsLoggedOutOnceLoggedOut() {
+        var research = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
+        research.invalidatedAt = now.addingTimeInterval(-minute)
+        research.invalidationReason = .loggedOut
+
+        #expect(tile(research).subtitle == .status("Logged out"))
+        #expect(tile(research).colour == .expired)
+        #expect(tile(research).isDue)
+    }
+
+    @Test func aDatabricksLoginWithNoSessionLengthStaysNoTimerWhileItAsks() {
+        let asking = Login(
+            displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
+            loginTime: now.addingTimeInterval(-hour))
+
+        #expect(tile(asking).trailing == .stateWord("No timer"))
+        #expect(tile(asking).colour == nil)
+    }
+
     @Test func anExpiringTileShowsItsTimeLeftAndLogIn() {
         let qa = tile(login(remaining: 19 * minute, now: now, name: "qa"))
 

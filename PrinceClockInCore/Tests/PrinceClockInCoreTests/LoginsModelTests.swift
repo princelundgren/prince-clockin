@@ -451,9 +451,11 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(due.map(\.id) == [expiring.id, expired.id, loggedOut.id])
     }
 
-    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoTimer() {
+    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoExpiryThenNoTimer() {
         let now = at("2026-11-17T12:00:00Z")
         let unknown = databricks("analytics-prod", sessionLength: nil)
+        let noExpiry = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
         var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
         stillValid.lastDatabricksAnswer = DatabricksCheckRecord(at: now, result: .valid)
         let okLater = login(remaining: 5 * hour, now: now, name: "prod")
@@ -464,14 +466,14 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var loggedOut = login(remaining: 4 * hour, now: now, name: "billing")
         loggedOut.invalidatedAt = now.addingTimeInterval(-30 * 60)
         let logins = model([
-            unknown, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
+            unknown, noExpiry, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
         ])
 
         let order = logins.panelOrder(now: now)
 
         #expect(order.map(\.id) == [
             expiredLongAgo.id, expiredRecently.id, loggedOut.id, expiring.id, okSooner.id, okLater.id,
-            stillValid.id, unknown.id,
+            stillValid.id, noExpiry.id, unknown.id,
         ])
     }
 

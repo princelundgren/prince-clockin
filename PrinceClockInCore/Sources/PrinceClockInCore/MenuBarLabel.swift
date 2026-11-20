@@ -41,6 +41,9 @@ public func menuBarLabel(
     case .ok(let id, let remaining):
         symbolName = "clock"
         spoken = "\(name(id)) expires in \(spokenTimeLeftText(remaining, locale: locale))"
+    case .loggedIn(let id):
+        symbolName = "clock"
+        spoken = "\(name(id)) logged in"
     case .noTimer:
         symbolName = "clock"
         spoken = "no timer"

@@ -21,6 +21,7 @@ private func label(
         #expect(label(.expired(id: prod.id)).symbolName == "clock.badge.xmark")
         #expect(label(.expiring(id: prod.id, remaining: nineteenMinutes)).symbolName == "clock.badge.exclamationmark")
         #expect(label(.ok(id: prod.id, remaining: fiveHoursThirteen)).symbolName == "clock")
+        #expect(label(.loggedIn(id: prod.id)).symbolName == "clock")
         #expect(label(.noTimer).symbolName == "clock")
     }
 
@@ -46,6 +47,7 @@ private func label(
         #expect(label(.loggingIn(BatchProgress(position: 1, total: 2))).accessibilityLabel
             == "PrinceClockIn, logging in, 1 of 2")
         #expect(label(.failure).accessibilityLabel == "PrinceClockIn, something failed")
+        #expect(label(.loggedIn(id: prod.id)).accessibilityLabel == "PrinceClockIn, prod logged in")
         #expect(label(.noTimer).accessibilityLabel == "PrinceClockIn, no timer")
     }
 

@@ -90,7 +90,8 @@ public struct LoginsModel: Equatable, Sendable {
 
     /// The order of the panel's tiles at `now`: due logins by time left, so the expired come first,
     /// the first to expire first; then the others with time left, by time left; then the still
-    /// valid; then those with no timer. Ties keep the stored order, since `sorted` is stable.
+    /// valid; then those logged in with no expiry; then those with no timer. Ties keep the stored
+    /// order, since `sorted` is stable.
     public func panelOrder(now: Date) -> [Login] {
         let leadTime = state.settings.warningLeadTime
         return state.logins
@@ -174,11 +175,12 @@ public struct LoginsModel: Equatable, Sendable {
 /// expired login, counted from when it expired.
 private func panelSortKey(_ login: Login, now: Date, leadTime: TimeInterval) -> (group: Int, timeLeft: TimeInterval) {
     if isStillValid(login, now: now) { return (2, 0) }
+    if isLoggedInWithNoExpiry(login) { return (3, 0) }
     switch timerState(for: login, now: now, leadTime: leadTime) {
     case .expired: return (0, (expiredAt(login) ?? now).timeIntervalSince(now))
     case .expiring(let remaining): return (0, remaining)
     case .ok(let remaining): return (1, remaining)
-    case .unknown: return (3, 0)
+    case .unknown: return (4, 0)
     }
 }
 

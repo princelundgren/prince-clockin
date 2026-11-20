@@ -224,8 +224,7 @@ private func detail(
         return .possibleLogin(
             question: "Its login changed \(changed). Was that you?", confirmTitle: "Mark as Logged In \(when)")
     case nil:
-        if case .databricksProfile = login.kind, login.loginTime != nil, login.sessionLength == nil,
-           !isInvalidated(login) {
+        if case .databricksProfile = login.kind, isLoggedInWithNoLength(login) {
             return .needsSessionLength(prompt: "Choose a session length")
         }
         guard case .stillValid = timer, let length = login.sessionLength else { return nil }
@@ -302,11 +301,17 @@ private enum TileTimer {
     case expired(ago: TimeInterval)
     case loggedOut
     case stillValid(checkedAt: Date?)
+    /// Logged in, with no session length to time it.
+    case noExpiry
     case unknown
 
     init(_ login: Login, now: Date, leadTime: TimeInterval) {
         if isStillValid(login, now: now) {
             self = .stillValid(checkedAt: login.lastDatabricksAnswer?.at)
+            return
+        }
+        if isLoggedInWithNoExpiry(login) {
+            self = .noExpiry
             return
         }
         switch timerState(for: login, now: now, leadTime: leadTime) {
@@ -320,7 +325,7 @@ private enum TileTimer {
 
     var symbolName: String {
         switch self {
-        case .ok: "checkmark.circle"
+        case .ok, .noExpiry: "checkmark.circle"
         case .expiring: "clock"
         case .expired, .loggedOut: "xmark.circle"
         case .stillValid: "clock.badge.checkmark"
@@ -330,7 +335,7 @@ private enum TileTimer {
 
     var colour: ColourToken? {
         switch self {
-        case .ok, .stillValid: .loggedIn
+        case .ok, .stillValid, .noExpiry: .loggedIn
         case .expiring: .expiring
         case .expired, .loggedOut: .expired
         case .unknown: nil
@@ -347,7 +352,7 @@ private enum TileTimer {
             .status("Logged out")
         case .stillValid(let checkedAt?):
             .status("Checked \(clockTimeText(checkedAt, locale: locale, calendar: calendar)) · valid")
-        case .ok, .stillValid(nil), .unknown:
+        case .ok, .stillValid(nil), .noExpiry, .unknown:
             .kind(kind)
         }
     }
@@ -358,6 +363,7 @@ private enum TileTimer {
         case .expired: .stateWord("Expired")
         case .loggedOut: .stateWord("Logged out")
         case .stillValid: .stateWord("Still valid")
+        case .noExpiry: .stateWord("Logged in")
         case .unknown: .stateWord("No timer")
         }
     }
@@ -365,7 +371,7 @@ private enum TileTimer {
     /// The state VoiceOver reads, or `nil` for a timer it reads only as "No timer".
     var spokenState: String? {
         switch self {
-        case .ok: "logged in"
+        case .ok, .noExpiry: "logged in"
         case .expiring: "expiring"
         case .expired: "expired"
         case .loggedOut: "logged out"
@@ -379,7 +385,7 @@ private enum TileTimer {
         switch self {
         case .ok(let remaining), .expiring(let remaining): "\(spokenTimeLeftText(remaining, locale: locale)) left"
         case .expired(let ago): "\(spokenAgoText(ago, locale: locale)) ago"
-        case .loggedOut, .stillValid: nil
+        case .loggedOut, .stillValid, .noExpiry: nil
         case .unknown: "No timer"
         }
     }
