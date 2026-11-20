@@ -7,6 +7,8 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private static let settingsFrameName = "Settings"
+    /// The popover's arrow and a gap above the bottom of the screen.
+    private static let popoverMargin: CGFloat = 24
 
     // Created with the delegate, before launch finishes, so a notification button that launched
     // the app finds its handler, and the timers run before the panel is first opened.
@@ -85,11 +87,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     /// The tiles take the stored order before the panel appears and keep it until it next opens.
-    /// Its times are brought up to the clock first, since the last tick may be hours old.
+    /// Its times are brought up to the clock first, since the last tick may be hours old. The panel
+    /// may reach from under the status item to the bottom of its screen's visible area.
     func popoverWillShow(_ notification: Notification) {
         appModel.coordinator.refresh()
         appModel.isPanelShown = true
-        panelSession.open(order: appModel.coordinator.model.state.logins.map(\.id))
+        let maximumHeight = statusItem?.button?.window.flatMap { window in
+            window.screen.map { window.frame.minY - $0.visibleFrame.minY - Self.popoverMargin }
+        }
+        panelSession.open(
+            order: appModel.coordinator.model.state.logins.map(\.id), maximumHeight: maximumHeight.map(Double.init))
     }
 
     /// The panel's content is built once, so what it shows from the system is read on each showing.
