@@ -327,8 +327,8 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    with its title as its VoiceOver label and help tag and the link pointer on hover, as in the
    maintainer's other menu bar apps (owner, 2026-11-20).
 
-**Empty states**: on first run, "No logins yet" with what discovery found ("Found 4 in your config
-files: 3 AWS SSO sessions and 1 Databricks profile.") and Add Logins…. When nothing is found, "No
+**Empty states**: on first run, "No logins yet" with what discovery found ("Found 3 AWS SSO sessions
+and 1 Databricks profile in your config files.") and Add Logins…. When nothing is found, "No
 AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or
 databricks CLI, or add your own command." with Add Logins…. Add Logins… opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up

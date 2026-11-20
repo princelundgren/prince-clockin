@@ -28,8 +28,7 @@ public func emptyPanel(aws: [String], databricks: [DatabricksProfile], locale: L
             message: "No AWS SSO sessions or Databricks profiles in your config files. Log in once with the aws or "
                 + "databricks CLI, or add your own command.")
     }
-    let total = aws.count + databricks.count
     return EmptyPanel(
         title: "No logins yet",
-        message: "Found \(total) in your config files: \(found.formatted(.list(type: .and).locale(locale))).")
+        message: "Found \(found.formatted(.list(type: .and).locale(locale))) in your config files.")
 }
