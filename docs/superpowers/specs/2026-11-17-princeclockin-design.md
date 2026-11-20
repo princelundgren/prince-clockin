@@ -202,8 +202,29 @@ seen logged in, one whose file times it has stored; a session it has never seen 
 has, unknown until a login is recorded. A login done while the app wasn't running is found only by
 the AWS file-time rule above, or set by hand.
 
-Times are recomputed every 30 seconds, on wake from sleep, on a clock change and on a time-zone
-change. Each recomputation also reads the AWS cache files and sends any notification now due.
+Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/`, on
+wake from sleep, on a clock change and on a time-zone change, with no polling, so a menu bar app
+that runs all day does no work while nothing happens. Each recomputation also reads the AWS cache
+files and sends any notification now due.
+
+- **The next moment** is the soonest notification time or expiry, or at once while a notification
+  is due and unsent. What is on screen adds more:
+  - the panel or Settings open: the next minute of each tile's time left or time since expiry, and
+    each minute of the clock, which Set Timer's caption and a shown "tomorrow" are timed against;
+  - VoiceOver on with both closed: the next minute of the one time left the menu bar label speaks.
+
+  One timer waits for it, re-armed when the logins or what is shown change, with 1 second of
+  tolerance. With no next moment there is no timer.
+- **App Nap** is held off only while that timer waits, with
+  `.userInitiatedAllowingIdleSystemSleep`, which leaves the Mac free to sleep.
+- **The AWS cache directory** is watched with File System Events, since the AWS CLI rewrites a
+  session's file in place. The watch follows the directory's path, so it also sees one created or
+  removed after launch.
+- **Opening the panel or Settings** first brings the times and the AWS sessions up to the clock,
+  since the last recomputation may be hours old. That leaves notifying to the recomputation, which a
+  notification found due makes happen at once.
+- A recomputation that arrives while one runs (a Databricks check can take seconds) makes that one
+  run once more when it ends.
 
 #### The Databricks live check
 
