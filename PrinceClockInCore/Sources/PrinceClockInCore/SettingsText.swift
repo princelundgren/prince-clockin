@@ -19,3 +19,23 @@ public func removePresetHelp(for preset: Preset?) -> String {
     guard let preset else { return "Remove the selected preset." }
     return "Remove \(preset.name)."
 }
+
+/// Settings → Warnings' Notifications row.
+public struct NotificationsSetting: Equatable, Sendable {
+    /// "On" or "Off".
+    public let state: String
+    /// Under the row while notifications are off: what warns instead.
+    public let note: String?
+
+    public init(state: String, note: String?) {
+        self.state = state
+        self.note = note
+    }
+}
+
+/// The Notifications row for notifications that the user has turned off (`areOff`) or not.
+public func notificationsSetting(areOff: Bool) -> NotificationsSetting {
+    guard areOff else { return NotificationsSetting(state: "On", note: nil) }
+    return NotificationsSetting(
+        state: "Off", note: "With notifications off, only the menu bar shows that a login is about to expire.")
+}

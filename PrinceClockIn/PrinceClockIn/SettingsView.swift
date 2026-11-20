@@ -50,7 +50,7 @@ struct SettingsView: View {
             switch pane {
             case .logins: LoginsSettings(appModel: appModel, request: loginsPaneRequest)
             case .presets: PresetsSettings(coordinator: appModel.coordinator)
-            case .warnings: WarningsSettings(coordinator: appModel.coordinator)
+            case .warnings: WarningsSettings(appModel: appModel)
             case .general: GeneralSettings(appModel: appModel)
             case .about: AboutSettings(updater: updater)
             }
@@ -102,16 +102,55 @@ struct CommitField: View {
     }
 }
 
-// MARK: Warnings
+/// A secondary caption under a field.
+struct SettingsNote: View {
+    let text: String
 
-private struct WarningsSettings: View {
-    let coordinator: Coordinator
+    init(_ text: String) {
+        self.text = text
+    }
 
     var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+// MARK: Warnings
+
+/// Settings → Warnings: how long before expiry a login warns, and whether notifications are on.
+/// The permission is read again when the pane appears and when the app becomes active, as after
+/// the user changes it in System Settings.
+private struct WarningsSettings: View {
+    let appModel: AppModel
+
+    var body: some View {
+        let notifications = notificationsSetting(areOff: appModel.notificationsAreOff)
         Form {
-            MinutesField(title: "Warn before expiry", value: \.warningLeadTime, coordinator: coordinator)
+            Section {
+                MinutesField(
+                    title: "Warn before a login expires", value: \.warningLeadTime, coordinator: appModel.coordinator)
+            }
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent("Notifications") {
+                        HStack {
+                            Text(notifications.state)
+                            Button("Open System Settings…") { NSWorkspace.shared.open(AppLinks.notificationSettings) }
+                                .controlSize(.small)
+                        }
+                    }
+                    if let note = notifications.note { SettingsNote(note) }
+                }
+            }
         }
         .formStyle(.grouped)
+        .task { await appModel.refreshNotificationPermission() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await appModel.refreshNotificationPermission() }
+        }
     }
 }
 
@@ -133,7 +172,7 @@ private struct MinutesField: View {
             })
         LabeledContent(title) {
             Stepper(value: minutes, in: 5...24 * 60, step: 5) {
-                Text("\(Int(minutes.wrappedValue)) min")
+                Text(sessionLengthText(coordinator.model.state.settings[keyPath: value]))
                     .monospacedDigit()
             }
         }
@@ -160,11 +199,6 @@ private struct GeneralSettings: View {
                 }
             }
             Section {
-                if appModel.notificationsAreOff {
-                    Label(
-                        "Notifications are off, so only the menu bar warns before a login expires. Turn them on in System Settings → Notifications.",
-                        systemImage: "exclamationmark.triangle")
-                }
                 Text("Removing the icon from the menu bar quits PrinceClockIn, which stops its timers and notifications.")
                 Text("Custom commands are stored as plain text in the settings file, so they must not contain secrets.")
             }
@@ -172,7 +206,6 @@ private struct GeneralSettings: View {
         }
         .formStyle(.grouped)
         .onAppear { launchesAtLogin = LaunchAtLogin.isEnabled }
-        .task { await appModel.refreshNotificationPermission() }
     }
 
     /// Reads the system's answer back after each change, since registering can need the user's
