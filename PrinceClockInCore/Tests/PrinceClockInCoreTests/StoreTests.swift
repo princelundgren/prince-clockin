@@ -140,18 +140,144 @@ private func expectSetAside(_ original: Data, in directory: URL) throws {
     }
 }
 
-@Test func newerVersionIsSetAside() throws {
+@Test(arguments: [0, 3])
+func aFileOfAnUnknownVersionIsSetAside(version: Int) throws {
     try withTemporaryDirectory { directory in
-        let newer = Data(#"{"version": 3, "somethingNew": [1, 2, 3]}"#.utf8)
-        try expectSetAside(newer, in: directory)
+        let unknown = Data(
+            #"{"version": \#(version), "presets": [], "logins": [], "settings": {"notificationLeadTime": 1800, "loginTimeout": 300}}"#.utf8)
+        try expectSetAside(unknown, in: directory)
     }
 }
 
-@Test func aVersion1FileIsSetAside() throws {
+/// `state.json` exactly as v1.0.2 wrote it: produced by that release's own `Model.swift` and
+/// `StateStore.save`.
+private let version1File = """
+{
+  "logins" : [
+    {
+      "displayName" : "dev",
+      "id" : "00000000-0000-0000-0000-000000000001",
+      "invalidatedAt" : "2026-11-17T08:00:00Z",
+      "invalidationReason" : "loggedOut",
+      "kind" : {
+        "name" : "dev",
+        "type" : "awsSSOSession"
+      },
+      "lastAWSCache" : {
+        "expiresAt" : "2026-11-17T10:00:00Z",
+        "modified" : "2026-11-17T09:00:05Z"
+      },
+      "loginTime" : "2026-11-17T09:00:00Z",
+      "sessionLength" : 28800,
+      "warnedForExpiry" : "2026-11-17T17:00:00Z"
+    },
+    {
+      "displayName" : "analytics-dev",
+      "id" : "00000000-0000-0000-0000-000000000002",
+      "invalidatedAt" : "2026-11-17T08:00:00Z",
+      "invalidationReason" : "foundInvalid",
+      "kind" : {
+        "accountLevel" : true,
+        "name" : "analytics-dev",
+        "type" : "databricksProfile"
+      },
+      "lastDatabricksAnswer" : {
+        "at" : "2026-11-17T09:00:00Z",
+        "result" : "valid"
+      },
+      "lastDatabricksCheck" : {
+        "at" : "2026-11-17T09:30:00Z",
+        "result" : "couldntCheck"
+      },
+      "loginTime" : "2026-11-17T08:30:00Z",
+      "sessionLength" : 3600,
+      "warnedForExpiry" : "2026-11-17T09:30:00Z"
+    },
+    {
+      "displayName" : "tool",
+      "id" : "00000000-0000-0000-0000-000000000003",
+      "kind" : {
+        "command" : "tool login --host example.cloud.databricks.com",
+        "type" : "custom"
+      }
+    }
+  ],
+  "presets" : [
+    {
+      "id" : "00000000-0000-0000-0000-0000000000A1",
+      "loginIDs" : [
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002"
+      ],
+      "name" : "Morning"
+    }
+  ],
+  "settings" : {
+    "loginTimeout" : 120,
+    "warningLeadTime" : 900
+  },
+  "version" : 1
+}
+"""
+
+/// The state `version1File` holds.
+private func version1State() throws -> AppState {
+    let aws = Login(
+        id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001")),
+        displayName: "dev", kind: .awsSSOSession(name: "dev"), sessionLength: 8 * 3600,
+        loginTime: at("2026-11-17T09:00:00Z"), invalidatedAt: at("2026-11-17T08:00:00Z"),
+        invalidationReason: .loggedOut, notifiedForExpiry: at("2026-11-17T17:00:00Z"),
+        lastAWSCache: AWSCacheRecord(modified: at("2026-11-17T09:00:05Z"), expiresAt: at("2026-11-17T10:00:00Z")))
+    let databricks = Login(
+        id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000002")),
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: true),
+        sessionLength: 3600, loginTime: at("2026-11-17T08:30:00Z"), invalidatedAt: at("2026-11-17T08:00:00Z"),
+        invalidationReason: .foundInvalid, notifiedForExpiry: at("2026-11-17T09:30:00Z"),
+        lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .couldntCheck),
+        lastDatabricksAnswer: DatabricksCheckRecord(at: at("2026-11-17T09:00:00Z"), result: .valid))
+    let custom = Login(
+        id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000003")),
+        displayName: "tool", kind: .custom(command: "tool login --host example.cloud.databricks.com"))
+    return AppState(
+        logins: [aws, databricks, custom],
+        presets: [Preset(id: try #require(UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")),
+                         name: "Morning", loginIDs: [aws.id, databricks.id])],
+        settings: Settings(notificationLeadTime: 15 * 60, loginTimeout: 120))
+}
+
+@Test func aVersion1FileLoadsWithEveryFieldAndIsLeftAsItIs() throws {
     try withTemporaryDirectory { directory in
-        let version1 = Data(
-            #"{"version": 1, "presets": [], "logins": [], "settings": {"warningLeadTime": 1800, "loginTimeout": 300}}"#.utf8)
-        try expectSetAside(version1, in: directory)
+        let file = directory.appending(path: "state.json")
+        try Data(version1File.utf8).write(to: file)
+
+        let result = StateStore(directory: directory).load()
+
+        #expect(result == .loaded(try version1State()))
+        guard case .loaded(let state) = result else { return }
+        #expect(state.version == AppState.currentVersion)
+        #expect(state.logins.first?.notifiedForExpiry == at("2026-11-17T17:00:00Z"))
+        #expect(state.settings.notificationLeadTime == 15 * 60)
+        #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == version1File)
+    }
+}
+
+@Test func aLoadedVersion1FileSavesInTheCurrentFormat() throws {
+    try withTemporaryDirectory { directory in
+        let store = StateStore(directory: directory)
+        try Data(version1File.utf8).write(to: directory.appending(path: "state.json"))
+        guard case .loaded(let state) = store.load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+
+        try store.save(state)
+
+        let text = String(decoding: try Data(contentsOf: directory.appending(path: "state.json")), as: UTF8.self)
+        #expect(text.contains(#""version" : 2"#))
+        #expect(text.contains(#""notifiedForExpiry" : "2026-11-17T17:00:00Z""#))
+        #expect(text.contains(#""notificationLeadTime" : 900"#))
+        #expect(!text.contains("warned") && !text.contains("warning"))
+        #expect(store.load() == .loaded(try version1State()))
     }
 }
 
