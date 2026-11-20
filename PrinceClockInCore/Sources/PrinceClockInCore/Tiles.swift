@@ -65,6 +65,8 @@ public enum TileSubtitle: Equatable, Sendable {
 public enum TileTrailing: Equatable, Sendable {
     case timeLeft(String)
     case stateWord(String)
+    /// Nothing, for a timer that is unknown.
+    case empty
     /// A visible Log In, on a tile that logs in when clicked.
     case logIn
 }
@@ -364,7 +366,7 @@ private enum TileTimer {
         case .loggedOut: .stateWord("Logged out")
         case .stillValid: .stateWord("Still valid")
         case .noExpiry: .stateWord("Logged in")
-        case .unknown: .stateWord("No timer")
+        case .unknown: .empty
         }
     }
 
