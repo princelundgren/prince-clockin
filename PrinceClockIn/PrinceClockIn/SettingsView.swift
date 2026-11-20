@@ -131,7 +131,7 @@ private struct NotificationsSettings: View {
         Form {
             Section {
                 MinutesField(
-                    title: "Warn before a login expires", value: \.warningLeadTime, coordinator: appModel.coordinator)
+                    title: "Notify before a login expires", value: \.warningLeadTime, coordinator: appModel.coordinator)
             }
             Section {
                 VStack(alignment: .leading, spacing: 4) {
@@ -216,7 +216,7 @@ private struct GeneralSettings: View {
             }
             Section {
                 Text(
-                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and warnings. "
+                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and notifications. "
                         + "Open PrinceClockIn from Applications to bring it back.")
                     .fixedSize(horizontal: false, vertical: true)
             }

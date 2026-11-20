@@ -289,8 +289,8 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
       `retrySave()`. It clears itself after a good save, and also posts a notification and puts
       the failure symbol in the menu bar, since a popover must not be the only place a warning
       appears.
-   3. **Notifications off**: "Notifications are off, so only the menu bar warns before a login
-      expires." With Open System Settings…, which opens System Settings → Notifications. It
+   3. **Notifications off**: "Notifications are off, so only the menu bar shows that a login is
+      about to expire." With Open System Settings…, which opens System Settings → Notifications. It
       appears once each time notifications are turned off (owner, 2026-11-19): closing the panel
       after it has been shown dismisses it until notifications are on again, and meanwhile it
       lives in Settings → Notifications.
@@ -439,7 +439,7 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
     says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
-    warn you before it expires, or skip and log in from the panel later." with Skip and Set
+    notify you before it expires, or skip and log in from the panel later." with Skip and Set
     Timer…, so a login the user has already done gets a known timer instead of the "Logged in
     elsewhere?" question later. It is asked once: selecting another login or removing this one
     ends it.
@@ -447,7 +447,7 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   with + (a menu of the tracked logins not in it), −, Move Up and Move Down. Drag also reorders;
   Move Up and Move Down are the keyboard and VoiceOver way. + adds an empty preset, "New preset"
   ("New preset 2" and on while that name is taken), and selects it; − removes the selected preset at once.
-- **Notifications:** "Warn before a login expires" (30 minutes by default), and Notifications: their
+- **Notifications:** "Notify before a login expires" (30 minutes by default), and Notifications: their
   state, Open System Settings…, and, while they're off, "With notifications off, only the menu bar
   shows that a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
@@ -455,8 +455,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
   the change happened); Login timeout (5 minutes by default; "A login that takes longer than the
   login timeout is stopped and marked failed."); and "Removing PrinceClockIn's icon from the menu
-  bar quits it, which stops its timers and warnings. Open PrinceClockIn from Applications to bring
-  it back."
+  bar quits it, which stops its timers and notifications. Open PrinceClockIn from Applications to
+  bring it back."
 - **About:** the icon, name and version ("v1.0.0 (42)"), "Your command-line logins, before they
   expire.", Check for Updates…, the links Report an Issue…, Website and Third-Party Notices…, and
   "No analytics or crash reports. PrinceClockIn's only connection is the daily update check; the
