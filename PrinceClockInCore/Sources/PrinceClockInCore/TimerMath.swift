@@ -156,7 +156,7 @@ func expiredAt(_ login: Login) -> Date? {
 }
 
 /// What the menu bar label shows. When several rows apply, the first case listed wins. A row about
-/// one login carries its id, so the label's time and the login it names always agree.
+/// one login carries its id, so the VoiceOver label's time and the login it names always agree.
 public enum MenuBarStatus: Equatable, Sendable {
     case loggingIn(BatchProgress)
     /// A failure, or a failed save, as the caller reports it in `hasFailure`.
