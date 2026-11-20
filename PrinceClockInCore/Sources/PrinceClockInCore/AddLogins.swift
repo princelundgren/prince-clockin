@@ -124,7 +124,7 @@ public func removeLoginConfirmation(for login: Login, presets: [Preset], locale:
 public struct NewCustomLoginDraft: Equatable, Sendable {
     public var name = ""
     public var command = ""
-    /// The Session Length pop-up's choice, from `sessionLengthOptions(current:)`.
+    /// The Session Length pop-up's choice, from `sessionLengthOptions()`.
     public var sessionLength: SessionLengthChoice = .noTimer
     /// Custom…'s number of hours, as the session length field reads it.
     public var customHours = ""

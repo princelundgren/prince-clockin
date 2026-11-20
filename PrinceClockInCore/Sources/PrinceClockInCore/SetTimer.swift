@@ -14,7 +14,7 @@ public struct SetTimerDraft: Equatable, Sendable {
     public var hours: String
     public var minutes: String
     public var loggedInAt: Date
-    /// The Session Length pop-up's choice, from `sessionLengthOptions(current:)`.
+    /// The Session Length pop-up's choice, from `sessionLengthOptions()`.
     public var sessionLength: SessionLengthChoice
     /// Custom…'s number of hours, in the locale's number format.
     public var customHours: String
@@ -45,13 +45,6 @@ public struct SetTimerDraft: Equatable, Sendable {
             customHours = sessionLengthHoursText(length, locale: locale)
             unlistedLength = UnlistedLength(text: customHours, length: length)
         }
-    }
-
-    /// Mark as Logged In Now while the session length is unknown, on a new draft or one already
-    /// open: Logged In At `now`, keeping the rest, so the form asks for the length.
-    public mutating func markLoggedInNow(at now: Date) {
-        mode = .loggedInAt
-        loggedInAt = now
     }
 
     /// What the draft tells Set Timer, or `nil` while a field it needs is empty or not a number,

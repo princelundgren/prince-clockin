@@ -115,6 +115,48 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(noTimer()).trailing == .stateWord("No timer"))
     }
 
+    @Test func aLoginWithNoSessionLengthShowsLoggedInOnceLoggedIn() {
+        let research = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
+        let vpn = Login(displayName: "vpn", kind: .custom(command: nil), loginTime: now.addingTimeInterval(-hour))
+
+        for loggedIn in [tile(research), tile(vpn)] {
+            #expect(loggedIn.symbol == .systemImage("checkmark.circle"))
+            #expect(loggedIn.colour == .loggedIn)
+            #expect(loggedIn.trailing == .stateWord("Logged in"))
+            #expect(!loggedIn.isDue)
+        }
+        #expect(tile(research).subtitle == .kind("AWS SSO session"))
+        #expect(tile(research).accessibilityLabel == "research, AWS SSO session, logged in")
+    }
+
+    @Test func aLoginWithNoSessionLengthNeverLoggedInStaysNoTimer() {
+        let research = Login(displayName: "research", kind: .awsSSOSession(name: "research"))
+
+        #expect(tile(research).trailing == .stateWord("No timer"))
+        #expect(tile(research).colour == nil)
+    }
+
+    @Test func aLoginWithNoSessionLengthShowsLoggedOutOnceLoggedOut() {
+        var research = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
+        research.invalidatedAt = now.addingTimeInterval(-minute)
+        research.invalidationReason = .loggedOut
+
+        #expect(tile(research).subtitle == .status("Logged out"))
+        #expect(tile(research).colour == .expired)
+        #expect(tile(research).isDue)
+    }
+
+    @Test func aDatabricksLoginWithNoSessionLengthStaysNoTimerWhileItAsks() {
+        let asking = Login(
+            displayName: "analytics-prod", kind: .databricksProfile(name: "analytics-prod", accountLevel: false),
+            loginTime: now.addingTimeInterval(-hour))
+
+        #expect(tile(asking).trailing == .stateWord("No timer"))
+        #expect(tile(asking).colour == nil)
+    }
+
     @Test func anExpiringTileShowsItsTimeLeftAndLogIn() {
         let qa = tile(login(remaining: 19 * minute, now: now, name: "qa"))
 
@@ -184,76 +226,47 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(qa.subtitle == .status("Expiring · 19\u{202F}m left"))
     }
 
-    // MARK: Control
+    // MARK: Click
 
-    @Test func onlyADueTileWithNothingPendingIsALogInButton() {
+    @Test func everyIdleTileLogsInWhenClicked() {
         let expiring = login(remaining: 19 * minute, now: now)
 
-        #expect(tile(expiring).control == .logInButton)
-        #expect(tile(login(remaining: 5 * hour, now: now)).control == .actionsMenu)
-        #expect(tile(noTimer()).control == .actionsMenu)
-        #expect(tile(stillValid(checkedAt: now)).control == .actionsMenu)
-        #expect(tile(expiring, facts: TileFacts(failure: .timedOut)).control == .actionsMenu)
-        #expect(tile(expiring, facts: TileFacts(possibleLoginAt: now)).control == .actionsMenu)
-        #expect(tile(expiring, facts: TileFacts(activity: .queued)).control == .actionsMenu)
-        #expect(tile(expiring, facts: TileFacts(activity: .running)).control == .actionsMenu)
+        for idle in [expiring, login(remaining: 5 * hour, now: now), noTimer(), stillValid(checkedAt: now)] {
+            #expect(tile(idle).clickLogsIn)
+            #expect(tile(idle).accessibilityHint == "Logs in")
+        }
     }
 
-    @Test func aHeldControlKeepsTheClicksActionAsTheStateChanges() {
-        let becameDue = login(remaining: 29 * minute, now: now)
-        let gotQuestion = login(remaining: 19 * minute, now: now)
-
-        let menu = tilePresentation(
-            for: becameDue, now: now, leadTime: thirtyMinutes, facts: TileFacts(), holding: .actionsMenu,
-            locale: british, calendar: calendar(british))
-        let button = tilePresentation(
-            for: gotQuestion, now: now, leadTime: thirtyMinutes, facts: TileFacts(possibleLoginAt: now),
-            holding: .logInButton, locale: british, calendar: calendar(british))
-
-        #expect(menu.control == .actionsMenu)
-        #expect(menu.trailing == .timeLeft("29m"))
-        #expect(menu.accessibilityHint == "Shows actions")
-        #expect(button.control == .logInButton)
-        #expect(button.trailing == .timeLeft("19m"))
-        #expect(!button.clickLogsIn)
-    }
-
-    @Test func aHeldLogInButtonShowsWhatIsPendingAndDoesNothing() {
+    @Test func aTileWithSomethingPendingDoesNothingWhenClicked() {
         let expiring = login(remaining: 19 * minute, now: now)
         let vpn = Login(
             displayName: "vpn", kind: .custom(command: "vpn-login --user dev"), sessionLength: 8 * hour,
             loginTime: now.addingTimeInterval(-8 * hour + 19 * minute))
-        func held(_ login: Login, _ facts: TileFacts) -> TilePresentation {
-            tilePresentation(
-                for: login, now: now, leadTime: thirtyMinutes, facts: facts, holding: .logInButton,
-                locale: british, calendar: calendar(british))
-        }
+        let pending = [
+            tile(expiring, facts: TileFacts(activity: .running)),
+            tile(expiring, facts: TileFacts(activity: .queued)),
+            tile(expiring, facts: TileFacts(failure: .timedOut)),
+            tile(expiring, facts: TileFacts(possibleLoginAt: now)),
+            tile(vpn, facts: TileFacts(isAwaitingApproval: true)),
+        ]
 
-        let running = held(expiring, TileFacts(activity: .running))
-        let queued = held(expiring, TileFacts(activity: .queued))
-        let failed = held(expiring, TileFacts(failure: .timedOut))
-        let notApproved = held(vpn, TileFacts(isAwaitingApproval: true))
-
-        #expect(running.trailing == .stateWord("Logging in"))
-        #expect(queued.trailing == .stateWord("Queued"))
-        #expect(failed.trailing == .stateWord("Failed"))
-        #expect(notApproved.trailing == .stateWord("Not yet approved"))
-        for tile in [running, queued, failed, notApproved] {
-            #expect(tile.control == .logInButton)
+        for tile in pending {
             #expect(!tile.clickLogsIn)
+            #expect(tile.accessibilityHint == "")
+            #expect(tile.trailingOnHover == tile.trailing)
         }
-        #expect(held(expiring, TileFacts()).clickLogsIn)
-        #expect(held(expiring, TileFacts()).trailing == .logIn)
     }
 
-    @Test func aHeldLogInButtonOnATileNoLongerDueShowsItsTimeAndDoesNothing() {
-        let loggedIn = tilePresentation(
-            for: login(remaining: 5 * hour, now: now), now: now, leadTime: thirtyMinutes, facts: TileFacts(),
-            holding: .logInButton, locale: british, calendar: calendar(british))
+    @Test func aTileThatIsntDueLogsInButShowsItsTime() {
+        let dev = tile(login(remaining: 5 * hour, now: now))
 
-        #expect(loggedIn.control == .logInButton)
-        #expect(!loggedIn.clickLogsIn)
-        #expect(loggedIn.trailing == .timeLeft("5h"))
+        #expect(!dev.isDue)
+        #expect(dev.trailing == .timeLeft("5h"))
+        #expect(dev.accessibilityHint == "Logs in")
+    }
+
+    @Test func aTileThatIsntDueShowsLogInOnHover() {
+        #expect(tile(login(remaining: 5 * hour, now: now)).trailingOnHover == .logIn)
     }
 
     @Test func dueFollowsTheTimerNotWhatIsPending() {
@@ -398,56 +411,25 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(login(remaining: -hour, now: now)).detail == nil)
     }
 
-    // MARK: The "…" menu
+    // MARK: Session length
 
-    @Test func theActionsMenuHasItsItemsInOrder() {
-        let dev = tile(login(remaining: 5 * hour, now: now))
-
-        #expect(dev.menuItems == [
-            .logIn, .setTimer, .markLoggedInNow(opensSetTimer: false), .sessionLength, .editInSettings,
-        ])
-        #expect(dev.menuItems.map(\.title) == [
-            "Log In", "Set Timer…", "Mark as Logged In Now", "Session Length", "Edit in Settings…",
-        ])
-    }
-
-    @Test func aRunningOrQueuedTileAddsCancelAll() {
-        let dev = login(remaining: 5 * hour, now: now)
-
-        #expect(tile(dev, facts: TileFacts(activity: .running)).menuItems.last == .cancelAll)
-        #expect(tile(dev, facts: TileFacts(activity: .queued)).menuItems.last == .cancelAll)
-        #expect(TileMenuItem.cancelAll.title == "Cancel All")
-    }
-
-    @Test func markAsLoggedInNowAsksForAnUnknownSessionLength() {
-        #expect(tile(noTimer()).menuItems.contains(.markLoggedInNow(opensSetTimer: true)))
-    }
-
-    @Test func sessionLengthOptionsCheckTheCurrentLength() {
-        let options = sessionLengthOptions(current: 24 * hour)
+    @Test func sessionLengthOptionsListTheLengthsThenCustomAndNoTimer() {
+        let options = sessionLengthOptions()
 
         #expect(options.map(\.title) == ["8 hours", "12 hours", "1 day", "3 days", "7 days", "Custom…", "No timer"])
-        #expect(options.filter(\.isSelected).map(\.title) == ["1 day"])
         #expect(options[0].choice == .length(8 * hour))
         #expect(options[5].choice == .custom)
         #expect(options[6].choice == .noTimer)
     }
 
     @Test func theOptionsOfferOnlyListedLengthsSoALengthOverTheCapIsCustom() {
-        let options = sessionLengthOptions(current: 9000 * hour)
-
-        #expect(options.filter(\.isSelected).map(\.title) == ["Custom…"])
-        for case .length(let length) in options.map(\.choice) {
+        for case .length(let length) in sessionLengthOptions().map(\.choice) {
             #expect(throws: Never.self) { try checkedSessionLength(length) }
         }
+        #expect(sessionLengthChoice(for: 9000 * hour) == .custom)
     }
 
-    @Test func anUnlistedLengthChecksCustomAndNoneChecksNoTimer() {
-        #expect(sessionLengthOptions(current: 10 * hour).filter(\.isSelected).map(\.title) == ["Custom…"])
-        #expect(sessionLengthOptions(current: nil).filter(\.isSelected).map(\.title) == ["No timer"])
-    }
-
-    @Test func aStoredLengthIsChosenInThePopUpAsTheOptionsCheckIt() {
+    @Test func aStoredLengthIsChosenInThePopUp() {
         #expect(sessionLengthChoice(for: 72 * hour) == .length(72 * hour))
         #expect(sessionLengthChoice(for: 10 * hour) == .custom)
         #expect(sessionLengthChoice(for: nil) == .noTimer)
@@ -469,7 +451,6 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
 
         #expect(prod.accessibilityLabel == "prod, AWS SSO session, expiring, 19 minutes left")
         #expect(prod.accessibilityHint == "Logs in")
-        #expect(prod.actionsLabel == "Actions for prod")
     }
 
     @Test func voiceOverReadsEachTimerState() {
@@ -480,7 +461,7 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         let underAMinute = tile(login(remaining: 30, now: now, name: "dev"))
 
         #expect(ok.accessibilityLabel == "dev, AWS SSO session, logged in, 5 hours, 13 minutes left")
-        #expect(ok.accessibilityHint == "Shows actions")
+        #expect(ok.accessibilityHint == "Logs in")
         #expect(expired.accessibilityLabel == "qa, AWS SSO session, expired, 40 minutes ago")
         #expect(unknown.accessibilityLabel == "analytics-prod, Databricks profile, No timer")
         #expect(valid.accessibilityLabel == "analytics-dev, Databricks profile, still valid")

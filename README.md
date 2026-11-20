@@ -20,16 +20,16 @@ expires, and logs in to the ones you pick, one after another, when you click.
   with its time left, the due ones first.
 - **Warns once** before a login expires, 30 minutes ahead by default. Logins that need it at the
   same time, or while the Mac slept, share one notification, whose Log In button starts them.
-- **Logs in when you click**: a due tile's Log In, Log In to N Due when several are due, a preset
-  you define such as "AWS dev + Databricks dev", or Log In in any tile's "…" menu. Logins run one
-  at a time, since several browser sign-ins at once conflict, and a card shows which one runs, the
-  progress ("1 of 2") and Cancel All. It never logs in on its own.
+- **Logs in when you click**: any tile that isn't running, queued, failed, awaiting approval or
+  asking, Log In to N Due when several are due, or a preset you define such as "AWS dev +
+  Databricks dev". Logins run one at a time, since several browser sign-ins at once conflict, and
+  a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs in on its own.
 - **Notices logins you do in a terminal**: an `aws sso login` is read from the AWS CLI's cache
   file, and when the file can't tell a login from a renewal, the tile asks "Logged in
   elsewhere?". A Databricks profile is checked with the Databricks CLI when it enters its warning
   time, or when you click Check Databricks Now in Settings → Logins.
-- **Takes a timer by hand**: Set Timer…, which opens in the tile, takes when the login expires or
-  when you logged in; Mark as Logged In Now starts it from now.
+- **Takes a timer by hand**: when a tile asks "Logged in elsewhere?", Set Timer… takes when the
+  login expires or when you logged in.
 - **Runs a custom login's command in Terminal**, so you can type passwords or MFA codes there, or
   waits while you log in your own way. Its timer starts when you click Done, within the login
   timeout (5 minutes by default).

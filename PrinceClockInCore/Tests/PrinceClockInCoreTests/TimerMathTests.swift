@@ -138,6 +138,41 @@ private let noTimer = Login(displayName: "vpn", kind: .custom(command: nil))
     #expect(status([stillValid("analytics-dev"), noTimer]) == .noTimer)
 }
 
+@Test func menuBarNamesALoginWithNoExpiryOnceNothingHasATimer() {
+    let sandbox = Login(
+        displayName: "sandbox", kind: .awsSSOSession(name: "sandbox"), loginTime: now.addingTimeInterval(-3600))
+    let ok = login(remaining: 5 * 3600, now: now)
+
+    #expect(status([noTimer, sandbox]) == .loggedIn(id: sandbox.id))
+    #expect(status([sandbox, ok]) == .ok(id: ok.id, remaining: 5 * 3600))
+}
+
+@Test func menuBarNamesTheFirstStoredLoginWithNoExpiry() {
+    let sandbox = Login(
+        displayName: "sandbox", kind: .awsSSOSession(name: "sandbox"), loginTime: now.addingTimeInterval(-3600))
+    let vpn = Login(displayName: "vpn", kind: .custom(command: nil), loginTime: now.addingTimeInterval(-3600))
+
+    #expect(status([noTimer, sandbox, vpn]) == .loggedIn(id: sandbox.id))
+    #expect(status([vpn, sandbox]) == .loggedIn(id: vpn.id))
+}
+
+@Test func menuBarDoesNotNameADatabricksLoginWithNoLengthAsLoggedIn() {
+    let analytics = Login(
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+        loginTime: now.addingTimeInterval(-3600))
+
+    #expect(status([analytics]) == .noTimer)
+}
+
+@Test func menuBarShowsALoggedOutLoginWithNoLengthAsExpired() {
+    var sandbox = Login(
+        displayName: "sandbox", kind: .awsSSOSession(name: "sandbox"), loginTime: now.addingTimeInterval(-3600))
+    sandbox.invalidatedAt = now.addingTimeInterval(-60)
+    sandbox.invalidationReason = .loggedOut
+
+    #expect(status([sandbox]) == .expired(id: sandbox.id))
+}
+
 @Test func menuBarWithNoTimerAtAll() {
     #expect(status([]) == .noTimer)
     #expect(status([noTimer]) == .noTimer)

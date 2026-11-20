@@ -114,10 +114,10 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(byLoggedInAt.state.logins[0].loginTime == at("2026-11-17T10:00:00Z"))
         #expect(byLoggedInAt.possibleLogins.isEmpty)
 
-        var byLoggedInNow = asked
-        byLoggedInNow.markLoggedInNow(id: dev.id, now: now)
-        #expect(byLoggedInNow.state.logins[0].loginTime == now)
-        #expect(byLoggedInNow.possibleLogins.isEmpty)
+        var bySetLoginTime = asked
+        bySetLoginTime.setLoginTime(id: dev.id, at: now)
+        #expect(bySetLoginTime.state.logins[0].loginTime == now)
+        #expect(bySetLoginTime.possibleLogins.isEmpty)
 
         var bySucceeded = asked
         bySucceeded.apply(.succeeded(id: dev.id, at: now))
@@ -382,7 +382,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         stillValid.apply(.valid, login: prod.id, now: now)
 
         var loggedIn = stillValid
-        loggedIn.markLoggedInNow(id: prod.id, now: now)
+        loggedIn.setLoginTime(id: prod.id, at: now)
         #expect(!isStillValid(loggedIn.state.logins[0], now: now))
 
         var lengthened = stillValid
@@ -451,9 +451,11 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(due.map(\.id) == [expiring.id, expired.id, loggedOut.id])
     }
 
-    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoTimer() {
+    @Test func panelOrderPutsDueFirstThenTimeLeftThenStillValidThenNoExpiryThenNoTimer() {
         let now = at("2026-11-17T12:00:00Z")
         let unknown = databricks("analytics-prod", sessionLength: nil)
+        let noExpiry = Login(
+            displayName: "research", kind: .awsSSOSession(name: "research"), loginTime: now.addingTimeInterval(-hour))
         var stillValid = databricks("staging", sessionLength: hour, loginTime: now.addingTimeInterval(-2 * hour))
         stillValid.lastDatabricksAnswer = DatabricksCheckRecord(at: now, result: .valid)
         let okLater = login(remaining: 5 * hour, now: now, name: "prod")
@@ -464,14 +466,14 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         var loggedOut = login(remaining: 4 * hour, now: now, name: "billing")
         loggedOut.invalidatedAt = now.addingTimeInterval(-30 * 60)
         let logins = model([
-            unknown, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
+            unknown, noExpiry, stillValid, okLater, okSooner, expiring, expiredRecently, expiredLongAgo, loggedOut,
         ])
 
         let order = logins.panelOrder(now: now)
 
         #expect(order.map(\.id) == [
             expiredLongAgo.id, expiredRecently.id, loggedOut.id, expiring.id, okSooner.id, okLater.id,
-            stillValid.id, unknown.id,
+            stillValid.id, noExpiry.id, unknown.id,
         ])
     }
 

@@ -302,11 +302,8 @@ public final class Coordinator {
         isFirstCheckAfterWake = true
     }
 
-    /// Login `id`'s tile at the last tick, or `nil` for a login not tracked. `heldControl` is the
-    /// control the tile was when the pointer entered it.
-    public func tile(
-        for id: UUID, holding heldControl: TileControl? = nil, locale: Locale, calendar: Calendar
-    ) -> TilePresentation? {
+    /// Login `id`'s tile at the last tick, or `nil` for a login not tracked.
+    public func tile(for id: UUID, locale: Locale, calendar: Calendar) -> TilePresentation? {
         guard let login = login(id) else { return nil }
         let activity: TileActivity = running == id ? .running : queued.contains(id) ? .queued : .idle
         let facts = TileFacts(
@@ -315,7 +312,7 @@ public final class Coordinator {
             isPossibleLoginFoundOnWake: model.possibleLogins[id]?.isFoundOnWake ?? false)
         return tilePresentation(
             for: login, now: now, leadTime: model.state.settings.warningLeadTime, facts: facts,
-            holding: heldControl, locale: locale, calendar: calendar)
+            locale: locale, calendar: calendar)
     }
 
     /// The output of the login's last run, kept in memory only.
@@ -356,11 +353,6 @@ public final class Coordinator {
     /// - Throws: a `TimerError`, leaving the login unchanged.
     public func setTimer(id: UUID, _ entry: TimerEntry) throws(TimerError) {
         try model.setTimer(id: id, entry, now: clock())
-        saveIfChanged()
-    }
-
-    public func markLoggedInNow(id: UUID) {
-        model.markLoggedInNow(id: id, now: clock())
         saveIfChanged()
     }
 

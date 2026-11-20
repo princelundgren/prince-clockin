@@ -103,6 +103,19 @@ func isInvalidated(_ login: Login) -> Bool {
     return (login.loginTime ?? .distantPast) <= invalidatedAt
 }
 
+/// Whether a login with no session length has been logged in to, and not invalidated since: its
+/// timer is unknown.
+func isLoggedInWithNoLength(_ login: Login) -> Bool {
+    login.loginTime != nil && login.sessionLength == nil && !isInvalidated(login)
+}
+
+/// Whether an AWS SSO session or custom login is logged in with no session length, which shows as
+/// logged in. A Databricks login in that state asks for its session length instead.
+func isLoggedInWithNoExpiry(_ login: Login) -> Bool {
+    if case .databricksProfile = login.kind { return false }
+    return isLoggedInWithNoLength(login)
+}
+
 /// Whether the login is invalidated because its AWS session was logged out, for "Logged out". With
 /// no stored reason, an AWS login counts as logged out, since a logout was its only cause before
 /// the reason was stored.
@@ -167,7 +180,10 @@ public enum MenuBarStatus: Equatable, Sendable {
     case expiring(id: UUID, remaining: TimeInterval)
     /// The login with the soonest future expiry.
     case ok(id: UUID, remaining: TimeInterval)
-    /// No login has time left, is expiring or has expired, leaving out the still valid.
+    /// No login has a timer, and this one, the first stored, is logged in with no expiry.
+    case loggedIn(id: UUID)
+    /// No login has time left, is expiring or has expired, leaving out the still valid, and none is
+    /// logged in with no expiry.
     case noTimer
 }
 
@@ -193,6 +209,7 @@ public func menuBarStatus(
     if let first = firstLeast(expired) { return .expired(id: first.id) }
     if let soonest = firstLeast(expiring) { return .expiring(id: soonest.id, remaining: soonest.key) }
     if let soonest = firstLeast(ok) { return .ok(id: soonest.id, remaining: soonest.key) }
+    if let loggedIn = logins.first(where: isLoggedInWithNoExpiry) { return .loggedIn(id: loggedIn.id) }
     return .noTimer
 }
 
