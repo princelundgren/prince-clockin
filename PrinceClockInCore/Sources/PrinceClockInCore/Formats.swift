@@ -1,7 +1,7 @@
 import Foundation
 
 /// Time left for the tiles and notifications: narrow, at most two of days, hours and minutes,
-/// rounded down ("5h 13m" in en_GB; sv_SE joins each number to its unit with U+202F).
+/// rounded down ("5h 13m").
 /// Under a minute it is "<1m" in every locale.
 public func timeLeftText(_ remaining: TimeInterval, locale: Locale) -> String {
     if isUnderAMinute(remaining) { return "<1m" }

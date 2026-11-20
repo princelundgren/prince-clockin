@@ -126,12 +126,12 @@ private let british = Locale(identifier: "en_GB")
         #expect(content.ids == [dev.id, prod.id])
     }
 
-    @Test func contentFollowsTheLocale() {
+    @Test func contentReadsEnglishTimesInASwedishRegion() {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: 5 * 3600 + 13 * 60, now: now)
 
-        #expect(expiryNotificationContent([dev], now: now, locale: Locale(identifier: "sv_SE")).title
-                == "dev expires in 5\u{202F}h 13\u{202F}m")
+        #expect(expiryNotificationContent([dev], now: now, locale: Locale(identifier: "en_SE")).title
+                == "dev expires in 5h 13m")
     }
 
     @Test func customDoneNotificationPointsToTerminalOnlyWithACommand() {
