@@ -427,6 +427,23 @@ private final class GatedLogins: Sendable {
         #expect(title == "analytics-dev expired")
     }
 
+    @Test func databricksLoginFoundStillValidAtTheTickIsNotNotified() async throws {
+        let expired = databricks("analytics-dev", remaining: -2 * hour)
+        let fixture = try Fixture(logins: [expired])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.tick()
+        fixture.clock.advance(by: 10 * 60)
+        await coordinator.tick()
+
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
+        let checked = try #require(coordinator.login(expired.id))
+        #expect(isStillValid(checked, now: fixture.clock.read()))
+        #expect(checked.notifiedForExpiry == expiry(of: expired))
+    }
+
     @Test func overlappingTickRunsOnceMoreAfterTheRunningOne() async throws {
         let gate = Gate()
         let expiring = databricks("analytics-dev", remaining: 600)
