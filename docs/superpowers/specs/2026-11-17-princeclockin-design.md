@@ -615,6 +615,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   notification time passed while the app wasn't running is announced once at the next launch, as
   expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
+- Clicking a notification itself, rather than one of its buttons, opens the panel while the app
+  runs and logs nothing in. A click that launches the app opens no panel: the status item's window
+  has no place in the menu bar yet, and the popover doesn't show.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
   "vpn is waiting for you" and "Log in your own way, then click Done."
@@ -826,3 +829,4 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     `Form`, and the panel's tiles follow at its next opening; a preset's "Logs in to, in order"
     reorders by drag too.
   - Whether VoiceOver can reorder these lists without Move Up and Move Down.
+  - Clicking a notification opens the panel under the icon while the app runs.

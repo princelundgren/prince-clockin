@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         appModel = AppModel()
         updater = Updater(coordinator: appModel.coordinator)
         super.init()
+        appModel.openPanel = { [weak self] in self?.showPanel() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// One grouped notification for the logins that entered their notification time.
 public struct ExpiryNotificationContent: Equatable, Sendable {
@@ -80,20 +81,23 @@ public enum NotificationActionID {
     public static let done = "customDone"
 }
 
-/// What the user asked for by pressing a notification's button.
+/// What the user asked for by clicking a notification or one of its buttons.
 public enum NotificationAction: Equatable, Sendable {
     case logIn([UUID])
     case customDone(UUID)
+    /// The notification itself was clicked: the panel opens, with nothing logged in.
+    case openPanel
 }
 
-/// The action for a notification response. Only the "Log In" and "Done" buttons give one: opening
-/// or dismissing the notification gives `nil`, so nothing logs in unasked. Strings that aren't
-/// UUIDs are dropped, and a response left with no login gives `nil`.
+/// The action for a notification response. Clicking the notification itself opens the panel, and
+/// only the "Log In" and "Done" buttons act on logins, so nothing logs in unasked. Dismissing it
+/// gives `nil`. Strings that aren't UUIDs are dropped, and a button left with no login gives `nil`.
 public func notificationAction(actionIdentifier: String, loginIDs: [String]) -> NotificationAction? {
     let ids = loginIDs.compactMap(UUID.init(uuidString:))
     switch actionIdentifier {
     case NotificationActionID.logIn: return ids.isEmpty ? nil : .logIn(ids)
     case NotificationActionID.done: return ids.first.map(NotificationAction.customDone)
+    case UNNotificationDefaultActionIdentifier: return .openPanel
     default: return nil
     }
 }

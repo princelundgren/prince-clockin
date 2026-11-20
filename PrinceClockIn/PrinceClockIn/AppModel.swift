@@ -5,7 +5,7 @@ import UserNotifications
 
 /// Builds the coordinator with the real system services and drives it: a tick at each deadline the
 /// coordinator gives, on a change in the AWS cache directory, on wake, clock and time-zone changes,
-/// and notification buttons. It makes no decisions of its own.
+/// and notification clicks. It makes no decisions of its own.
 @MainActor
 @Observable
 final class AppModel: NSObject, UNUserNotificationCenterDelegate {
@@ -28,6 +28,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     var isPanelShown = false
     /// Whether the Settings window is open.
     var isSettingsShown = false
+    /// Opens the panel, for a click on a notification itself.
+    @ObservationIgnored var openPanel: (() -> Void)?
     /// Whether VoiceOver runs, which reads the menu bar item's label with its time left.
     private var isVoiceOverOn = NSWorkspace.shared.isVoiceOverEnabled
 
@@ -127,6 +129,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             if !stillTracked.isEmpty { coordinator.logIn(stillTracked) }
         case .customDone(let id):
             if tracked.contains(id) { coordinator.confirmCustomDone(id: id) }
+        case .openPanel:
+            openPanel?()
         case nil:
             break
         }
