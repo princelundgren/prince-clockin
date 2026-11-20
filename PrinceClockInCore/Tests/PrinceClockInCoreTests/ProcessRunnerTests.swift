@@ -91,6 +91,49 @@ import PrinceClockInCore
         #expect(ContinuousClock.now - started < .seconds(6))
     }
 
+    /// Runs `script` under `sh` with a file for it to write a pid to, until the 1-second timeout,
+    /// and returns the outcome and that pid.
+    private func runForking(_ script: String) async throws -> (ProcessOutcome, pid_t) {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let outcome = await run("/bin/sh", ["-c", script, "sh", pidFile.path], timeout: .seconds(1))
+        let text = try String(contentsOf: pidFile, encoding: .utf8)
+        let pid = try #require(pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+        return (outcome, pid)
+    }
+
+    /// Whether `pid` is gone within `deadline`, polled since launchd reaps an orphan shortly after
+    /// it dies. Kills it on the way out, so a failing test leaves nothing running.
+    private func isGone(_ pid: pid_t, within deadline: Duration) async -> Bool {
+        let end = ContinuousClock.now + deadline
+        while ContinuousClock.now < end {
+            if kill(pid, 0) == -1 && errno == ESRCH { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        kill(pid, SIGKILL)
+        return false
+    }
+
+    @Test func aTimeoutEndsWhatTheChildStarted() async throws {
+        let (outcome, grandchild) = try await runForking(#"sleep 30 & echo $! > "$1"; wait"#)
+        guard case .timedOut = outcome else {
+            Issue.record("expected timedOut, got \(outcome)")
+            return
+        }
+        #expect(await isGone(grandchild, within: .seconds(2)))
+    }
+
+    @Test func aTimeoutKillsADescendantThatIgnoresTerminate() async throws {
+        let (outcome, grandchild) = try await runForking(
+            #"(trap "" TERM; exec sleep 30) & echo $! > "$1"; wait"#)
+        guard case .timedOut = outcome else {
+            Issue.record("expected timedOut, got \(outcome)")
+            return
+        }
+        #expect(await isGone(grandchild, within: .seconds(4)))
+    }
+
     @Test func runnerDrainsLargeOutput() async {
         let script = "i=0; while [ $i -lt 1024 ]; do printf '%01023d\\n' $i >&2; i=$((i+1)); done"
         let outcome = await run("/bin/sh", ["-c", script])

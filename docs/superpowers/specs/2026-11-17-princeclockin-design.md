@@ -655,6 +655,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   once or crash the app; the stored value itself is kept as it is. For a custom login it covers
   opening Terminal and the wait for Done together, and the timeout and Cancel All end either step,
   even a Terminal that never answers.
+  Ending a CLI sends `SIGTERM` to its process group, so to what it started too unless that left the
+  group, and `SIGKILL` to any of them still running 2 seconds later.
 - AWS and Databricks logins run as an executable plus an argument list, never through a shell
   string, so a session or profile name can't inject a command. The name is joined to its flag
   (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or

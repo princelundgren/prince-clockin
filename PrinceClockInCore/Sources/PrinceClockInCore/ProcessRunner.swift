@@ -24,8 +24,9 @@ public protocol ProcessRunning: Sendable {
     ) async -> ProcessOutcome
 }
 
-/// Runs a process with `Foundation.Process`: stdin is `/dev/null`, stdout and stderr share one pipe,
-/// and a child that ignores `terminate()` gets `SIGKILL` after 2 seconds.
+/// Runs a process with `Foundation.Process`: stdin is `/dev/null`, and stdout and stderr share one
+/// pipe. A stop sends `SIGTERM` to the child's process group, or to the child alone if it shares a
+/// group, and `SIGKILL` to what is left 2 seconds later.
 public final class FoundationProcessRunner: ProcessRunning {
     public init() {}
 
@@ -122,6 +123,10 @@ private final class ProcessBox: @unchecked Sendable {
     private var state = State.notLaunched
     private var reason: StopReason?
     private var timeoutTask: Task<Void, Never>?
+    /// The child's process group, so a stop also reaches the processes it started. `Process`
+    /// starts the child leading a group of its own, but doesn't document it, so it is checked at
+    /// launch: `nil` when the child shares a group, which isn't the runner's to signal.
+    private var groupID: pid_t?
 
     var stopReason: StopReason? { lock.withLock { reason } }
 
@@ -134,6 +139,8 @@ private final class ProcessBox: @unchecked Sendable {
                 return .failed("\(process.executableURL?.lastPathComponent ?? "process"): \(error.localizedDescription)")
             }
             state = .running(process)
+            let pid = process.processIdentifier
+            if getpgid(pid) == pid { groupID = pid }
             return .launched
         }
     }
@@ -163,7 +170,7 @@ private final class ProcessBox: @unchecked Sendable {
             case .running(let process):
                 if reason == nil {
                     reason = stopReason
-                    process.terminate()
+                    if let groupID { kill(-groupID, SIGTERM) } else { process.terminate() }
                     scheduleKill()
                 }
             case .finished, .cancelledEarly:
@@ -176,7 +183,11 @@ private final class ProcessBox: @unchecked Sendable {
         Task.detached { [self] in
             try? await Task.sleep(for: .seconds(2))
             lock.withLock {
-                if case .running(let process) = state, process.isRunning {
+                // Even once the child has exited, since a descendant can outlive it; the system
+                // doesn't reuse a group's ID while any process is left in the group.
+                if let groupID {
+                    kill(-groupID, SIGKILL)
+                } else if case .running(let process) = state, process.isRunning {
                     kill(process.processIdentifier, SIGKILL)
                 }
             }
