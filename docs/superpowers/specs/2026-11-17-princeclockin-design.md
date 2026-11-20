@@ -793,6 +793,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - The panel's height: nine logins show eight and a half and scroll, six presets show five and a
     half, and on a short screen the presets keep three and the login list scrolls; on macOS 27,
     three logins and one preset showed whole with no scroll bar.
+  - The first opening after launch, before any tile has been measured: whether the panel visibly
+    resizes in its first frames, or is briefly taller than a short screen. Later openings reuse the
+    measured heights, since the panel's view is built once.
   - A slow click and a tap-to-click on the icon while the panel is open close it and leave it
     closed; on macOS 27.2.1, holds of 0.25 to 1.2 s did.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
