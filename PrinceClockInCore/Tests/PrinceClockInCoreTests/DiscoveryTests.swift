@@ -167,6 +167,37 @@ import PrinceClockInCore
         #expect(discoverDatabricksProfiles(configText: config).map(\.name) == ["analytics-dev"])
     }
 
+    // Expected names are what botocore's `build_profile_map` gives for each header.
+    @Test(arguments: [
+        (#"[sso-session "my team"]"#, ["my team"]),
+        ("[sso-session\tdev2]", ["dev2"]),
+        ("[sso-session a b]", []),
+        (#"[sso-session 'it''s']"#, ["its"]),
+        (#"[sso-session a\ b]"#, ["a b"]),
+        (#"[sso-session "a\"b"]"#, [#"a"b"#]),
+        (#"[sso-session "a\b"]"#, [#"a\b"#]),
+        (#"[sso-session "open]"#, []),
+        (#"[sso-session "a\]"#, []),
+        (#"[sso-session dev\]"#, []),
+        ("[sso-session dev]]", ["dev]"]),
+        ("[sso-session ]", []),
+        ("[sso-sessionx dev]", ["dev"]),
+    ] as [(String, [String])])
+    func sessionNamesAreSplitAsBotocoreDoes(header: String, names: [String]) {
+        #expect(discoverAWSSessions(configText: "\(header)\nsso_region = eu-north-1\n") == names)
+    }
+
+    @Test func aQuotedSessionNameIsTheSameSessionAsTheBareOne() throws {
+        let directory = URL(fileURLWithPath: "/cache")
+        let quoted = try #require(discoverAWSSessions(configText: #"[sso-session "dev"]"#).first)
+        #expect(awsCacheFile(forSession: quoted, cacheDirectory: directory)
+            == awsCacheFile(forSession: "dev", cacheDirectory: directory))
+        let spaced = try #require(discoverAWSSessions(configText: #"[sso-session "my team"]"#).first)
+        // `printf 'my team' | shasum`
+        #expect(awsCacheFile(forSession: spaced, cacheDirectory: directory).lastPathComponent
+            == "cd59fe8a6e954656aa78540d540d909d8225c93e.json")
+    }
+
     @Test func crlfLinesAndEqualsInValuesAreParsed() {
         let config = "[sso-session dev]\r\nsso_start_url = https://example.awsapps.com/start?a=b\r\n"
         let sections = parseINI(config)
