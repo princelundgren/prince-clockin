@@ -62,6 +62,17 @@ jobs:
             exit 1
           fi
 
+      # Sparkle compares only the build number, the run number, so an older tag pushed late would
+      # still reach every user as an update.
+      - name: Check the tag is the highest release
+        if: env.REHEARSAL == 'false'
+        run: |
+          highest="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [[ "$TAG" != "$highest" ]]; then
+            echo "::error::$TAG isn't the highest release tag, $highest is; tag a version above it"
+            exit 1
+          fi
+
       - name: Check the release secrets are set
         env:
           CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}

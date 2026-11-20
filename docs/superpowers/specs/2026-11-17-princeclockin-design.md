@@ -738,6 +738,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   it uploads only `princeclockin/rehearsal/appcast.xml`, which no app reads and which names a DMG
   that isn't uploaded, and publishes nothing else.
 - The build number is the release workflow's run number, so it only grows, as Sparkle needs.
+- A release tag must be the highest `vX.Y.Z` tag by version sort, rehearsal tags left out, or the
+  release fails before building: Sparkle compares only the build number, so an older tag pushed
+  later would reach every user as an update. A rehearsal isn't compared, since no app reads its
+  feed.
 - The DMG is uploaded only if it isn't there yet, and the appcast last, so the feed never names a
   missing file and a published DMG is never replaced; a re-run after a partial upload needs a
   new tag. The appcast lists only the latest release.
