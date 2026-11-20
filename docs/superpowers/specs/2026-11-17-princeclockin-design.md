@@ -18,12 +18,13 @@ ones have expired, finding out when a command fails halfway, and running each lo
 owner's experience, logging in to several at once doesn't work: each opens a browser sign-in, and
 simultaneous sign-ins against the same identity provider conflict.
 
-Success: a glance at the menu bar tells you what is about to expire, a notification arrives before
-it does, and one click logs in to the logins you choose, in sequence.
+Success: a glance at the menu bar tells you whether a login is about to expire, a notification
+arrives before it does, and one click logs in to the logins you choose, in sequence.
 
 ## Goals
 
-- A timer per login, and in the menu bar the time left on the one that expires soonest.
+- A timer per login, and in the menu bar a symbol that says whether one needs you, with no
+  countdown.
 - A notification a set time before a login expires: 30 minutes by default, changeable in settings.
 - Logging in only when the user clicks: one login, every due login, or a preset. There is no
   multi-select; a set of logins used together is a preset (owner, 2026-11-18).
@@ -226,22 +227,25 @@ clicks Check Databricks Now in Settings → Logins.
 
 #### Menu bar label
 
-A template SF Symbol and, beside it, the time left on one login, in monospaced digits. The text's
-width is set by its state's widest form in the user's locale, so it doesn't jitter as the time
-counts down; it changes only with the state. Urgency shows in the symbol's shape, never in
-colour. The core publishes the id of the login the label is about, so the number always belongs
-to the login the badge is about.
+A template SF Symbol and nothing else: no time left and no progress, in any state, since a
+countdown in the menu bar is stressful (owner, 2026-11-20). Urgency shows in the symbol's shape,
+never in colour; the panel has the times.
 
-| State | Symbol | Text |
-|---|---|---|
-| Logging in | `clock.arrow.circlepath` | the batch's progress, "1 of 2" |
-| A failure not yet seen, or a failed save | `exclamationmark.triangle` | none |
-| Any login expired | `clock.badge.xmark` | none |
-| A login expiring | `clock.badge.exclamationmark` | the soonest-expiring login's time left, "19m" |
-| Every timer ok | `clock` | the soonest future expiry's time left, "5h 13m" |
-| No timer at all | `clock` | none |
+| State | Symbol |
+|---|---|
+| Logging in | `clock.arrow.circlepath`, pulsing |
+| A failure not yet seen, or a failed save | `clock.badge.xmark` |
+| Any login expired | `clock.badge.xmark` |
+| A login expiring | `clock.badge.exclamationmark` |
+| Every timer ok | `clock` |
+| No timer at all | `clock` |
 
-- When several apply, the highest row wins. A dot after the label means an update is waiting (see
+- A failure looks like an expiry, and Every timer ok looks like No timer at all, because each pair
+  asks the same of the user and the panel says which (owner, 2026-11-20).
+- The symbol is an `NSImageView` in the status item's button, since in AppKit only an image view
+  runs SF Symbol effects; Logging in adds the Pulse effect, repeating, and removes it when the
+  state changes, rather than drawing frames by hand, which would imitate what macOS does natively.
+- When several apply, the highest row wins. A dot after the symbol means an update is waiting (see
   Release), in any state.
 - Still valid logins are skipped in every row, so Still valid and no-timer logins alone show the
   No timer at all row.
@@ -514,7 +518,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 | What | API | English, UK region (en_GB) | English, Swedish region (en_SE) |
 |---|---|---|---|
-| Time left (tiles, menu bar, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5h 13m · 14h 5m · 2d 17h |
+| Time left (tiles, notifications) | `Duration.UnitsFormatStyle`, narrow, at most 2 units, rounded down | 5h 13m · 14h 5m · 2d 17h | 5h 13m · 14h 5m · 2d 17h |
 | Time left under a minute (owner, 2026-11-19) | one form everywhere, instead of the "0m" the format style gives | <1m | <1m |
 | Time left (VoiceOver) | `Duration.UnitsFormatStyle`, wide; under a minute, "less than a minute" | 5 hours, 13 minutes | 5 hours, 13 minutes |
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
@@ -559,7 +563,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - The core publishes the running login, the queued logins in order, and this batch's outcomes:
   each finished login and whether it succeeded, failed or was cancelled. Its progress is a
   position and a total; the total counts the logins started and queued in this batch, so it grows
-  when one is added mid-run. Progress reads "1 of 2" in the menu bar and the batch card alike.
+  when one is added mid-run. Progress reads "1 of 2" in the batch card.
 - A failed or timed-out login is reported on its tile, and the queue goes on to the next.
 - A login removed while it is queued leaves the queue, and the total shrinks with it. Removing the
   running login cancels it, and the queue goes on.
@@ -705,12 +709,15 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     SSH session can't reach.
 - Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
   these behaviours are unverified:
+  - The menu bar symbol, an image view rather than the button's own image, which Apple documents
+    as styled for the menu bar, looks right in a light menu bar, over a light wallpaper and on an
+    inactive second display.
   - Hiding the item in System Settings' menu bar settings, as well as ⌘-dragging it out, counts
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
-    `clock.badge.exclamationmark`, `clock.badge.xmark`, `clock.arrow.circlepath` and
-    `exclamationmark.triangle`, and the tiles' and Settings' `timer`, `xmark.circle`,
+    `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
+    tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
     `clock.badge.checkmark`,
     `checkmark.circle`, `questionmark.circle`, `terminal`, `ellipsis`, `gearshape`, `cloud` and
     `square.stack.3d.up`.

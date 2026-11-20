@@ -15,9 +15,9 @@ expires, and logs in to the ones you pick, one after another, when you click.
 
 - **Tracks your logins**: AWS IAM Identity Center sessions (`aws sso login`), Databricks CLI
   profiles (`databricks auth login`), and any other login as a custom login.
-- **Shows the time left** on the soonest-expiring login in the menu bar (`5h 13m`), with another
-  symbol once a login is within its warning time or has expired. The panel has a tile per login,
-  the due ones first.
+- **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
+  symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
+  with its time left, the due ones first.
 - **Warns once** before a login expires, 30 minutes ahead by default. Logins that need it at the
   same time, or while the Mac slept, share one notification, whose Log In button starts them.
 - **Logs in when you click**: a due tile's Log In, Log In to N Due when several are due, a preset
