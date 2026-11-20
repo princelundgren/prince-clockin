@@ -181,46 +181,66 @@ private struct MinutesField: View {
 
 // MARK: General
 
+/// Settings → General: Launch at login, Login timeout, and what removing the menu bar icon does.
+/// The login item's status is read again when the pane appears and when the app becomes active,
+/// since the user can change it in System Settings.
 private struct GeneralSettings: View {
     let appModel: AppModel
-    @State private var launchesAtLogin = false
-    @State private var launchAtLoginError: String?
+    @State private var launchAtLoginStatus = LaunchAtLoginStatus.off
+    @State private var launchAtLoginFailure: LaunchAtLoginFailure?
 
     var body: some View {
+        let launchAtLogin = launchAtLoginSetting(status: launchAtLoginStatus, failure: launchAtLoginFailure)
         Form {
             Section {
-                MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
-            }
-            Section {
-                Toggle("Launch at login", isOn: launchAtLoginBinding)
-                if let launchAtLoginError {
-                    Text(launchAtLoginError)
-                        .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Launch at login", isOn: launchAtLoginBinding(isOn: launchAtLogin.isOn))
+                    switch launchAtLogin.note {
+                    case .needsApproval(let note):
+                        HStack {
+                            SettingsNote(note)
+                            Spacer()
+                            Button("Open…", action: LaunchAtLogin.openLoginItemsSettings)
+                                .controlSize(.small)
+                        }
+                    case .failed(let note):
+                        SettingsNote(note)
+                    case nil:
+                        EmptyView()
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    MinutesField(title: "Login timeout", value: \.loginTimeout, coordinator: appModel.coordinator)
+                    SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
                 }
             }
             Section {
-                Text("Removing the icon from the menu bar quits PrinceClockIn, which stops its timers and notifications.")
-                Text("Custom commands are stored as plain text in the settings file, so they must not contain secrets.")
+                Text(
+                    "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and warnings. "
+                        + "Open PrinceClockIn from Applications to bring it back.")
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(.callout)
         }
         .formStyle(.grouped)
-        .onAppear { launchesAtLogin = LaunchAtLogin.isEnabled }
+        .onAppear { launchAtLoginStatus = LaunchAtLogin.status }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLoginStatus = LaunchAtLogin.status
+        }
     }
 
     /// Reads the system's answer back after each change, since registering can need the user's
     /// approval in System Settings.
-    private var launchAtLoginBinding: Binding<Bool> {
+    private func launchAtLoginBinding(isOn: Bool) -> Binding<Bool> {
         Binding(
-            get: { launchesAtLogin },
+            get: { isOn },
             set: { enabled in
                 do {
                     try LaunchAtLogin.setEnabled(enabled)
-                    launchAtLoginError = nil
+                    launchAtLoginFailure = nil
                 } catch {
-                    launchAtLoginError = error.localizedDescription
+                    launchAtLoginFailure = LaunchAtLoginFailure(turningOn: enabled, reason: error.localizedDescription)
                 }
-                launchesAtLogin = LaunchAtLogin.isEnabled
+                launchAtLoginStatus = LaunchAtLogin.status
             })
     }
 }

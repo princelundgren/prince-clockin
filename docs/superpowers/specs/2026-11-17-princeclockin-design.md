@@ -418,10 +418,12 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   state, Open System Settings…, and, while they're off, "With notifications off, only the menu bar
   shows that a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
-  Settings → General → Login Items." with Open…) and its error state; Login timeout (5 minutes by
-  default; "A login that takes longer than the login timeout is stopped and marked failed."); and
-  "Removing PrinceClockIn's icon from the menu bar quits it, which stops its timers and warnings.
-  Open PrinceClockIn from Applications to bring it back."
+  Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
+  login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
+  the change happened); Login timeout (5 minutes by default; "A login that takes longer than the
+  login timeout is stopped and marked failed."); and "Removing PrinceClockIn's icon from the menu
+  bar quits it, which stops its timers and warnings. Open PrinceClockIn from Applications to bring
+  it back."
 - **About:** the icon, name and version ("v1.0.0 (42)"), "Your command-line logins, before they
   expire.", Check for Updates…, the links Report an Issue…, Website and Third-Party Notices…, and
   "No analytics or crash reports. PrinceClockIn's only connection is the daily update check; the
