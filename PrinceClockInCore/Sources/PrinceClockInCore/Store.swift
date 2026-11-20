@@ -3,7 +3,7 @@ import Foundation
 public enum LoadResult: Equatable, Sendable {
     case loaded(AppState)
     case empty
-    /// The file was unreadable or from a newer version and now lives at `backup`.
+    /// The file was unreadable or from another version and now lives at `backup`.
     case setAside(backup: URL)
 }
 
@@ -17,7 +17,7 @@ public final class StateStore: Sendable {
         self.directory = directory
     }
 
-    /// A missing file gives `.empty`. A file that won't decode, or whose version is newer than
+    /// A missing file gives `.empty`. A file that won't decode, or whose version isn't
     /// `AppState.currentVersion`, is renamed to `state-YYYYMMDD-HHMMSS-<4 hex>.json.bak` and gives
     /// `.setAside`. Every date and session length is rounded down to whole seconds.
     ///

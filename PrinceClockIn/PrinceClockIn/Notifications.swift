@@ -33,10 +33,8 @@ struct SystemNotifier: Notifying {
     }
 
     func postCustomDone(login: Login) async {
-        await post(
-            title: "\(login.displayName) is waiting in Terminal",
-            body: "Finish the login there, then click Done.",
-            category: Self.customDoneCategory, ids: [login.id])
+        let content = customDoneContent(login)
+        await post(title: content.title, body: content.body, category: Self.customDoneCategory, ids: [login.id])
     }
 
     func postSaveFailed(reason: String) async {

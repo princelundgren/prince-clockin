@@ -79,14 +79,19 @@ public enum TileControl: Equatable, Sendable {
 
 /// What a tile shows below its first line, for the user to answer.
 public enum TileDetail: Equatable, Sendable {
-    /// With Try Again and Show Output….
-    case failed(message: String)
+    /// With Try Again and Show Output…, and Open System Settings… for System Settings → Privacy &
+    /// Security → Automation when the failure is a denied permission to control Terminal.
+    case failed(message: String, offersAutomationSettings: Bool = false)
     /// "Logged in elsewhere?", with the confirming button's title and Set Timer….
     case possibleLogin(question: String, confirmTitle: String)
     /// With Edit Session Length….
     case stillValid(message: String)
     /// The command, with Run It and Not Now.
     case notYetApproved(command: String)
+    /// A Databricks login that logged in with no session length and hasn't been invalidated since,
+    /// whether or not the user chose No timer: the prompt, with Set Timer's Session Length pop-up,
+    /// whose length times the timer from that login.
+    case needsSessionLength(prompt: String)
 }
 
 /// One item of a tile's "…" menu, which is also its context menu and its accessibility actions.
@@ -258,7 +263,8 @@ private func detail(
 ) -> TileDetail? {
     switch pending {
     case .activity: return nil
-    case .failure(let failure): return .failed(message: failure.message)
+    case .failure(let failure):
+        return .failed(message: failure.message, offersAutomationSettings: failure == .terminalNotPermitted)
     case .approval(let command): return .notYetApproved(command: command)
     case .possibleLogin(let time, let isFoundOnWake):
         let when = calendar.isDate(time, inSameDayAs: now)
@@ -268,6 +274,10 @@ private func detail(
         return .possibleLogin(
             question: "Its login changed \(changed). Was that you?", confirmTitle: "Mark as Logged In \(when)")
     case nil:
+        if case .databricksProfile = login.kind, login.loginTime != nil, login.sessionLength == nil,
+           !isInvalidated(login) {
+            return .needsSessionLength(prompt: "Choose a session length")
+        }
         guard case .stillValid = timer, let length = login.sessionLength else { return nil }
         return .stillValid(message: "Its \(sessionLengthAdjective(length)) timer ran out, but Databricks says the "
             + "login still works. The session length may be too short.")

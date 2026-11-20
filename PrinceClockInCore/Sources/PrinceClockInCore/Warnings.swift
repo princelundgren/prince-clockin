@@ -50,6 +50,28 @@ private func describe(_ login: Login, now: Date, locale: Locale) -> String {
     }
 }
 
+/// A notification's title and body.
+public struct NotificationText: Equatable, Sendable {
+    public let title: String
+    public let body: String
+
+    public init(title: String, body: String) {
+        self.title = title
+        self.body = body
+    }
+}
+
+/// The notification for custom login `login` waiting for the user's Done. Only a login with a
+/// command mentions Terminal, since one without opens nothing.
+public func customDoneContent(_ login: Login) -> NotificationText {
+    if case .custom(command: nil) = login.kind {
+        NotificationText(title: "\(login.displayName) is waiting for you", body: "Log in your own way, then click Done.")
+    } else {
+        NotificationText(
+            title: "\(login.displayName) is waiting in Terminal", body: "Finish the login there, then click Done.")
+    }
+}
+
 /// The identifiers of the notification buttons the app registers.
 public enum NotificationActionID {
     /// "Log In", on a warning: starts the logins it names.

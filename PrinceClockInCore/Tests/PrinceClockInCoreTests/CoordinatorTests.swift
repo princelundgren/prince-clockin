@@ -570,6 +570,70 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.count == 1)
     }
 
+    @Test func theAccountFlagIsReadFromTheConfigBeforeACheck() async throws {
+        var workspace = databricks("analytics-dev", remaining: 5 * hour)
+        workspace.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)
+        let account = databricks("analytics-account", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [workspace, account])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        try """
+            [analytics-dev]
+            host = https://example.cloud.databricks.com
+            account_id = 00000000-0000-0000-0000-000000000000
+            workspace_id = 1234567890123456
+            auth_type = databricks-cli
+            [analytics-account]
+            host = https://example.cloud.databricks.com
+            account_id = 00000000-0000-0000-0000-000000000000
+            auth_type = databricks-cli
+            """.write(to: fixture.configPaths.databricksConfig, atomically: true, encoding: .utf8)
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev"])
+        #expect(fixture.stored?.logins.map(\.kind) == [
+            .databricksProfile(name: "analytics-dev", accountLevel: false),
+            .databricksProfile(name: "analytics-account", accountLevel: true),
+        ])
+    }
+
+    @Test func theAccountFlagIsReadFromTheConfigAtLaunch() async throws {
+        var workspace = databricks("analytics-dev", remaining: 5 * hour)
+        workspace.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)
+        let fixture = try Fixture(logins: [workspace])
+        try """
+            [analytics-dev]
+            host = https://example.cloud.databricks.com
+            workspace_id = 1234567890123456
+            auth_type = databricks-cli
+            """.write(to: fixture.configPaths.databricksConfig, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        #expect(coordinator.login(workspace.id)?.kind == .databricksProfile(name: "analytics-dev", accountLevel: false))
+        #expect(fixture.stored?.logins.first?.kind == .databricksProfile(name: "analytics-dev", accountLevel: false))
+    }
+
+    @Test func aProfileMissingFromTheConfigKeepsItsAccountFlag() async throws {
+        var account = databricks("analytics-account", remaining: 5 * hour)
+        account.kind = .databricksProfile(name: "analytics-account", accountLevel: true)
+        let fixture = try Fixture(logins: [account])
+        try """
+            [analytics-dev]
+            host = https://example.cloud.databricks.com
+            auth_type = databricks-cli
+            """.write(to: fixture.configPaths.databricksConfig, atomically: true, encoding: .utf8)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        #expect(coordinator.login(account.id)?.kind == .databricksProfile(name: "analytics-account", accountLevel: true))
+        #expect(fixture.checkRunner.calls.isEmpty)
+    }
+
     // MARK: Logging in
 
     @Test func logInKeepsOrder() async throws {

@@ -191,7 +191,8 @@ public final class Coordinator {
     }
 
     /// Starts applying the queue's events and feeding it commands, takes every AWS session's
-    /// baseline, and begins resolving the login shell's `PATH` without waiting for it. Runs once.
+    /// baseline, begins resolving the login shell's `PATH` without waiting for it, and reads which
+    /// Databricks logins are account profiles from the config file. Runs once.
     public func start() async {
         guard !isStarted else { return }
         isStarted = true
@@ -214,6 +215,7 @@ public final class Coordinator {
         observeAWSCaches(now: clock())
         saveIfChanged()
         Task { [pathResolver] in _ = await pathResolver.resolvePath() }
+        await rereadAccountLevels()
     }
 
     /// Reads the AWS cache files, takes and saves the warnings due, checks the Databricks logins
@@ -511,16 +513,33 @@ public final class Coordinator {
         }
     }
 
-    /// Checks `logins` one at a time and applies each answer. Skipped checks change nothing.
+    /// Checks `logins` one at a time and applies each answer, after reading which are account
+    /// profiles from the config file. Skipped checks change nothing.
     private func check(_ logins: [Login], now: Date) async {
         guard !logins.isEmpty else { return }
         runningChecks += 1
         defer { runningChecks -= 1 }
-        for login in logins {
+        await rereadAccountLevels()
+        for login in logins.compactMap({ login($0.id) }) {
             guard case .databricksProfile(let profile, let accountLevel) = login.kind else { continue }
             let check = await checker.check(
                 profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
             if let result = check.result { model.apply(result, login: login.id, now: now) }
+        }
+        saveIfChanged()
+    }
+
+    /// Sets each tracked Databricks login's account flag to what the config file says now, and
+    /// saves. A profile the file no longer offers keeps its flag.
+    private func rereadAccountLevels() async {
+        let profiles = await Self.discover(in: configPaths).databricks
+        for profile in profiles {
+            for index in model.state.logins.indices {
+                guard case .databricksProfile(profile.name, let accountLevel) = model.state.logins[index].kind,
+                      accountLevel != profile.accountLevel
+                else { continue }
+                model.state.logins[index].kind = .databricksProfile(name: profile.name, accountLevel: profile.accountLevel)
+            }
         }
         saveIfChanged()
     }

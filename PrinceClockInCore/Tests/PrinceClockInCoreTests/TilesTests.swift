@@ -274,6 +274,16 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             == .failed(message: "aws not found on your login shell's PATH"))
     }
 
+    @Test func onlyADeniedTerminalPermissionOffersAutomationSettings() {
+        let vpn = Login(displayName: "vpn", kind: .custom(command: "vpn-login"), sessionLength: 8 * hour)
+
+        #expect(tile(vpn, facts: TileFacts(failure: .terminalNotPermitted)).detail == .failed(
+            message: "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation",
+            offersAutomationSettings: true))
+        #expect(tile(vpn, facts: TileFacts(failure: .terminalFailed("Terminal couldn't be started"))).detail
+            == .failed(message: "Terminal couldn't be started", offersAutomationSettings: false))
+    }
+
     @Test func aPossibleLoginAsksWithItsTime() {
         let dev = login(remaining: 10 * minute, now: now)
         let changed = at("2026-11-19T13:02:00Z")
@@ -315,6 +325,50 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
     @Test func aStillValidTileSaysItsSessionLengthMayBeTooShort() {
         #expect(tile(stillValid(checkedAt: now)).detail == .stillValid(
             message: "Its 1-day timer ran out, but Databricks says the login still works. The session length may be too short."))
+    }
+
+    @Test func aDatabricksLoginWithNoSessionLengthAsksForIt() {
+        var loggedIn = noTimer()
+        loggedIn.loginTime = now.addingTimeInterval(-hour)
+
+        let asking = tile(loggedIn)
+
+        #expect(asking.detail == .needsSessionLength(prompt: "Choose a session length"))
+        #expect(asking.trailing == .stateWord("No timer"))
+    }
+
+    @Test func aDatabricksAccountProfileWithNoSessionLengthAsksForItToo() {
+        var account = Login(displayName: "analytics-account", kind: .databricksProfile(name: "analytics-account", accountLevel: true))
+        account.loginTime = now.addingTimeInterval(-hour)
+
+        #expect(tile(account).detail == .needsSessionLength(prompt: "Choose a session length"))
+    }
+
+    @Test func aStoredSessionLengthEndsTheAsk() {
+        var timed = noTimer()
+        timed.loginTime = now.addingTimeInterval(-hour)
+        timed.sessionLength = 72 * hour
+
+        #expect(tile(timed).detail == nil)
+    }
+
+    @Test func anInvalidatedDatabricksLoginDoesNotAskForItsSessionLength() {
+        var invalid = noTimer()
+        invalid.loginTime = now.addingTimeInterval(-hour)
+        invalid.invalidatedAt = now.addingTimeInterval(-60)
+
+        #expect(tile(invalid).detail == nil)
+    }
+
+    @Test func onlyALoggedInDatabricksLoginAsksForItsSessionLength() {
+        var custom = Login(displayName: "vpn", kind: .custom(command: nil))
+        custom.loginTime = now.addingTimeInterval(-hour)
+        var failed = noTimer()
+        failed.loginTime = now.addingTimeInterval(-hour)
+
+        #expect(tile(noTimer()).detail == nil)
+        #expect(tile(custom).detail == nil)
+        #expect(tile(failed, facts: TileFacts(failure: .timedOut)).detail == .failed(message: "The login timed out"))
     }
 
     @Test func aCommandNotYetApprovedIsShown() {

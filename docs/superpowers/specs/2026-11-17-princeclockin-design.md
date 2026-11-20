@@ -88,7 +88,10 @@ and a timer. The kinds are:
   the timer stays unknown until the user enters the length once. Profiles using other auth types
   (personal access tokens, `azure-cli`, machine-to-machine) aren't offered; the user can add one
   as a custom login. A profile for the account rather than a workspace is a **Databricks account
-  profile**.
+  profile**: one with a `host` and an `account_id` but no `workspace_id` (or `workspace_id = none`),
+  as the Databricks CLI tells them apart, since a workspace profile can hold an `account_id` too.
+  The app reads this from the config file again at launch and before each check (owner,
+  2026-11-20); a profile no longer in the file keeps what was last read.
 - **Custom login**: for any other login (Azure, Okta and so on), with a session length the user
   sets. It can carry a command, which opens in a Terminal window so the user can type passwords,
   MFA codes or choices; the timer starts when the user clicks Done (owner, 2026-11-17). Without a
@@ -336,6 +339,7 @@ Discovery reads the config files again on each opening; while it runs, no earlie
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
     timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
+    A denied permission to control Terminal also offers Open System Settings… (see Running logins).
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02 and Set Timer…. A question the first check after the Mac wakes raises says "…at 07:48,
     while this Mac slept.", 07:48 being the file's change time, for as long as it asks (owner,
@@ -345,6 +349,9 @@ Discovery reads the config files again on each opening; while it runs, no earlie
     "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
+  - **Session length:** a Databricks login that logged in with no session length asks for it (see
+    Running logins), until a length is stored or the login is invalidated. A No timer chosen on
+    purpose keeps it asking (owner, 2026-11-20).
   - **Set Timer**, opened inline in the tile, not as a sheet, since a sheet loses focus with the
     popover: Expires In (hours and minutes) or Logged In At, a Session Length pop-up, a caption
     ("Expires tomorrow at 03:55. The session length times its next login."), Cancel and Set. A
@@ -534,7 +541,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   warning time passed while the app wasn't running is announced once at the next launch, as
   expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
-- A custom login waiting for Done posts a notification with a Done action.
+- A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
+  Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
+  "vpn is waiting for you" and "Log in your own way, then click Done."
 - A failed save posts a notification (see Panel).
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.
@@ -562,7 +571,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
   (checked by the owner, 2026-11-17).
 - A Databricks login run with no session length records its login time; its tile stays No timer
-  and asks for the session length inline, as Set Timer does, and the timer counts from that login.
+  and asks for the session length inline, as Set Timer does ("Choose a session length" over Set
+  Timer's Session Length pop-up), and the timer counts from that login.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.
@@ -584,9 +594,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   executes. The command is passed as the parameter of a handler in a constant, compiled script, so
   it is never quoted into script source. The app launches Terminal first, then asks for the
   Automation permission off the main thread. A denied permission fails the login: its tile says
-  Failed, with a message that says where to allow it and Open System Settings…, and the queue goes
-  on. This was chosen over quoting the command into script source, and over `osascript`, whose
-  permission would be asked for on behalf of a different process.
+  Failed, with a message that says where to allow it and Open System Settings…, which opens System
+  Settings → Privacy & Security → Automation, and the queue goes on. This was chosen over quoting
+  the command into script source, and over `osascript`, whose permission would be asked for on
+  behalf of a different process.
 
 ### Platform
 
@@ -602,10 +613,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last warning was for (so a relaunch doesn't warn twice), for Databricks,
-  whether the profile is account-level, the time and result of its last check and of its last
-  answer (valid or invalid), and, for AWS,
-  the cache file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
-- A file that is unreadable, or from a newer version, is set aside beside it and the app starts
+  whether the profile is account-level (as last read from its config), the time and result of
+  its last check and of its last answer (valid or invalid), and, for AWS, the cache file's
+  last-seen modified and `expiresAt` times. Fingerprints are never stored.
+- A file that is unreadable, or from another version, is set aside beside it and the app starts
   empty. A save that fails keeps the state in memory until the core's `retrySave()` or the next
   change saves it.
 - Bundle ID `com.princelundgren.princeclockin`.

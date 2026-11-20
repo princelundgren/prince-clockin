@@ -2,9 +2,9 @@ import AppKit
 import Carbon
 import PrinceClockInCore
 
-/// Why Terminal couldn't be given a custom login's command.
+/// Why Terminal couldn't be given a custom login's command, other than a denied permission, which
+/// is the core's `TerminalNotPermitted`.
 enum TerminalOpenerError: LocalizedError {
-    case notPermitted
     case notStarted
     case permissionCheckFailed(OSStatus)
     case scriptNotCompiled
@@ -12,8 +12,6 @@ enum TerminalOpenerError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notPermitted:
-            "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation"
         case .notStarted:
             "Terminal couldn't be started"
         case .permissionCheckFailed(let status):
@@ -51,7 +49,7 @@ struct TerminalOpener: TerminalOpening {
         try await Self.launchTerminal()
         switch await Self.automationPermission() {
         case noErr: try await Self.run(command)
-        case OSStatus(errAEEventNotPermitted): throw TerminalOpenerError.notPermitted
+        case OSStatus(errAEEventNotPermitted): throw TerminalNotPermitted()
         case OSStatus(procNotFound): throw TerminalOpenerError.notStarted
         case let status: throw TerminalOpenerError.permissionCheckFailed(status)
         }
@@ -90,7 +88,7 @@ struct TerminalOpener: TerminalOpening {
         _ = script.executeAppleEvent(handlerCallEvent(handler: handlerName, argument: command), error: &errorInfo)
         guard let errorInfo else { return }
         let number = (errorInfo[NSAppleScript.errorNumber] as? Int) ?? 0
-        if number == Int(errAEEventNotPermitted) { throw TerminalOpenerError.notPermitted }
+        if number == Int(errAEEventNotPermitted) { throw TerminalNotPermitted() }
         throw TerminalOpenerError.scriptFailed(number)
     }
 }

@@ -104,8 +104,8 @@ private final class FakeTerminal: TerminalOpening, @unchecked Sendable {
     }
 }
 
-private struct TerminalDenied: LocalizedError {
-    var errorDescription: String? { "Not authorized to send Apple events to Terminal." }
+private struct TerminalNotStarted: LocalizedError {
+    var errorDescription: String? { "Terminal couldn't be started" }
 }
 
 private final class StepLog: @unchecked Sendable {
@@ -421,7 +421,7 @@ private final class StepLog: @unchecked Sendable {
     @Test func terminalFailureIsReported() async throws {
         let directory = try makeCLIDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let terminal = FakeTerminal(failure: TerminalDenied())
+        let terminal = FakeTerminal(failure: TerminalNotStarted())
         let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
         var events = EventReader(queue)
         let custom = customLogin(command: "az login")
@@ -431,7 +431,25 @@ private final class StepLog: @unchecked Sendable {
         #expect(await events.throughFinished() == [
             .queued(ids: [custom.id], total: 1),
             .started(id: custom.id, position: 1, total: 1),
-            .failed(id: custom.id, reason: .terminalFailed("Not authorized to send Apple events to Terminal.")),
+            .failed(id: custom.id, reason: .terminalFailed("Terminal couldn't be started")),
+            .finished,
+        ])
+    }
+
+    @Test func aDeniedTerminalPermissionIsItsOwnFailure() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let terminal = FakeTerminal(failure: TerminalNotPermitted())
+        let queue = makeQueue(runner: succeedingRunner(), terminal: terminal, path: directory)
+        var events = EventReader(queue)
+        let custom = customLogin(command: "az login")
+
+        await queue.enqueue([custom], timeout: timeout)
+
+        #expect(await events.throughFinished() == [
+            .queued(ids: [custom.id], total: 1),
+            .started(id: custom.id, position: 1, total: 1),
+            .failed(id: custom.id, reason: .terminalNotPermitted),
             .finished,
         ])
     }
@@ -812,4 +830,6 @@ private final class StepLog: @unchecked Sendable {
     #expect(LoginFailure.cancelled.message == "Cancelled")
     #expect(LoginFailure.launchFailed("aws: permission denied").message == "aws: permission denied")
     #expect(LoginFailure.terminalFailed("Terminal couldn't be started").message == "Terminal couldn't be started")
+    #expect(LoginFailure.terminalNotPermitted.message
+        == "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation")
 }

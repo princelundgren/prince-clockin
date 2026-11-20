@@ -43,6 +43,37 @@ import PrinceClockInCore
         ])
     }
 
+    @Test func anAccountProfileHasAHostAndAnAccountIDButNoWorkspaceID() {
+        let config = """
+            [analytics-dev]
+            host = https://example.cloud.databricks.com
+            account_id = 00000000-0000-0000-0000-000000000000
+            workspace_id = 1234567890123456
+            auth_type = databricks-cli
+
+            [analytics-account]
+            host = https://example.cloud.databricks.com
+            account_id = 00000000-0000-0000-0000-000000000000
+            auth_type = databricks-cli
+
+            [analytics-skipped]
+            host = https://example.cloud.databricks.com
+            account_id = 00000000-0000-0000-0000-000000000000
+            workspace_id = none
+            auth_type = databricks-cli
+
+            [no-host]
+            account_id = 00000000-0000-0000-0000-000000000000
+            auth_type = databricks-cli
+            """
+        #expect(discoverDatabricksProfiles(configText: config) == [
+            DatabricksProfile(name: "analytics-dev", accountLevel: false),
+            DatabricksProfile(name: "analytics-account", accountLevel: true),
+            DatabricksProfile(name: "analytics-skipped", accountLevel: true),
+            DatabricksProfile(name: "no-host", accountLevel: false),
+        ])
+    }
+
     @Test func missingConfigGivesEmpty() {
         #expect(discoverAWSSessions(configText: nil).isEmpty)
         #expect(discoverDatabricksProfiles(configText: nil).isEmpty)
