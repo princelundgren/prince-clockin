@@ -426,7 +426,7 @@ private final class GatedLogins: Sendable {
         fixture.clock.advance(by: 360)
         await coordinator.tick(calendar: utc)
 
-        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile=analytics-dev"]])
         #expect(fixture.notifier.expiryNotifications.isEmpty)
     }
 
@@ -504,7 +504,7 @@ private final class GatedLogins: Sendable {
         fixture.clock.advance(by: 10 * 60)
         await coordinator.tick(calendar: utc)
 
-        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile=analytics-dev"]])
         #expect(fixture.notifier.expiryNotifications.isEmpty)
         let checked = try #require(coordinator.login(expired.id))
         #expect(isStillValid(checked, now: fixture.clock.read()))
