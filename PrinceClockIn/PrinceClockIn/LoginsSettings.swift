@@ -36,7 +36,13 @@ struct LoginsSettings: View {
                 }
                 .frame(minHeight: 160)
                 .accessibilityLabel("Logins")
-                listButtons
+                VStack(alignment: .leading, spacing: 4) {
+                    listButtons
+                    SettingsNote(addLoginsNote)
+                    Link("Setup Guide", destination: AppLinks.setupGuide)
+                        .font(.caption)
+                        .foregroundStyle(Color("Link"))
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     DurationPopUp(
                         title: "Login timeout", listed: listedLoginTimeouts, value: \.loginTimeout,
