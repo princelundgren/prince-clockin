@@ -25,20 +25,20 @@ public enum DatabricksCheck: Equatable, Sendable {
 }
 
 /// Asks the Databricks CLI whether a profile still has a usable login. Runs
-/// `databricks current-user me --profile <name>`, never `auth token`, which prints a token.
+/// `databricks current-user me --profile=<name>`, never `auth token`, which prints a token.
 public actor DatabricksChecker {
     /// What the CLI prints when it holds no usable credentials for the profile.
     private static let authFailure = "error getting token: cache: no cached credentials"
 
     private let runner: ProcessRunning
-    private let pathResolver: ShellPathResolver
+    private let pathResolver: any PathResolving
     private let clock: @Sendable () -> Date
     private let minInterval: TimeInterval
     private let timeout: TimeInterval
     private var lastCheck: [String: Date] = [:]
 
     public init(
-        runner: ProcessRunning, pathResolver: ShellPathResolver,
+        runner: ProcessRunning, pathResolver: any PathResolving,
         clock: @escaping @Sendable () -> Date = Date.init,
         minInterval: TimeInterval = 300, timeout: TimeInterval = 30
     ) {
@@ -51,27 +51,38 @@ public actor DatabricksChecker {
 
     /// `.valid` on exit 0 and `.invalid` on the CLI's no-credentials error; any other failure is
     /// `.couldntCheck`, so an offline or VPN-down failure never reads as invalid. Only a check that
-    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`.
-    public func check(profile: String, accountLevel: Bool, loginRunning: Bool) async -> DatabricksCheck {
+    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`, as does
+    /// `lastAnswerAt`, the stored time of the profile's last valid or invalid answer, so the
+    /// interval holds across launches. A `lastAnswerAt` after the clock's time is ignored, so a
+    /// clock set back never blocks checks until it catches up.
+    public func check(
+        profile: String, accountLevel: Bool, loginRunning: Bool, lastAnswerAt: Date? = nil
+    ) async -> DatabricksCheck {
         guard !accountLevel, !loginRunning else { return .skipped }
         let now = clock()
-        if let last = lastCheck[profile], now.timeIntervalSince(last) < minInterval { return .skipped }
+        let storedAnswer = lastAnswerAt.flatMap { $0 <= now ? $0 : nil }
+        if let last = [lastCheck[profile], storedAnswer].compactMap({ $0 }).max(),
+           now.timeIntervalSince(last) < minInterval
+        {
+            return .skipped
+        }
         // Reserved before the first await: the actor is reentrant, so a second call arriving while
         // this one waits would otherwise pass the interval check too.
         let previousCheck = lastCheck[profile]
         lastCheck[profile] = now
-        guard let executable = await pathResolver.locate("databricks") else {
+        let path = await pathResolver.resolvePath()
+        guard let executable = path.locate("databricks") else {
             lastCheck[profile] = previousCheck
             return .couldntCheck
         }
-        let environment = await pathResolver.childEnvironment(base: ProcessInfo.processInfo.environment)
+        let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.run(
-            executable: executable, arguments: ["current-user", "me", "--profile", profile],
+            executable: executable, arguments: ["current-user", "me", "--profile=\(profile)"],
             environment: environment, timeout: .seconds(timeout))
         switch outcome {
         case .exited(0, _): return .valid
         case .exited(_, let output): return output.contains(Self.authFailure) ? .invalid : .couldntCheck
-        case .timedOut: return .couldntCheck
+        case .timedOut, .signalled: return .couldntCheck
         case .cancelled, .launchFailed:
             lastCheck[profile] = previousCheck
             return .couldntCheck

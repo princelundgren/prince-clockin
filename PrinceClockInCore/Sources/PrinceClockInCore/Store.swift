@@ -3,7 +3,7 @@ import Foundation
 public enum LoadResult: Equatable, Sendable {
     case loaded(AppState)
     case empty
-    /// The file was unreadable or from another version and now lives at `backup`.
+    /// The file was unreadable or of a version this build can't read, and now lives at `backup`.
     case setAside(backup: URL)
 }
 
@@ -17,9 +17,11 @@ public final class StateStore: Sendable {
         self.directory = directory
     }
 
-    /// A missing file gives `.empty`. A file that won't decode, or whose version isn't
-    /// `AppState.currentVersion`, is renamed to `state-YYYYMMDD-HHMMSS-<4 hex>.json.bak` and gives
-    /// `.setAside`. Every date and session length is rounded down to whole seconds.
+    /// A missing file gives `.empty`. A version-1 file loads as the current version, and the file
+    /// stays as it is until the next `save`. A file that won't decode, or whose version is neither 1
+    /// nor `AppState.currentVersion`, is renamed to `state-YYYYMMDD-HHMMSS-<4 hex>.json.bak` and
+    /// gives `.setAside`. Every date and session length is rounded down to whole seconds, and a
+    /// session length `checkedSessionLength` refuses, such as one under a minute, is made unknown.
     ///
     /// If the rename itself fails, the directory isn't writable and `save` would fail the same way,
     /// so the result is `.empty`.
@@ -29,10 +31,39 @@ public final class StateStore: Sendable {
         }
         struct Header: Decodable { let version: Int }
         guard let header = try? Self.makeDecoder().decode(Header.self, from: data),
-              header.version == AppState.currentVersion,
-              let state = try? Self.makeDecoder().decode(AppState.self, from: data)
+              let current = Self.inCurrentFormat(data, version: header.version),
+              let state = try? Self.makeDecoder().decode(AppState.self, from: current)
         else { return setAside() }
-        return .loaded(state.roundedToWholeSeconds())
+        return .loaded(state.roundedToWholeSeconds().withRefusedSessionLengthsUnknown())
+    }
+
+    /// `data`, a file of format `version`, in the current format; `nil` for a version this build
+    /// can't read.
+    private static func inCurrentFormat(_ data: Data, version: Int) -> Data? {
+        switch version {
+        case AppState.currentVersion: data
+        case 1: upgradedFromVersion1(data)
+        default: nil
+        }
+    }
+
+    /// Version 1 differs from version 2 only in two key names: a login's `warnedForExpiry` and the
+    /// settings' `warningLeadTime`.
+    private static func upgradedFromVersion1(_ data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        if var settings = root["settings"] as? [String: Any] {
+            settings["notificationLeadTime"] = settings.removeValue(forKey: "warningLeadTime")
+            root["settings"] = settings
+        }
+        if let logins = root["logins"] as? [[String: Any]] {
+            root["logins"] = logins.map { login in
+                var login = login
+                login["notifiedForExpiry"] = login.removeValue(forKey: "warnedForExpiry")
+                return login
+            }
+        }
+        root["version"] = AppState.currentVersion
+        return try? JSONSerialization.data(withJSONObject: root)
     }
 
     /// Writes atomically, creating the directory if needed. Times and session lengths are rounded

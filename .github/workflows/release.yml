@@ -8,7 +8,8 @@ on:
 
 permissions: {}
 
-# One group for every tag, so two releases can't race to write the appcast.
+# One group for every tag, so only one release runs at a time and two can't race to write the
+# appcast. A run still waiting for the group is cancelled when a newer tag's run joins it.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -59,6 +60,17 @@ jobs:
         run: |
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::$TAG points at $GITHUB_SHA, which isn't on main"
+            exit 1
+          fi
+
+      # Sparkle compares only the build number, the run number, so an older tag pushed late would
+      # still reach every user as an update.
+      - name: Check the tag is the highest release
+        if: env.REHEARSAL == 'false'
+        run: |
+          highest="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [[ "$TAG" != "$highest" ]]; then
+            echo "::error::$TAG isn't the highest release tag, $highest is; tag a version above it"
             exit 1
           fi
 
@@ -200,15 +212,23 @@ jobs:
           fi
 
       # The feed lists only this release, which is all Sparkle needs to update anyone.
+      # generate_appcast signs the feed because the app sets SURequireSignedFeed.
       - name: Generate the appcast
         env:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: |
+          sparkle_bin=build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin
           printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
-            | build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            | "$sparkle_bin/generate_appcast" \
               --ed-key-file - --maximum-deltas 0 --download-url-prefix "$UPDATE_URL_PREFIX" "$RELEASE_DIR"
+          # generate_appcast leaves out the DMG's signature, with only a warning, if the key isn't the app's.
           if ! grep -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"; then
             echo "::error::appcast.xml has no sparkle:edSignature"
+            exit 1
+          fi
+          if ! printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
+              | "$sparkle_bin/sign_update" --verify --ed-key-file - "$RELEASE_DIR/appcast.xml"; then
+            echo "::error::appcast.xml has no valid feed signature, which the app requires"
             exit 1
           fi
           cat "$RELEASE_DIR/appcast.xml"

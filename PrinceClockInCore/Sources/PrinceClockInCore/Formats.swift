@@ -1,7 +1,7 @@
 import Foundation
 
 /// Time left for the tiles and notifications: narrow, at most two of days, hours and minutes,
-/// rounded down ("5h 13m" in en_GB; sv_SE joins each number to its unit with U+202F).
+/// rounded down ("5h 13m").
 /// Under a minute it is "<1m" in every locale.
 public func timeLeftText(_ remaining: TimeInterval, locale: Locale) -> String {
     if isUnderAMinute(remaining) { return "<1m" }
@@ -26,15 +26,41 @@ public func clockTimeText(_ date: Date, locale: Locale, calendar: Calendar) -> S
 /// the day ("tomorrow at 03:55"), else the medium date and short time, in `calendar`'s time zone.
 /// Relative to the real clock.
 public func dayAndTimeText(_ date: Date, locale: Locale, calendar: Calendar) -> String {
+    dayAndTimeFormatter(isRelative: true, locale: locale, calendar: calendar).string(from: date)
+}
+
+/// `dayAndTimeText` for after a verb, with "on" ahead of a date ("on 17 Nov 2026 at 23:38") and
+/// nothing ahead of a word for the day ("yesterday at 23:38").
+func dayAndTimeAfterAVerbText(_ date: Date, locale: Locale, calendar: Calendar) -> String {
+    let text = dayAndTimeText(date, locale: locale, calendar: calendar)
+    let dated = dayAndTimeFormatter(isRelative: false, locale: locale, calendar: calendar).string(from: date)
+    return text == dated ? "on \(text)" : text
+}
+
+private func dayAndTimeFormatter(isRelative: Bool, locale: Locale, calendar: Calendar) -> DateFormatter {
     let formatter = DateFormatter()
     formatter.locale = locale
     formatter.calendar = calendar
     formatter.timeZone = calendar.timeZone
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
-    formatter.doesRelativeDateFormatting = true
+    formatter.doesRelativeDateFormatting = isRelative
     formatter.formattingContext = .middleOfSentence
-    return formatter.string(from: date)
+    return formatter
+}
+
+/// A Databricks check, for Settings and the Still valid tile: "Checked 14:02 · valid", with the day
+/// as well when the check wasn't on `now`'s day.
+func databricksCheckText(_ check: DatabricksCheckRecord, now: Date, locale: Locale, calendar: Calendar) -> String {
+    let when = calendar.isDate(check.at, inSameDayAs: now)
+        ? clockTimeText(check.at, locale: locale, calendar: calendar)
+        : dayAndTimeText(check.at, locale: locale, calendar: calendar)
+    let result = switch check.result {
+    case .valid: "valid"
+    case .invalid: "invalid"
+    case .couldntCheck: "couldn't check"
+    }
+    return "Checked \(when) · \(result)"
 }
 
 /// A batch's progress, in its one form ("1 of 2").

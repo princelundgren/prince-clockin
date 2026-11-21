@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// One grouped notification for the logins that entered their notification time.
 public struct ExpiryNotificationContent: Equatable, Sendable {
@@ -16,13 +17,19 @@ public struct ExpiryNotificationContent: Equatable, Sendable {
 
 /// The logins, in the order given, that have reached their notification time and haven't been
 /// notified for their current expiry. That includes ones that expired while the Mac slept or the app
-/// wasn't running. An unknown timer, a login invalidated since its last login time, or a Still
-/// valid login is never notified.
+/// wasn't running. An unknown timer or a Still valid login is never notified, and neither is a
+/// login invalidated since its last login time, unless a check found it invalid at or after its
+/// notification time: that one, held by the working hours, is still owed its notification.
 public func expiryNotificationsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) -> [UUID] {
     logins.filter { login in
-        guard let expiry = expiry(of: login), !isInvalidated(login), !isStillValid(login, now: now)
-        else { return false }
-        return now >= expiry.addingTimeInterval(-leadTime) && login.notifiedForExpiry != expiry
+        guard let expiry = expiry(of: login), !isStillValid(login, now: now) else { return false }
+        let notificationTime = expiry.addingTimeInterval(-leadTime)
+        if isInvalidated(login) {
+            guard login.invalidationReason == .foundInvalid, let invalidatedAt = login.invalidatedAt,
+                  invalidatedAt >= notificationTime
+            else { return false }
+        }
+        return now >= notificationTime && login.notifiedForExpiry != expiry
     }
     .map(\.id)
 }
@@ -80,20 +87,23 @@ public enum NotificationActionID {
     public static let done = "customDone"
 }
 
-/// What the user asked for by pressing a notification's button.
+/// What the user asked for by clicking a notification or one of its buttons.
 public enum NotificationAction: Equatable, Sendable {
     case logIn([UUID])
     case customDone(UUID)
+    /// The notification itself was clicked: the panel opens, with nothing logged in.
+    case openPanel
 }
 
-/// The action for a notification response. Only the "Log In" and "Done" buttons give one: opening
-/// or dismissing the notification gives `nil`, so nothing logs in unasked. Strings that aren't
-/// UUIDs are dropped, and a response left with no login gives `nil`.
+/// The action for a notification response. Clicking the notification itself opens the panel, and
+/// only the "Log In" and "Done" buttons act on logins, so nothing logs in unasked. Dismissing it
+/// gives `nil`. Strings that aren't UUIDs are dropped, and a button left with no login gives `nil`.
 public func notificationAction(actionIdentifier: String, loginIDs: [String]) -> NotificationAction? {
     let ids = loginIDs.compactMap(UUID.init(uuidString:))
     switch actionIdentifier {
     case NotificationActionID.logIn: return ids.isEmpty ? nil : .logIn(ids)
     case NotificationActionID.done: return ids.first.map(NotificationAction.customDone)
+    case UNNotificationDefaultActionIdentifier: return .openPanel
     default: return nil
     }
 }

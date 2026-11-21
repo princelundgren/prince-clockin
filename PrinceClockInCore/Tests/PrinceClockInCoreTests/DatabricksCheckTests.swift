@@ -15,6 +15,22 @@ private final class TestClock: @unchecked Sendable {
     func read() -> Date { lock.withLock { now } }
 }
 
+/// A resolver that answers `path` and counts how often it was asked.
+private final class CountingResolver: PathResolving, @unchecked Sendable {
+    private let lock = NSLock()
+    private let path: ResolvedPath
+    private var calls = 0
+
+    init(_ path: ResolvedPath) { self.path = path }
+
+    var count: Int { lock.withLock { calls } }
+
+    func resolvePath() async -> ResolvedPath {
+        lock.withLock { calls += 1 }
+        return path
+    }
+}
+
 /// A checker whose `databricks` is found in a temporary directory and whose runs `respond` answers.
 private func makeChecker(
     clock: TestClock = TestClock(at("2026-11-17T09:00:00Z")),
@@ -32,8 +48,14 @@ private func makeChecker(
     @Test func databricksExitZeroIsValid() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
-        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile", "dev"])
+        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile=dev"])
         #expect(runner.calls[0].timeout == .seconds(30))
+    }
+
+    @Test func aProfileNameStartingWithADashStaysJoinedToItsFlag() async throws {
+        let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
+        _ = await checker.check(profile: "-h", accountLevel: false, loginRunning: false)
+        #expect(runner.calls[0].arguments == ["current-user", "me", "--profile=-h"])
     }
 
     @Test func databricksSkipsWithinInterval() async throws {
@@ -46,6 +68,28 @@ private func makeChecker(
         clock.advance(by: 1)
         #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
         #expect(runner.calls.count == 2)
+    }
+
+    @Test func aStoredAnswerHoldsTheIntervalAfterARelaunch() async throws {
+        let clock = TestClock(at("2026-11-17T09:00:00Z"))
+        let (checker, runner) = try makeChecker(clock: clock) { _ in .exited(code: 0, output: "") }
+        let answeredAt = at("2026-11-17T08:55:01Z")
+        #expect(await checker.check(
+            profile: "dev", accountLevel: false, loginRunning: false, lastAnswerAt: answeredAt) == .skipped)
+        #expect(runner.calls.isEmpty)
+        clock.advance(by: 1)
+        #expect(await checker.check(
+            profile: "dev", accountLevel: false, loginRunning: false, lastAnswerAt: answeredAt) == .valid)
+        #expect(runner.calls.count == 1)
+    }
+
+    @Test func aStoredAnswerAfterTheClocksTimeIsIgnored() async throws {
+        let clock = TestClock(at("2026-11-17T09:00:00Z"))
+        let (checker, runner) = try makeChecker(clock: clock) { _ in .exited(code: 0, output: "") }
+        let answeredAt = at("2026-11-17T09:02:00Z")
+        #expect(await checker.check(
+            profile: "dev", accountLevel: false, loginRunning: false, lastAnswerAt: answeredAt) == .valid)
+        #expect(runner.calls.count == 1)
     }
 
     @Test func databricksSkipsWhileLoginRunning() async throws {
@@ -111,7 +155,7 @@ private func makeChecker(
     @Test func databricksChecksOneProfileOnly() async throws {
         let (checker, runner) = try makeChecker { _ in .exited(code: 0, output: "") }
         _ = await checker.check(profile: "dev", accountLevel: false, loginRunning: false)
-        #expect(runner.calls[0].arguments.filter { $0 == "--profile" }.count == 1)
+        #expect(runner.calls[0].arguments.filter { $0.hasPrefix("--profile") }.count == 1)
         #expect(runner.calls[0].arguments.contains("token") == false)
     }
 
@@ -130,6 +174,17 @@ private func makeChecker(
         let results = await [first, second]
         #expect(results.contains(.valid) && results.contains(.skipped))
         #expect(runner.calls.count == 1)
+    }
+
+    @Test func aCheckResolvesThePathOnce() async throws {
+        let bin = try makeTemporaryDirectory()
+        try makeExecutable(named: "databricks", in: bin)
+        let resolver = CountingResolver(ResolvedPath(directories: [bin], fromShell: false))
+        let runner = FakeRunner { _ in .exited(code: 0, output: "") }
+        let checker = DatabricksChecker(runner: runner, pathResolver: resolver)
+        #expect(await checker.check(profile: "dev", accountLevel: false, loginRunning: false) == .valid)
+        #expect(resolver.count == 1)
+        #expect(runner.calls[0].environment["PATH"] == bin.path)
     }
 
     @Test func databricksNotOnPathIsCouldntCheckAndLeavesTheIntervalFree() async {

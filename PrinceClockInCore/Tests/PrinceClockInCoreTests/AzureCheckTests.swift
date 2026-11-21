@@ -84,6 +84,18 @@ private let signInAgainCodes = [
         #expect(call.timeout == .seconds(30))
     }
 
+    @Test func aStoredAnswerHoldsTheIntervalAcrossLaunches() async throws {
+        let clock = TestClock(at("2026-11-17T09:00:00Z"))
+        let (checker, runner) = try makeChecker(clock: clock) { _ in .exited(code: 0, output: "") }
+        let answeredAt = at("2026-11-17T08:55:01Z")
+
+        #expect(await checker.check(account: dev, loginRunning: false, lastAnswerAt: answeredAt) == .skipped)
+        #expect(runner.calls.isEmpty)
+        clock.advance(by: 1)
+        #expect(await checker.check(account: dev, loginRunning: false, lastAnswerAt: answeredAt) == .valid)
+        #expect(runner.calls.count == 1)
+    }
+
     @Test func theTrackedUserActiveRunsTheCheck() async throws {
         let differentCase = AzureAccount(user: "Dev@Example.com", tenant: tenant)
         let (checker, runner) = try makeChecker(profile: profile([ops, differentCase], defaultUser: differentCase.user)) { _ in

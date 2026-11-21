@@ -2,7 +2,7 @@ import Foundation
 
 /// One `[name]` section of an INI file with its `key = value` pairs.
 public struct INISection: Equatable, Sendable {
-    /// The text between the brackets, trimmed, such as `sso-session dev`.
+    /// The text between the `[` and the line's last `]`, trimmed, such as `sso-session dev`.
     public let name: String
     /// The section's keys and values, trimmed. A repeated key keeps its last value.
     public let values: [String: String]
@@ -17,6 +17,8 @@ public struct INISection: Equatable, Sendable {
 ///
 /// Comment lines (`#`, `;`), blank lines and lines that are neither a section header nor
 /// `key = value` are skipped, as are pairs before the first header and after a malformed header.
+/// A header ends at the line's last `]` and any text after it, such as a comment, is ignored, as in
+/// both CLIs' readers. A line starting with `[` and holding no `]` is a malformed header.
 /// As in Python's `configparser`, a line indented deeper than the key before it continues that
 /// key's value (AWS's nested `s3 =` blocks) and is skipped, so nested keys never leak into the
 /// section. A leading UTF-8 BOM is ignored.
@@ -43,8 +45,8 @@ public func parseINI(_ text: String, stripInlineComments: Bool = false) -> [INIS
 
         if line.hasPrefix("[") {
             closeSection()
-            if line.hasSuffix("]") {
-                name = line.dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
+            if let close = line.lastIndex(of: "]") {
+                name = line[line.index(after: line.startIndex)..<close].trimmingCharacters(in: .whitespaces)
             }
             continue
         }

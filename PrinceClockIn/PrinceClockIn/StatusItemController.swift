@@ -32,6 +32,11 @@ final class StatusItemController: NSObject {
 
     var button: NSStatusBarButton? { statusItem.button }
 
+    /// Puts the item back in the menu bar if it isn't shown there.
+    func makeVisible() {
+        statusItem.isVisible = true
+    }
+
     init(
         coordinator: Coordinator, updater: Updater, togglePanel: @escaping () -> Void,
         openSettings: @escaping () -> Void

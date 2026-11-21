@@ -218,20 +218,44 @@ public struct Settings: Codable, Equatable, Sendable {
 
     /// Seconds before expiry at which a login counts as expiring.
     public var notificationLeadTime: TimeInterval
-    /// Seconds a login may wait on the user before it is ended.
+    /// Seconds a login may wait on the user before it is ended, as stored; logins run with
+    /// `appliedLoginTimeout`.
     public var loginTimeout: TimeInterval
+    /// When expiry notifications may be sent.
+    public var workingHours: WorkingHours
+
+    /// The login timeouts a login runs with: from the shortest the pop-up lists to a day, which
+    /// covers any time Settings has stored.
+    public static let loginTimeoutRange: ClosedRange<TimeInterval> = 2 * 60...24 * 60 * 60
+
+    /// The timeout a login runs with: `loginTimeout` held within `loginTimeoutRange`, or the
+    /// default when it isn't a finite number. The stored value is left as it is.
+    public var appliedLoginTimeout: TimeInterval {
+        guard loginTimeout.isFinite else { return Settings.defaultLoginTimeout }
+        return min(max(loginTimeout, Settings.loginTimeoutRange.lowerBound), Settings.loginTimeoutRange.upperBound)
+    }
 
     public init(
         notificationLeadTime: TimeInterval = Settings.defaultNotificationLeadTime,
-        loginTimeout: TimeInterval = Settings.defaultLoginTimeout
+        loginTimeout: TimeInterval = Settings.defaultLoginTimeout,
+        workingHours: WorkingHours = WorkingHours()
     ) {
         self.notificationLeadTime = notificationLeadTime
         self.loginTimeout = loginTimeout
+        self.workingHours = workingHours
+    }
+
+    /// A file written before working hours existed has none, and reads as working hours off.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        notificationLeadTime = try container.decode(TimeInterval.self, forKey: .notificationLeadTime)
+        loginTimeout = try container.decode(TimeInterval.self, forKey: .loginTimeout)
+        workingHours = try container.decodeIfPresent(WorkingHours.self, forKey: .workingHours) ?? WorkingHours()
     }
 }
 
 public struct AppState: Codable, Equatable, Sendable {
-    /// The file-format version this build reads and writes.
+    /// The file-format version this build writes. `StateStore.load` also reads version 1.
     public static let currentVersion = 2
 
     public var version = AppState.currentVersion
@@ -249,6 +273,16 @@ public struct AppState: Codable, Equatable, Sendable {
     func roundedToWholeSeconds() -> AppState {
         var state = self
         state.logins = logins.map { $0.roundedToWholeSeconds() }
+        return state
+    }
+
+    /// The same state with every session length that `checkedSessionLength` refuses made unknown.
+    func withRefusedSessionLengthsUnknown() -> AppState {
+        var state = self
+        for index in state.logins.indices {
+            let length = state.logins[index].sessionLength
+            state.logins[index].sessionLength = length.flatMap { try? checkedSessionLength($0) }
+        }
         return state
     }
 }

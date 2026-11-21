@@ -15,15 +15,21 @@ public enum ShownTimes: Sendable {
 }
 
 /// When the app must next recompute, or `nil` when nothing changes until something happens: now
-/// while an expiry notification is due and not sent, else the soonest notification time or expiry
-/// after `now`. With `.menuBarLabel`, also the next minute of the time left the label speaks. With
+/// while an expiry notification is due and not sent, or the start of `workingHours`, read in
+/// `calendar`, when it is due outside them; else the soonest notification time or expiry after
+/// `now`. With `.menuBarLabel`, also the next minute of the time left the label speaks. With
 /// `.all`, also the next minute of every tile's time left or time since expiry, and the next
 /// minute of the clock in `calendar`, which moves Set Timer's caption and a shown "tomorrow" on.
 public func nextTickDeadline(
-    _ logins: [Login], now: Date, leadTime: TimeInterval, shown: ShownTimes, calendar: Calendar
+    _ logins: [Login], now: Date, leadTime: TimeInterval, workingHours: WorkingHours, shown: ShownTimes,
+    calendar: Calendar
 ) -> Date? {
-    if !expiryNotificationsDue(logins, now: now, leadTime: leadTime).isEmpty { return now }
     var deadlines: [Date] = []
+    if !expiryNotificationsDue(logins, now: now, leadTime: leadTime).isEmpty,
+       let notifying = workingHours.nextNotifyingTime(onOrAfter: now, calendar: calendar) {
+        if notifying <= now { return now }
+        deadlines.append(notifying)
+    }
     for login in logins {
         guard !isInvalidated(login), let expiry = expiry(of: login) else { continue }
         deadlines += [expiry.addingTimeInterval(-leadTime), expiry]

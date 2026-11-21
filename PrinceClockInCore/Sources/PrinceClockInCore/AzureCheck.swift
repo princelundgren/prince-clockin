@@ -24,7 +24,7 @@ public actor AzureChecker {
     ]
 
     private let runner: ProcessRunning
-    private let pathResolver: ShellPathResolver
+    private let pathResolver: any PathResolving
     private let profile: AzureProfileReading
     private let clock: @Sendable () -> Date
     private let minInterval: TimeInterval
@@ -32,7 +32,7 @@ public actor AzureChecker {
     private var lastCheck: [AzureAccount: Date] = [:]
 
     public init(
-        runner: ProcessRunning, pathResolver: ShellPathResolver, profile: AzureProfileReading,
+        runner: ProcessRunning, pathResolver: any PathResolving, profile: AzureProfileReading,
         clock: @escaping @Sendable () -> Date = Date.init,
         minInterval: TimeInterval = 300, timeout: TimeInterval = 30
     ) {
@@ -46,24 +46,31 @@ public actor AzureChecker {
 
     /// `.valid` on exit 0 and `.invalid` on one of az's no-credentials or sign-in-again errors; any
     /// other failure is `.couldntCheck`, so an offline failure never reads as invalid. Only a check
-    /// that ran the CLI, to its exit or its timeout, counts towards `minInterval`. `.skipped`, without
+    /// that ran the CLI, to its exit or its timeout, counts towards `minInterval`, as does
+    /// `lastAnswerAt`, as for `DatabricksChecker`. `.skipped`, without
     /// running az, unless `azureProfile.json`'s default subscription is `account`'s user's, compared
     /// ignoring case, since az would answer for whichever user that is.
-    public func check(account: AzureAccount, loginRunning: Bool) async -> DatabricksCheck {
+    public func check(account: AzureAccount, loginRunning: Bool, lastAnswerAt: Date? = nil) async -> DatabricksCheck {
         guard !loginRunning else { return .skipped }
         let now = clock()
-        if let last = lastCheck[account], now.timeIntervalSince(last) < minInterval { return .skipped }
+        let storedAnswer = lastAnswerAt.flatMap { $0 <= now ? $0 : nil }
+        if let last = [lastCheck[account], storedAnswer].compactMap({ $0 }).max(),
+           now.timeIntervalSince(last) < minInterval
+        {
+            return .skipped
+        }
         guard let activeUser = profile.read()?.defaultUser, isSameAzureUser(activeUser, account.user) else {
             return .skipped
         }
         // Reserved before the first await, as DatabricksChecker does, since the actor is reentrant.
         let previousCheck = lastCheck[account]
         lastCheck[account] = now
-        guard let executable = await pathResolver.locate("az") else {
+        let path = await pathResolver.resolvePath()
+        guard let executable = path.locate("az") else {
             lastCheck[account] = previousCheck
             return .couldntCheck
         }
-        let environment = await pathResolver.childEnvironment(base: ProcessInfo.processInfo.environment)
+        let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.runDiscardingStandardOutput(
             executable: executable,
             arguments: ["account", "get-access-token", "--tenant=\(account.tenant)", "--output=none"],
@@ -71,7 +78,7 @@ public actor AzureChecker {
         switch outcome {
         case .exited(0, _): return .valid
         case .exited(_, let errors): return Self.needsSignIn(errors) ? .invalid : .couldntCheck
-        case .timedOut: return .couldntCheck
+        case .timedOut, .signalled: return .couldntCheck
         case .cancelled, .launchFailed:
             lastCheck[account] = previousCheck
             return .couldntCheck

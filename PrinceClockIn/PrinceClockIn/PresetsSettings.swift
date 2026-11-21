@@ -79,9 +79,7 @@ private struct PresetForm: View {
         Section(preset.name) {
             CommitField("Name", text: preset.name) { name in
                 guard !name.isEmpty else { return false }
-                var renamed = preset
-                renamed.name = name
-                coordinator.savePreset(renamed)
+                coordinator.renamePreset(id: preset.id, to: name)
                 return true
             }
         }

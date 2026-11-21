@@ -197,6 +197,9 @@ public final class Coordinator {
     @ObservationIgnored private var savedState: AppState
     /// The last state read of each AWS login's cache file, with its token hash, in memory only.
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
+    /// The expiry each login was last checked for at its notification time, in memory only, so a
+    /// notification waiting for the working hours is checked once, not on every tick.
+    @ObservationIgnored private var checkedForExpiry: [UUID: Date] = [:]
     private var runningDatabricksID: UUID?
     private var runningGcloudID: UUID?
     private var runningAzureID: UUID?
@@ -276,10 +279,14 @@ public final class Coordinator {
     }
 
     /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks, gcloud
-    /// and Azure logins among them and posts one grouped notification. A tick that arrives while
-    /// one runs makes that one run once more when it ends, so a deadline that falls during a slow
-    /// check is still met.
-    public func tick() async {
+    /// and Azure logins among them and posts one grouped notification for those the check didn't
+    /// find still valid; a still-valid one stays marked as notified for its expiry. Outside the
+    /// working hours, read in `calendar`, a checked login due is still checked, once per launch for
+    /// its notification time, so the menu bar and panel show what the check finds, but nothing is
+    /// taken, so the notifications wait for the hours to start. A tick that arrives while one runs
+    /// makes that one run once more when it ends, so a deadline that falls during a slow check is
+    /// still met.
+    public func tick(calendar: Calendar) async {
         guard !isTicking else {
             isTickPending = true
             return
@@ -290,10 +297,14 @@ public final class Coordinator {
             isTickPending = false
             refresh()
             let tickTime = now
-            let due = model.takeExpiryNotifications(now: tickTime)
+            let unchecked = expiryNotificationsDue(
+                model.state.logins, now: tickTime, leadTime: model.state.settings.notificationLeadTime
+            ).filter { id in login(id).flatMap(expiry(of:)) != checkedForExpiry[id] }
+            for id in unchecked { checkedForExpiry[id] = login(id).flatMap(expiry(of:)) }
+            let due = model.takeExpiryNotifications(now: tickTime, calendar: calendar)
             saveIfChanged()
-            await check(model.checkedLogins(among: due), now: tickTime)
-            let notified = due.compactMap(login)
+            await check(model.checkedLogins(among: unchecked), now: tickTime)
+            let notified = due.compactMap(login).filter { !isStillValid($0, now: tickTime) }
             if !notified.isEmpty { await notifier.postExpiryNotification(logins: notified) }
         } while isTickPending
     }
@@ -311,11 +322,11 @@ public final class Coordinator {
     }
 
     /// When the next tick is needed for the logins as they are at `now`; see
-    /// `nextTickDeadline(_:now:leadTime:shown:calendar:)`.
+    /// `nextTickDeadline(_:now:leadTime:workingHours:shown:calendar:)`.
     public func nextTickDeadline(shown: ShownTimes, calendar: Calendar) -> Date? {
         PrinceClockInCore.nextTickDeadline(
-            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime, shown: shown,
-            calendar: calendar)
+            model.state.logins, now: now, leadTime: model.state.settings.notificationLeadTime,
+            workingHours: model.state.settings.workingHours, shown: shown, calendar: calendar)
     }
 
     /// Checks every tracked Databricks, gcloud and Azure login, for Check Now.
@@ -335,7 +346,7 @@ public final class Coordinator {
             }
         }
         guard !ready.isEmpty else { return }
-        commandSink.yield(.enqueue(ready, timeout: model.state.settings.loginTimeout))
+        commandSink.yield(.enqueue(ready, timeout: model.state.settings.appliedLoginTimeout))
     }
 
     /// Whether login `id` is a custom login whose command isn't approved on this Mac, so it won't
@@ -403,7 +414,7 @@ public final class Coordinator {
         await queue.lastOutput(id: id)
     }
 
-    /// The user's yes to "Logged in at <time>?".
+    /// The user's Mark as Logged In at <time>, answering "Its login changed at <time>. Was that you?".
     public func confirmPossibleLogin(id: UUID) {
         model.confirmPossibleLogin(id: id)
         saveIfChanged()
@@ -479,8 +490,9 @@ public final class Coordinator {
 
     /// Sets the session length, rounded down to whole seconds, or makes it unknown with `nil`.
     /// - Throws: `.sessionLengthTooLong` for a length that isn't finite or is longer than
-    ///   `maximumSessionLength`, and `.sessionLengthNotPositive` for one of zero or less, or under
-    ///   a second, either leaving the session length as it was.
+    ///   `maximumSessionLength`, `.sessionLengthNotPositive` for one of zero or less, or under a
+    ///   second, and `.sessionLengthUnderAMinute` for one under a minute, each leaving the session
+    ///   length as it was.
     public func setSessionLength(id: UUID, to length: TimeInterval?) throws(TimerError) {
         let length = try length.map(checkedSessionLength)
         edit(id) { $0.sessionLength = length }
@@ -513,6 +525,14 @@ public final class Coordinator {
         } else {
             model.state.presets.append(preset)
         }
+        saveIfChanged()
+    }
+
+    /// Renames the preset with `id`, keeping its logins as they are now. A preset since removed
+    /// stays removed.
+    public func renamePreset(id: UUID, to name: String) {
+        guard let index = model.state.presets.firstIndex(where: { $0.id == id }) else { return }
+        model.state.presets[index].name = name
         saveIfChanged()
     }
 
@@ -662,16 +682,20 @@ public final class Coordinator {
         defer { runningChecks -= 1 }
         await rereadAccountLevels()
         for login in logins.compactMap({ login($0.id) }) {
+            let lastAnswerAt = login.lastDatabricksAnswer?.at
             let check: DatabricksCheck
             switch login.kind {
             case .databricksProfile(let profile, let accountLevel):
                 check = await checker.check(
-                    profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
+                    profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil,
+                    lastAnswerAt: lastAnswerAt)
             case .gcloudAccount(let account):
-                check = await gcloudChecker.check(account: account, loginRunning: runningGcloudID != nil)
+                check = await gcloudChecker.check(
+                    account: account, loginRunning: runningGcloudID != nil, lastAnswerAt: lastAnswerAt)
             case .azureTenant(let user, let tenant):
                 check = await azureChecker.check(
-                    account: AzureAccount(user: user, tenant: tenant), loginRunning: runningAzureID != nil)
+                    account: AzureAccount(user: user, tenant: tenant), loginRunning: runningAzureID != nil,
+                    lastAnswerAt: lastAnswerAt)
             case .awsSSOSession, .custom:
                 continue
             }

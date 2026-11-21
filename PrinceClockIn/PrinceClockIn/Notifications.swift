@@ -11,13 +11,15 @@ struct SystemNotifier: Notifying {
     private static let customDoneCategory = "CUSTOM_DONE"
     private static let saveFailedCategory = "SAVE_FAILED"
 
-    /// Registers the "Log In" and "Done" buttons. Call before the first notification is posted.
+    /// Registers every category the app posts, with the "Log In" and "Done" buttons. Call before
+    /// the first notification is posted.
     static func registerCategories() {
         let logIn = UNNotificationAction(identifier: NotificationActionID.logIn, title: "Log In", options: [])
         let done = UNNotificationAction(identifier: NotificationActionID.done, title: "Done", options: [])
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: expiringCategory, actions: [logIn], intentIdentifiers: []),
             UNNotificationCategory(identifier: customDoneCategory, actions: [done], intentIdentifiers: []),
+            UNNotificationCategory(identifier: saveFailedCategory, actions: [], intentIdentifiers: []),
         ])
     }
 

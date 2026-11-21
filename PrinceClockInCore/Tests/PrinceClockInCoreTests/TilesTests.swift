@@ -7,7 +7,8 @@ private let minute: TimeInterval = 60
 private let thirtyMinutes: TimeInterval = 30 * minute
 private let now = at("2026-11-19T12:00:00Z")
 private let british = Locale(identifier: "en_GB")
-private let swedish = Locale(identifier: "sv_SE")
+/// What an English-only app gets on a Mac set to Swedish.
+private let swedishRegion = Locale(identifier: "en_SE")
 
 private func calendar(_ locale: Locale) -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
@@ -30,6 +31,18 @@ private func stillValid(checkedAt: Date) -> Login {
         sessionLength: 24 * hour, loginTime: now.addingTimeInterval(-25 * hour))
     login.lastDatabricksAnswer = DatabricksCheckRecord(at: checkedAt, result: .valid)
     return login
+}
+
+/// The tile at `now` of a Databricks workspace login with a 1-hour session, logged in two days
+/// before `checkedAt` and found valid at `checkedAt`.
+private func stillValidTile(checkedAt: Date, now: Date) -> TilePresentation {
+    var login = Login(
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+        sessionLength: hour, loginTime: checkedAt.addingTimeInterval(-48 * hour))
+    login.lastDatabricksAnswer = DatabricksCheckRecord(at: checkedAt, result: .valid)
+    return tilePresentation(
+        for: login, now: now, leadTime: thirtyMinutes, facts: TileFacts(), locale: british,
+        calendar: calendar(british))
 }
 
 private func noTimer(_ name: String = "analytics-prod") -> Login {
@@ -202,6 +215,28 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(valid.trailing == .stateWord("Still valid"))
     }
 
+    @Test(arguments: [
+        (daysBefore: 0, subtitle: "Checked 12:30 · valid"),
+        (daysBefore: 1, subtitle: "Checked yesterday at 12:30 · valid"),
+    ])
+    func aStillValidTileGivesTheDayOnlyForACheckBeforeToday(daysBefore: Int, subtitle: String) throws {
+        // `DateFormatter`'s relative formatting reads the real clock, so the fixture is built from it.
+        let britishCalendar = calendar(british)
+        let today = Date.now
+        let day = try #require(britishCalendar.date(byAdding: .day, value: -daysBefore, to: today))
+        let checkedAt = try #require(britishCalendar.date(bySettingHour: 12, minute: 30, second: 0, of: day))
+
+        #expect(stillValidTile(checkedAt: checkedAt, now: today).subtitle == .status(subtitle))
+    }
+
+    @Test func aStillValidTileGivesTheDateOfAnOlderCheck() {
+        // Before any real date this test runs on, so the real clock never names its day.
+        let checkedAt = at("2026-11-01T11:30:00Z")
+
+        #expect(stillValidTile(checkedAt: checkedAt, now: .now).subtitle
+            == .status("Checked 1 Nov 2026 at 12:30 · valid"))
+    }
+
     @Test func aPendingItemShowsItsStateWordInsteadOfLogIn() {
         let expired = login(remaining: -40 * minute, now: now)
         let vpn = Login(displayName: "vpn", kind: .custom(command: "vpn-login"), sessionLength: 8 * hour)
@@ -218,12 +253,12 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(expired, facts: TileFacts(activity: .queued)).trailing == .stateWord("Queued"))
     }
 
-    @Test func swedishTimesJoinNumberAndUnit() {
-        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now), locale: swedish)
-        let qa = tile(login(remaining: 19 * minute, now: now), locale: swedish)
+    @Test func aSwedishRegionReadsEnglishTimes() {
+        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now), locale: swedishRegion)
+        let qa = tile(login(remaining: 19 * minute, now: now), locale: swedishRegion)
 
-        #expect(prod.trailing == .timeLeft("5\u{202F}h 13\u{202F}m"))
-        #expect(qa.subtitle == .status("Expiring · 19\u{202F}m left"))
+        #expect(prod.trailing == .timeLeft("5h 13m"))
+        #expect(qa.subtitle == .status("Expiring · 19m left"))
     }
 
     // MARK: Click
@@ -333,6 +368,17 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(detail == .possibleLogin(
             question: "Its login changed yesterday at 23:40. Was that you?",
             confirmTitle: "Mark as Logged In yesterday at 23:40"))
+    }
+
+    @Test func aPossibleLoginBeforeYesterdaySaysOnItsDate() {
+        // Before yesterday on the real clock too, which `DateFormatter`'s relative formatting reads.
+        let changed = at("2026-11-17T22:38:00Z")
+
+        let detail = tile(login(remaining: 10 * minute, now: now), facts: TileFacts(possibleLoginAt: changed)).detail
+
+        #expect(detail == .possibleLogin(
+            question: "Its login changed on 17 Nov 2026 at 23:38. Was that you?",
+            confirmTitle: "Mark as Logged In on 17 Nov 2026 at 23:38"))
     }
 
     @Test func aStillValidTileSaysItsSessionLengthMayBeTooShort() {
@@ -483,6 +529,8 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(sessionLengthText(72 * hour) == "3 days")
         #expect(sessionLengthText(36 * hour) == "36 hours")
         #expect(sessionLengthText(90 * minute) == "90 minutes")
+        #expect(sessionLengthText(20 * minute + 30) == "20 minutes")
+        #expect(sessionLengthText(minute) == "1 minute")
     }
 
     // MARK: VoiceOver
@@ -525,9 +573,9 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             == "analytics-prod, Databricks profile, failed, No timer")
     }
 
-    @Test func voiceOverReadsSwedishDurationsWide() {
-        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now, name: "prod"), locale: swedish)
+    @Test func voiceOverReadsEnglishDurationsWideInASwedishRegion() {
+        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now, name: "prod"), locale: swedishRegion)
 
-        #expect(prod.accessibilityLabel == "prod, AWS SSO session, logged in, 5 timmar, 13 minuter left")
+        #expect(prod.accessibilityLabel == "prod, AWS SSO session, logged in, 5 hours, 13 minutes left")
     }
 }

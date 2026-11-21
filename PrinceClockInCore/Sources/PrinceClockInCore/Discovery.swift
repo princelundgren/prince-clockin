@@ -1,15 +1,71 @@
 import Foundation
 
 /// The names of the `[sso-session <name>]` sections of an AWS CLI config, in file order.
-/// A name that repeats is listed once. A missing file (`nil`) or one with no such sections gives `[]`.
+///
+/// As in botocore, a section whose name starts with `sso-session` is split into words the way
+/// Python's `shlex.split` does, and kept only when that gives exactly two words; the second is the
+/// session name, so `[sso-session "my team"]` names `my team`. An empty name is skipped. A name that
+/// repeats is listed once. A missing file (`nil`) or one with no such sections gives `[]`.
 public func discoverAWSSessions(configText: String?) -> [String] {
     guard let configText else { return [] }
-    let prefix = "sso-session "
     var seen: Set<String> = []
     return parseINI(configText).compactMap { section in
-        guard section.name.hasPrefix(prefix) else { return nil }
-        let sessionName = section.name.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+        guard section.name.hasPrefix("sso-session"), let words = shellWords(section.name), words.count == 2
+        else { return nil }
+        let sessionName = words[1]
         return sessionName.isEmpty || !seen.insert(sessionName).inserted ? nil : sessionName
+    }
+}
+
+/// `text` split into words as Python's `shlex.split` does in its default POSIX mode: words are
+/// separated by spaces, tabs, carriage returns and line feeds; single quotes keep everything
+/// literally; a backslash escapes any character outside quotes and only `"` or `\` inside double
+/// quotes. `nil` for an unclosed quote or a trailing backslash, which `shlex.split` rejects.
+private func shellWords(_ text: String) -> [String]? {
+    enum State { case between, word, singleQuoted, doubleQuoted }
+    let whitespace: Set<Unicode.Scalar> = [" ", "\t", "\r", "\n"]
+    var words: [String] = []
+    var word = String.UnicodeScalarView()
+    var state = State.between
+    var scalars = text.unicodeScalars.makeIterator()
+
+    while let scalar = scalars.next() {
+        switch state {
+        case .between, .word:
+            if whitespace.contains(scalar) {
+                if state == .word { words.append(String(word)) }
+                word = String.UnicodeScalarView()
+                state = .between
+            } else if scalar == "\\" {
+                guard let escaped = scalars.next() else { return nil }
+                word.append(escaped)
+                state = .word
+            } else if scalar == "'" {
+                state = .singleQuoted
+            } else if scalar == "\"" {
+                state = .doubleQuoted
+            } else {
+                word.append(scalar)
+                state = .word
+            }
+        case .singleQuoted:
+            if scalar == "'" { state = .word } else { word.append(scalar) }
+        case .doubleQuoted:
+            if scalar == "\"" {
+                state = .word
+            } else if scalar == "\\" {
+                guard let escaped = scalars.next() else { return nil }
+                if escaped != "\"" && escaped != "\\" { word.append(scalar) }
+                word.append(escaped)
+            } else {
+                word.append(scalar)
+            }
+        }
+    }
+    switch state {
+    case .between: return words
+    case .word: return words + [String(word)]
+    case .singleQuoted, .doubleQuoted: return nil
     }
 }
 

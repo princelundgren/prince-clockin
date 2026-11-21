@@ -98,6 +98,18 @@ private let noCredentials = ProcessOutcome.exited(
         #expect(runner.calls.count == 2)
     }
 
+    @Test func aStoredAnswerHoldsTheIntervalAcrossLaunches() async throws {
+        let clock = TestClock(at("2026-11-17T09:00:00Z"))
+        let (checker, runner) = try makeChecker(clock: clock) { _ in .exited(code: 0, output: "") }
+        let answeredAt = at("2026-11-17T08:55:01Z")
+
+        #expect(await checker.check(account: "dev@example.com", loginRunning: false, lastAnswerAt: answeredAt) == .skipped)
+        #expect(runner.calls.isEmpty)
+        clock.advance(by: 1)
+        #expect(await checker.check(account: "dev@example.com", loginRunning: false, lastAnswerAt: answeredAt) == .valid)
+        #expect(runner.calls.count == 1)
+    }
+
     @Test func aCheckThatDidntRunTheCLILeavesTheIntervalFree() async throws {
         let (checker, runner) = try makeChecker { index in
             index == 0 ? .launchFailed("gcloud: not permitted") : .exited(code: 0, output: "")

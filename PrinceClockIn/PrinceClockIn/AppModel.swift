@@ -5,7 +5,7 @@ import UserNotifications
 
 /// Builds the coordinator with the real system services and drives it: a tick at each deadline the
 /// coordinator gives, on a change in the AWS cache directory, gcloud's config directory or the Azure
-/// CLI's `azureProfile.json`, on wake, clock and time-zone changes, and notification buttons. It
+/// CLI's `azureProfile.json`, on wake, clock and time-zone changes, and notification clicks. It
 /// makes no decisions of its own.
 @MainActor
 @Observable
@@ -16,6 +16,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     private static let notificationsBannerDismissedKey = "notificationsBannerDismissed"
 
     let coordinator: Coordinator
+    /// Runs every CLI the app starts, so quitting can kill what is left of them.
+    let runner: FoundationProcessRunner
     /// The user's home directory, which Settings abbreviates to `~` in a config file's path.
     let homeDirectory: URL
     /// Whether the user has denied notifications, so the panel and settings can say so.
@@ -29,6 +31,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     var isPanelShown = false
     /// Whether the Settings window is open.
     var isSettingsShown = false
+    /// Opens the panel, for a click on a notification itself.
+    @ObservationIgnored var openPanel: (() -> Void)?
     /// Whether VoiceOver runs, which reads the menu bar item's label with its time left.
     private var isVoiceOverOn = NSWorkspace.shared.isVoiceOverEnabled
 
@@ -43,6 +47,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     override init() {
         let environment = ProcessInfo.processInfo.environment
         let runner = FoundationProcessRunner()
+        self.runner = runner
         let pathResolver = ShellPathResolver(runner: runner, shell: Self.loginShell(), environment: environment)
         let queue = LoginQueue(runner: runner, pathResolver: pathResolver, terminal: TerminalOpener())
         let home = URL(
@@ -77,20 +82,20 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         // No timer or cache change ticks before the coordinator has started and taken its baseline.
         Task {
             await coordinator.start()
-            await coordinator.tick()
+            await coordinator.tick(calendar: .current)
             scheduleTicks()
             awsCacheWatcher = AWSCacheWatcher(directory: home.appending(path: ".aws/sso/cache")) { [weak self] in
-                Task { await self?.coordinator.tick() }
+                Task { await self?.coordinator.tick(calendar: .current) }
             }
             gcloudConfigWatcher = AWSCacheWatcher(
                 directory: configPaths.gcloudConfig, fileNames: gcloudCredentialsFileNames
             ) { [weak self] in
-                Task { await self?.coordinator.tick() }
+                Task { await self?.coordinator.tick(calendar: .current) }
             }
             azureConfigWatcher = AWSCacheWatcher(
                 directory: configPaths.azureConfig, fileNames: azureProfileFileNames
             ) { [weak self] in
-                Task { await self?.coordinator.tick() }
+                Task { await self?.coordinator.tick(calendar: .current) }
             }
         }
     }
@@ -121,11 +126,12 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: UNUserNotificationCenterDelegate
 
-    /// Shown even while the panel is open, which makes the app active and would otherwise hide it.
+    /// Shown, with its sound, even while the panel or Settings is open, which makes the app active
+    /// and would otherwise hide it.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list]
+        [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(
@@ -146,6 +152,8 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             if !stillTracked.isEmpty { coordinator.logIn(stillTracked) }
         case .customDone(let id):
             if tracked.contains(id) { coordinator.confirmCustomDone(id: id) }
+        case .openPanel:
+            openPanel?()
         case nil:
             break
         }
@@ -182,7 +190,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
                 options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and notifying before they expire")
         }
         let timer = Timer(fire: deadline, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in await self?.coordinator.tick() }
+            Task { @MainActor in await self?.coordinator.tick(calendar: .current) }
         }
         timer.tolerance = Self.tickTolerance
         RunLoop.main.add(timer, forMode: .common)
@@ -194,7 +202,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 self?.coordinator.systemDidWake()
-                await self?.coordinator.tick()
+                await self?.coordinator.tick(calendar: .current)
             }
         }
         let changes: [(NotificationCenter, Notification.Name)] = [
@@ -203,7 +211,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         ]
         for (center, name) in changes {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.coordinator.tick() }
+                Task { @MainActor in await self?.coordinator.tick(calendar: .current) }
             }
         }
         voiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled) { [weak self] workspace, _ in

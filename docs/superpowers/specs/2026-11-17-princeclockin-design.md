@@ -25,7 +25,8 @@ arrives before it does, and one click logs in to the logins you choose, in seque
 
 - A timer per login, and in the menu bar a symbol that says whether one needs you, with no
   countdown.
-- A notification a set time before a login expires: 30 minutes by default, changeable in settings.
+- A notification a set time before a login expires: 30 minutes by default, changeable in settings,
+  and, if the user turns on working hours, held until they start (owner, 2026-11-20).
 - Logging in only when the user clicks: one login, every due login, or a preset. There is no
   multi-select; a set of logins used together is a preset (owner, 2026-11-18).
 - Presets the user defines and edits (e.g. "AWS dev + Databricks dev"); nothing hard-coded like
@@ -163,16 +164,19 @@ The login time comes from:
    session length. A time that would make the login already expired is refused with "That login
    would already have expired", a Logged In At time in the future with "That time is in the
    future", an Expires In longer than the session length with "That's longer than the session
-   length", a session length over a year with "A session length can be at most a year", and one of
-   zero or less with "A session length must be more than zero". Both limits hold for every session
-   length. The hours field of Settings' Custom… and of Edit Session Length stores its text on
-   Return or when focus leaves it within the panel or Settings, never while typing, and closing
-   the panel discards unsaved text. Empty text makes the session length unknown, text that isn't a
-   positive number of hours is refused with "Enter a number of hours", and one over a year with the
-   same words as Set Timer. A refused text stays in the field with the refusal under it until it
-   changes, and nothing is stored. While the session length is unknown, Set Timer asks for it in
-   the same form, so the time left is never stored as the session length. The core sets a login
-   time through `setLoginTime(id:at:)`.
+   length", a session length over a year with "A session length can be at most a year", one of
+   zero or less with "A session length must be more than zero", and one under a minute, the
+   smallest unit a session length's text shows, with "A session length must be at least a minute".
+   These limits hold for every session length: a stored one outside them, such as one under a
+   minute in a file an earlier version wrote, loads as unknown. The hours field of Settings'
+   Custom… and of Edit Session Length stores its text on Return or when focus leaves it within the
+   panel or Settings, never while typing, and closing the panel discards unsaved text. Empty text
+   makes the session length unknown, text that isn't a positive number of hours is refused with
+   "Enter a number of hours", and one under a minute or over a year with the same words as Set
+   Timer. A refused text stays in the field with the refusal under it until it changes, and
+   nothing is stored. While the session length is unknown, Set Timer asks for it in the same form,
+   so the time left is never stored as the session length. The core sets a login time through
+   `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
    - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
      The app compares what it last saw of the file with what it reads now, in this order:
@@ -188,11 +192,11 @@ The login time comes from:
         only renews within 15 minutes of it. A rewrite at or after the timer's expiry is a login,
         since a renewal can't outlive the session.
      5. A rewrite while the timer is unknown, or within the notification time, could be either,
-        since the CLI also renews a token that has lapsed. The tile asks "Logged in elsewhere?" with
-        the rewrite's time, and offers Mark as Logged In at <time>, Log In and Set Timer…; the
-        first sets the login time to the rewrite's time. There is no "No", since a wrong timer is
-        worse than an open question: the question stays until a time is set or the app logs the
-        login in (owner, 2026-11-19). Any other rewrite is a renewal.
+        since the CLI also renews a token that has lapsed. The tile asks "Its login changed at
+        <time>. Was that you?" with the rewrite's time, and offers Mark as Logged In at <time>, Log
+        In and Set Timer…; the first sets the login time to the rewrite's time. There is no "No",
+        since a wrong timer is worse than an open question: the question stays until a time is set
+        or the app logs the login in (owner, 2026-11-19). Any other rewrite is a renewal.
      A login done while the app wasn't running is found the same way at launch, against the stored
      times, which hold no hash. A session last seen logged out has no stored times; at launch its
      file counts as a login.
@@ -275,10 +279,11 @@ Times are recomputed at the next moment one can change, on any change in `~/.aws
 gcloud config directory or the Azure CLI's `azureProfile.json`, on wake from sleep, on a clock
 change and on a time-zone change, with no polling, so a menu bar app that runs all day does no work
 while nothing happens. Each recomputation also reads the AWS cache files, gcloud's credential store
-and `azureProfile.json` and sends any notification now due.
+and `azureProfile.json` and sends any notification now due and, with working hours on, inside them.
 
 - **The next moment** is the soonest notification time or expiry, or at once while a notification
-  is due and unsent. What is on screen adds more:
+  is due and unsent, or, while one waits outside the working hours, their next start. What is on
+  screen adds more:
   - the panel or Settings open: the next minute of each tile's time left or time since expiry, and
     each minute of the clock, which Set Timer's caption and a shown "tomorrow" are timed against;
   - VoiceOver on with both closed: the next minute of the one time left the menu bar label speaks.
@@ -307,7 +312,10 @@ and `azureProfile.json` and sends any notification now due.
 A check asks a CLI whether a tracked Databricks profile, gcloud account or Azure CLI tenant is still
 valid, one login at a time, for tracked logins only, at most every 5 minutes per login, and never
 while a login of the same CLI is running. It runs when such a login enters its notification time,
-and when the user clicks Check Now in Settings → Logins.
+outside the working hours too, where only the notification waits: a waiting login is checked once
+per launch for that notification time, and the notification at the hours' start reads what the
+check stored. A login found invalid while its notification waits stays owed it, so it is sent as
+expired. It also runs when the user clicks Check Now in Settings → Logins.
 
 - **Databricks** runs `databricks current-user me --profile <name>`. Only the CLI's
   no-credentials error counts as invalid.
@@ -345,9 +353,15 @@ and when the user clicks Check Now in Settings → Logins.
 - A check of one login returns **valid**, **invalid**, **couldn't check** (the check failed)
   or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
   apart. The core keeps each login's last check, its time and one of the first three results, and
-  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
+  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid", with the
+  day as well for a check on an earlier day ("Checked yesterday at 12:30 · valid"); the Still
+  valid tile shows its last valid answer the same way.
 - A press of Check Now within 5 minutes of a login's last check skips that login, which keeps its
   last check, so a skip never reads as a fresh result.
+- The 5 minutes hold across launches: they count from the stored time of the login's last valid
+  or invalid answer. A stored couldn't check doesn't count, since it may be a check that never
+  ran the CLI, and neither does a stored time after the clock's, so a clock set back never blocks
+  checks until it catches up.
 - Check Now is disabled while a check runs, while a Databricks, gcloud or Azure login runs, and
   when no workspace profile, gcloud account or Azure tenant is tracked.
 
@@ -392,7 +406,8 @@ never in colour; the panel has the times.
 - A left click opens the panel and a right click opens the right-click menu.
 - Removing the icon from the menu bar quits the app, which stops timers and notifications.
   Opening the app again from Applications brings it back: at launch
-  the app makes its status item visible.
+  the app makes its status item visible. Opened again while it runs, it makes the status item
+  visible and opens the panel.
 
 #### Panel
 
@@ -436,12 +451,14 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    as a login tile is, so the panel reads as one piece (owner, 2026-11-20): the same frame, fill,
    hover and press, a `rectangle.stack` symbol no login uses, the name, and under it the logins in
    order ("dev, prod, staging"), each line truncated at the end. The help tag says "Logs in to dev,
-   prod and staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since
-   `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts the preset. An
-   empty preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to
-   add logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
-   tiles, the presets start fresh at each opening, so no hover carries over. The list is as tall as
-   its tiles, up to five; past five it shows half of the sixth and scrolls.
+   prod and staging", the list in the locale's own form, as every list in the copy is, so en_US and
+   en_SE read "dev, prod, and staging". VoiceOver reads "Morning preset" with the help tag as its
+   hint, since `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts
+   the preset. An empty preset reads "No logins" under its name, is dimmed and disabled, and its
+   help tag says to add logins in Settings → Presets; VoiceOver reads "Night shift preset, no
+   logins". Like the login tiles, the presets start fresh at each opening, so no hover carries
+   over. The list is as tall as its tiles, up to five; past five it shows half of the sixth and
+   scrolls.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
@@ -464,7 +481,8 @@ tenants in your config files. Log in once with the aws, databricks, gcloud or az
 own command." Add Logins…
 opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
-under +, since SwiftUI can't open a `Menu` programmatically.
+under +, since SwiftUI can't open a `Menu` programmatically. The presets are hidden while no login
+is tracked, since every preset is then empty.
 Discovery reads the config files again on each opening; while it runs, the empty state shows
 without its text, so no earlier text shows.
 
@@ -496,22 +514,24 @@ without its text, so no earlier text shows.
   actions, so there is no Mark as Logged In Now or Edit in Settings…. A SwiftUI menu in the panel
   closed on the first click after the panel opened, the app's activation arriving with that click
   (macOS 27.2.1), and the owner chose fewer actions over working around it. Session length is set
-  in Settings, and Set Timer opens from a "Logged in elsewhere?" question and from Settings'
+  in Settings, and Set Timer opens from a "Was that you?" question and from Settings'
   prompt after adding a login. A login whose timer is wrong with no question, or a custom login
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
-    timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
+    timed out", "The login was stopped by signal 9" for a CLI ended by a signal the app didn't
+    send), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
     A denied permission to control Terminal also offers Open System Settings… (see Running logins).
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02, Log In and Set Timer…. A question the first check after the Mac wakes raises says
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
-    (owner, 2026-11-19). After a sleep, each login asks on its own tile.
+    (owner, 2026-11-19). After a sleep, each login asks on its own tile. A time on another day
+    reads "yesterday at 23:38", or "on 17 Nov 2026 at 23:38" where the locale has no word for the
+    day.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
     session length may be too short." ("but gcloud says" for a gcloud account, "but the Azure CLI
-    says" for an Azure tenant) with Edit Session
-    Length…. Its subtitle carries the check:
-    "Checked 22:30 · valid".
+    says" for an Azure tenant) with Edit Session Length…. Its subtitle carries the check, as
+    Settings shows it: "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
   - **Session length:** a Databricks login that logged in with no session length asks for it (see
@@ -556,9 +576,11 @@ without its text, so no earlier text shows.
 
 #### Settings window
 
-Its own window hosting SwiftUI: a native sidebar list with a symbol per pane,
+Its own window hosting SwiftUI: a native sidebar list with a symbol per pane (`person.badge.key`
+Logins, `list.bullet` Presets, `bell` Notifications, `gearshape` General, `info.circle` About),
 the selected pane's grouped `Form` beside it, controls on the trailing edge, and edits committed on
-Return or when focus leaves the field. One title, "PrinceClockIn Settings", whatever the pane, and
+Return or when focus leaves the field; a Name or Command field also commits when the window
+closes or its pane or form is replaced. One title, "PrinceClockIn Settings", whatever the pane, and
 resizable, with zoom available, as in the maintainer's other menu bar apps (owner, 2026-11-19).
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
@@ -589,8 +611,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     says Log In waits for the user to click Done.
   - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
     notify you before it expires, or skip and log in from the panel later." with Skip and Set
-    Timer…, so a login the user has already done gets a known timer instead of the "Logged in
-    elsewhere?" question later. It is asked once: selecting another login or removing this one
+    Timer…, so a login the user has already done gets a known timer instead of the "Was that
+    you?" question later. It is asked once: selecting another login or removing this one
     ends it.
 - **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
   the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
@@ -600,8 +622,13 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
   selected preset at once.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
-  hours (30 minutes by default), and Notifications: their state, Open System Settings…, and, while
-  they're off, "With notifications off, only the menu bar shows that a login is about to expire."
+  hours (30 minutes by default); "Only notify during working hours", off by default, with
+  "Notifications from outside these hours arrive when they start.", and while it is on, From and To
+  time pickers (09:00 and 17:00 by default; "They end the next day." when To is at or before
+  From) and Days, a button per weekday in the calendar's order, Monday to Friday by default, the
+  last one picked disabled so the hours always name a day; and Notifications: their state, Open
+  System Settings…, and, while they're off, "With notifications off, only the menu bar shows that
+  a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
@@ -665,7 +692,8 @@ A token has only the meanings its row lists.
   `panelKeyResponse(to:in:)` decides Return and the arrows, and
   `escapeResponse(openSetTimer:tiles:)` Escape.
 - **⌘,** (Settings…) and **⌘Q** (Quit) come from a hidden main menu, since an `LSUIElement` app
-  shows none.
+  shows none. It also carries File → Close (⌘W) and an Edit menu (Undo, Redo, Cut, Copy, Paste,
+  Select All), for the Settings window and its text fields.
 - **VoiceOver:** every login tile follows one template, a label of "name, kind, state, time" ("prod,
   AWS SSO session, expiring, 19 minutes left") and "Logs in" as its hint, with no hint while a click
   does nothing. A pending item's word (logging in, queued, failed, not yet approved, logged in
@@ -704,7 +732,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
 | A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | tomorrow at 03:55 |
 | Batch progress | one form everywhere | 1 of 2 | 1 of 2 |
-| Session length | hours or days | 8 hours · 3 days | 8 hours · 3 days |
+| Session length | days when a whole number of days, else hours when a whole number of hours, else minutes, rounded down | 8 hours · 3 days · 20 minutes | 8 hours · 3 days · 20 minutes |
 
 #### Departures from Apple's guidelines
 
@@ -722,15 +750,33 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its notification time. Logins that do so close together, or
-  while the Mac slept or the app wasn't running, are grouped into one notification. A login whose
-  notification time passed while the app wasn't running is announced once at the next launch, as
-  expired if it has.
+- One notification when a login enters its notification time, or, with working hours on and
+  outside them, at their next start. Logins that enter it at the same moment, or while the Mac
+  slept or the app wasn't running, are grouped into one notification. A login whose notification
+  time passed while the app wasn't running is announced once at the next launch, or the next start
+  of the working hours if that launch is outside them, as expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
+- Clicking a notification itself, rather than one of its buttons, opens the panel while the app
+  runs and logs nothing in. A click that launches the app opens no panel: the status item's window
+  has no place in the menu bar yet, and the popover doesn't show.
+- **Working hours** (owner, 2026-11-20), when the user turns them on in Settings → Notifications:
+  an expiry notification that falls due outside them waits, and every one waiting is sent at their
+  next start as one grouped notification, each login described as it is then ("expired" for one
+  that expired meanwhile). One set of hours, read in the Mac's time zone, applies to every day
+  picked. Hours that end at or before they start run past midnight and belong to the day they
+  start, so equal times make a 24-hour span. A start inside the hour a clock change skips is
+  skipped that day. The menu bar and panel don't wait: they show expiring and expired as always,
+  and a Databricks check still runs at the notification time. A login that check finds invalid
+  still waits and is sent as expired; one it finds still valid isn't sent, as at any other time.
+  Only expiry notifications wait; Done and a failed save are about what is happening now. macOS
+  Focus can silence the app on a schedule; holding the notification and sending it when the hours
+  start is what the app adds.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
   "vpn is waiting for you" and "Log in your own way, then click Done."
 - A failed save posts a notification (see Panel).
+- Every notification has the default sound, also when it arrives while the panel or Settings is
+  open.
 - No notification at the moment a login expires or is found invalid, and nothing repeats: the menu
   bar shows expired.
 - If notification permission is denied, the menu bar label carries the expiry alone (the
@@ -747,8 +793,18 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - A failed or timed-out login is reported on its tile, and the queue goes on to the next.
 - A login removed while it is queued leaves the queue, and the total shrinks with it. Removing the
   running login cancels it, and the queue goes on.
+- Quitting while a batch runs cancels it, as Cancel All does, and the app quits once the batch has
+  finished, or 3 seconds later if it hasn't. An update's relaunch postponed for the batch then
+  doesn't go ahead, so the app stays quit. As it quits, the app kills every CLI still running, with
+  its process group, and what is left of the group of each one it stopped.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
-  browser.
+  browser. A login runs with the stored timeout held between 2 minutes and 24 hours, or with the
+  default if the stored value isn't finite, so a hand-edited state file can't end every login at
+  once or crash the app; the stored value itself is kept as it is. For a custom login it covers
+  opening Terminal and the wait for Done together, and the timeout and Cancel All end either step,
+  even a Terminal that never answers.
+  Ending a CLI sends `SIGTERM` to its process group, so to what it started too unless that left the
+  group, and `SIGKILL` to any of them still running 2 seconds later.
 - AWS, Databricks, gcloud and Azure logins run as an executable plus an argument list, never
   through a shell string, so a session, profile, account or tenant name can't inject a command.
   Each name is joined to its flag (`--profile=<name>`, `--account=<email>`, `--tenant=<id>`), so a
@@ -784,19 +840,27 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - The Notifications off banner's dismissal is also kept in the app's user defaults
   (`notificationsBannerDismissed`), and cleared once notifications are found on again.
 - A custom command opens in Terminal through a `do script` Apple event, never a file Terminal
-  executes. The command is passed as the parameter of a handler in a constant, compiled script, so
-  it is never quoted into script source. The app launches Terminal first, then asks for the
-  Automation permission off the main thread. A denied permission fails the login: its tile says
-  Failed, with a message that says where to allow it and Open System Settings…, which opens System
-  Settings → Privacy & Security → Automation, and the queue goes on. This was chosen over quoting
-  the command into script source, and over `osascript`, whose permission would be asked for on
-  behalf of a different process.
+  executes. The app builds the event itself, with the command as its direct parameter, so it is
+  never quoted into script source. The app launches Terminal first, then checks the Automation
+  permission off the main thread, asking the user only when no answer is on record. A denied
+  permission fails the login: its tile says Failed, with a message that says where to allow it and
+  Open System Settings…, which opens System Settings → Privacy & Security → Automation, and the
+  queue goes on. The `activate` and `do script` events are sent off the main thread, each waiting
+  at most 30 seconds for Terminal's reply, and none is sent once the login has timed out or been
+  cancelled. The permission check and the sends run on a Dispatch queue of their own, not Swift's
+  concurrency pool, since a call already made can't be cancelled: an abandoned one holds a thread
+  until Terminal or the user answers, and must not starve the app's other work. This was chosen
+  over quoting the command into script source, over `osascript`, whose
+  permission would be asked for on behalf of a different process, and over a compiled AppleScript
+  handler, since `NSAppleScript` runs only on the main thread, where a Terminal that doesn't answer
+  would freeze the app.
 
 ### Platform
 
 - Swift 6. An `NSStatusItem` with a transient `NSPopover` (about 320 pt) and a right-click
   `NSMenu`, their content in SwiftUI. The status item's behaviour is `terminationOnRemoval`.
-- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q.
+- Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q, File →
+  Close (⌘W) and an Edit menu.
 - Colours come from the app's asset catalog, with light, dark and Increase Contrast variants.
 - Minimum macOS 26 (owner, 2026-11-17).
 - Not sandboxed (see Approaches). Hardened runtime, Developer ID signing, notarized.
@@ -810,11 +874,14 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   gcloud and Azure, the time and result of its last check and of its last answer (valid or
   invalid), for AWS, the cache file's last-seen modified and `expiresAt` times, for gcloud, the
   account's last-seen row, missing or its `rowid`, which is no secret, and for Azure, whether
-  `azureProfile.json` last listed its user and tenant. Fingerprints are never stored. The file
-  format version stays 2: the gcloud and Azure kinds, the row and the presence are additions an
-  older file decodes without.
-- The file is `state.json`, with a format version. One that won't decode, or has another format
-  version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
+  `azureProfile.json` last listed its user and tenant. Fingerprints are never stored. The working
+  hours are stored as their on/off, start and end minutes and weekdays; a file written before
+  they existed has none and reads as off. The gcloud and Azure kinds, the row and the presence are
+  additions an older file decodes without too, so none of them needs a new format version.
+- The file is `state.json`, with a format version. A format-1 file, as v1.0.0 to v1.0.2 wrote it,
+  loads with its two renamed keys read as `notifiedForExpiry` and `notificationLeadTime`, and is
+  written in format 2 at the next save. One that won't decode, or has a format version other than 1
+  or 2, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
   app starts empty and says so in the panel (State set aside). A save that fails keeps the state
   in memory until the core's `retrySave()` or the next change saves it.
 - Bundle ID `com.princelundgren.princeclockin`.
@@ -837,6 +904,16 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 - Sparkle 2 with EdDSA-signed updates: `SUPublicEDKey` in `Info.plist`, the private key only in
   the release environment. The signature protects users even if the update host is compromised.
+- The feed is signed too: the app sets `SURequireSignedFeed` and its prerequisite
+  `SUVerifyUpdateBeforeExtraction`, so it accepts only an appcast signed with that key, and checks
+  a downloaded DMG's signature before extracting it. `generate_appcast` signs the feed because the
+  app sets the key, and a release fails unless `sign_update --verify` passes on it. A build without
+  the keys reads the signature as a trailing XML comment and updates as before.
+- Once a user runs a build that requires a signed feed, every later feed must be signed with the
+  same key: an unsigned or badly signed one shows them no update until 20 days after the first
+  failure (`SUSignedFeedFailureExpirationInterval`'s default). A lost key is recovered the same way:
+  a feed signed with a new key reaches them after that wait, and only with a Developer ID signed
+  DMG, which every release is.
 - Sparkle checks daily without asking first (`SUEnableAutomaticChecks`), with system profiling
   off. A scheduled check that finds an update shows no window: through Sparkle's gentle-reminder
   delegate it puts a dot in the menu bar, the update line in the panel and Install Update <version>…
@@ -844,7 +921,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   Update… show Sparkle's window, as does Check for Updates…, in the right-click menu and About.
   This departs on purpose from Sparkle's example for dockless apps, which brings back the Dock
   icon: the menu bar is where this app is looked at.
-- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty.
+- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty,
+  unless the user quits first (see Running logins).
 - Sparkle's license ships in the app from `PrinceClockIn/PrinceClockIn/ThirdPartyNotices.txt`, a
   copy of the pinned release's `LICENSE`; a release fails if the two differ.
 - The release workflow lives in this repository. Its build, signing and upload jobs run on
@@ -860,6 +938,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   it uploads only `princeclockin/rehearsal/appcast.xml`, which no app reads and which names a DMG
   that isn't uploaded, and publishes nothing else.
 - The build number is the release workflow's run number, so it only grows, as Sparkle needs.
+- A release tag must be the highest `vX.Y.Z` tag by version sort, rehearsal tags left out, or the
+  release fails before building: Sparkle compares only the build number, so an older tag pushed
+  later would reach every user as an update. A rehearsal isn't compared, since no app reads its
+  feed.
 - The DMG is uploaded only if it isn't there yet, and the appcast last, so the feed never names a
   missing file and a published DMG is never replaced; a re-run after a partial upload needs a
   new tag. The appcast lists only the latest release.
@@ -893,7 +975,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Recorded 2026-11-17, on AWS CLI 2.39.0 and Databricks CLI 1.22.1:
   - **Refresh token (AWS):** a renewal keeps it and a login changes it, on the same session, so
     the hash is kept and decides first.
-  - **Databricks check:** `databricks current-user me --profile <name>` exits 0 for a valid
+  - **Databricks check:** `databricks current-user me --profile=<name>` exits 0 for a valid
     profile. For one with no usable login it exits 1 and prints
     `Error: error getting token: cache: no cached credentials; run `databricks auth login` to sign in`,
     which is the one failure read as invalid. That line was recorded from a logged-out profile, not
@@ -923,8 +1005,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - **Check:** `az account get-access-token --tenant=<id>` using the default subscription's user, and
     the two MSAL-cache messages The live checks reads as invalid; the Entra codes are from
     Microsoft's error-code reference, and the exact stderr az prints for each is unrecorded.
-- Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
-  these behaviours are unverified:
+- Not yet checked on a Mac with macOS 26; these behaviours stay unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
     image, which Apple documents as styled for the menu bar, looks right in a light menu bar, over a
     light wallpaper and on an inactive second display.
@@ -944,11 +1025,12 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
-    `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the tiles'
-    and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`, `clock.badge.checkmark`,
-    `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud`,
-    `square.stack.3d.up`, `person.badge.key` and `building.2`, the preset tiles' `rectangle.stack`,
-    and the footer's `gear` and `power`.
+    `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
+    tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
+    `clock.badge.checkmark`, `checkmark.circle`, `questionmark.circle`, `terminal`, `cloud` and
+    `square.stack.3d.up`, Settings' kind symbols `person.badge.key` (gcloud) and `building.2`, the Settings sidebar's `person.badge.key`, `list.bullet`, `bell`,
+    `gearshape` and `info.circle`, Settings' + and − as `plus` and `minus`, the preset tiles'
+    `rectangle.stack`, and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
@@ -968,3 +1050,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     `Form`, and the panel's tiles follow at its next opening; a preset's "Logs in to, in order"
     reorders by drag too.
   - Whether VoiceOver can reorder these lists without Move Up and Move Down.
+  - Clicking a notification opens the panel under the icon while the app runs.
+  - Opening the app from Finder while it runs opens the panel, and no other window.
+  - A login's or preset's name, or a custom login's Command, typed in Settings and left without
+    Return is kept on ⌘W and on choosing another pane, login or preset. On macOS 27.0.1, closing a
+    hosted SwiftUI window ran no focus change before teardown, even after `makeFirstResponder(nil)`
+    in `windowShouldClose`, but did run `onDisappear` with the text.

@@ -18,14 +18,14 @@ public actor GcloudChecker {
     ]
 
     private let runner: ProcessRunning
-    private let pathResolver: ShellPathResolver
+    private let pathResolver: any PathResolving
     private let clock: @Sendable () -> Date
     private let minInterval: TimeInterval
     private let timeout: TimeInterval
     private var lastCheck: [String: Date] = [:]
 
     public init(
-        runner: ProcessRunning, pathResolver: ShellPathResolver,
+        runner: ProcessRunning, pathResolver: any PathResolving,
         clock: @escaping @Sendable () -> Date = Date.init,
         minInterval: TimeInterval = 300, timeout: TimeInterval = 30
     ) {
@@ -38,19 +38,26 @@ public actor GcloudChecker {
 
     /// `.valid` on exit 0 and `.invalid` on one of gcloud's no-credentials errors; any other
     /// failure is `.couldntCheck`, so an offline failure never reads as invalid. Only a check that
-    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`.
-    public func check(account: String, loginRunning: Bool) async -> DatabricksCheck {
+    /// ran the CLI, to its exit or its timeout, counts towards `minInterval`, as does
+    /// `lastAnswerAt`, as for `DatabricksChecker`.
+    public func check(account: String, loginRunning: Bool, lastAnswerAt: Date? = nil) async -> DatabricksCheck {
         guard !loginRunning else { return .skipped }
         let now = clock()
-        if let last = lastCheck[account], now.timeIntervalSince(last) < minInterval { return .skipped }
+        let storedAnswer = lastAnswerAt.flatMap { $0 <= now ? $0 : nil }
+        if let last = [lastCheck[account], storedAnswer].compactMap({ $0 }).max(),
+           now.timeIntervalSince(last) < minInterval
+        {
+            return .skipped
+        }
         // Reserved before the first await, as DatabricksChecker does, since the actor is reentrant.
         let previousCheck = lastCheck[account]
         lastCheck[account] = now
-        guard let executable = await pathResolver.locate("gcloud") else {
+        let path = await pathResolver.resolvePath()
+        guard let executable = path.locate("gcloud") else {
             lastCheck[account] = previousCheck
             return .couldntCheck
         }
-        let environment = await pathResolver.childEnvironment(base: ProcessInfo.processInfo.environment)
+        let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.runDiscardingStandardOutput(
             executable: executable,
             arguments: ["auth", "print-access-token", "--account=\(gcloudAccountEmail(account))", "--format=none"],
@@ -59,7 +66,7 @@ public actor GcloudChecker {
         case .exited(0, _): return .valid
         case .exited(_, let errors):
             return Self.authFailures.contains(where: errors.contains) ? .invalid : .couldntCheck
-        case .timedOut: return .couldntCheck
+        case .timedOut, .signalled: return .couldntCheck
         case .cancelled, .launchFailed:
             lastCheck[account] = previousCheck
             return .couldntCheck

@@ -126,12 +126,12 @@ private let british = Locale(identifier: "en_GB")
         #expect(content.ids == [dev.id, prod.id])
     }
 
-    @Test func contentFollowsTheLocale() {
+    @Test func contentReadsEnglishTimesInASwedishRegion() {
         let now = at("2026-11-17T12:00:00Z")
         let dev = login(remaining: 5 * 3600 + 13 * 60, now: now)
 
-        #expect(expiryNotificationContent([dev], now: now, locale: Locale(identifier: "sv_SE")).title
-                == "dev expires in 5\u{202F}h 13\u{202F}m")
+        #expect(expiryNotificationContent([dev], now: now, locale: Locale(identifier: "en_SE")).title
+                == "dev expires in 5h 13m")
     }
 
     @Test func customDoneNotificationPointsToTerminalOnlyWithACommand() {
@@ -144,7 +144,7 @@ private let british = Locale(identifier: "en_GB")
             == NotificationText(title: "vpn is waiting for you", body: "Log in your own way, then click Done."))
     }
 
-    @Test func onlyActionButtonsGiveActions() {
+    @Test func onlyActionButtonsLogIn() {
         let dev = UUID()
         let prod = UUID()
         let ids = [dev.uuidString, prod.uuidString]
@@ -152,8 +152,14 @@ private let british = Locale(identifier: "en_GB")
         #expect(notificationAction(actionIdentifier: NotificationActionID.logIn, loginIDs: ids) == .logIn([dev, prod]))
         #expect(notificationAction(actionIdentifier: NotificationActionID.done, loginIDs: [dev.uuidString])
             == .customDone(dev))
-        #expect(notificationAction(actionIdentifier: UNNotificationDefaultActionIdentifier, loginIDs: ids) == nil)
         #expect(notificationAction(actionIdentifier: UNNotificationDismissActionIdentifier, loginIDs: ids) == nil)
         #expect(notificationAction(actionIdentifier: NotificationActionID.logIn, loginIDs: ["not-a-uuid"]) == nil)
+    }
+
+    @Test func clickingTheNotificationOpensThePanel() {
+        let ids = [UUID().uuidString]
+
+        #expect(notificationAction(actionIdentifier: UNNotificationDefaultActionIdentifier, loginIDs: ids) == .openPanel)
+        #expect(notificationAction(actionIdentifier: UNNotificationDefaultActionIdentifier, loginIDs: []) == .openPanel)
     }
 }

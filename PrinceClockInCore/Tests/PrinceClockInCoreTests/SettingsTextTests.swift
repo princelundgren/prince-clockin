@@ -26,6 +26,25 @@ private let minute: TimeInterval = 60
         #expect(durationOptions(listedLoginTimeouts, showing: 30 * minute) == [2, 5, 10, 15, 30].map { $0 * minute })
     }
 
+    @Test func everyListedLoginTimeoutRunsAsListed() {
+        for timeout in listedLoginTimeouts {
+            #expect(Settings(loginTimeout: timeout).appliedLoginTimeout == timeout)
+        }
+    }
+
+    @Test func aStoredLoginTimeoutOutsideTheRangeRunsAtTheNearestBound() {
+        #expect(Settings(loginTimeout: 1e30).appliedLoginTimeout == 24 * 60 * minute)
+        #expect(Settings(loginTimeout: 0).appliedLoginTimeout == 2 * minute)
+        #expect(Settings(loginTimeout: -300).appliedLoginTimeout == 2 * minute)
+        #expect(Settings(loginTimeout: 45 * minute).appliedLoginTimeout == 45 * minute)
+    }
+
+    @Test func aStoredLoginTimeoutThatIsNotFiniteRunsAtTheDefault() {
+        for timeout in [TimeInterval.nan, .infinity, -.infinity] {
+            #expect(Settings(loginTimeout: timeout).appliedLoginTimeout == Settings.defaultLoginTimeout)
+        }
+    }
+
 
     // MARK: Presets
 

@@ -49,7 +49,8 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
-    /// The user's yes to "Logged in at <time>?": the login time becomes the rewrite's time.
+    /// The user's Mark as Logged In at <time>, answering "Its login changed at <time>. Was that you?":
+    /// the login time becomes the rewrite's time.
     public mutating func confirmPossibleLogin(id: UUID) {
         guard let possibleLogin = possibleLogins[id] else { return }
         setLoginTime(id: id, at: possibleLogin.time)
@@ -75,8 +76,10 @@ public struct LoginsModel: Equatable, Sendable {
     }
 
     /// The logins due an expiry notification at `now`, in stored order, each marked as notified for
-    /// its current expiry so the next call, or a relaunch, doesn't return it again.
-    public mutating func takeExpiryNotifications(now: Date) -> [UUID] {
+    /// its current expiry so the next call, or a relaunch, doesn't return it again. Outside the
+    /// working hours, read in `calendar`, none is taken, so they wait for the hours to start.
+    public mutating func takeExpiryNotifications(now: Date, calendar: Calendar) -> [UUID] {
+        guard state.settings.workingHours.allowsNotifying(at: now, calendar: calendar) else { return [] }
         let due = expiryNotificationsDue(state.logins, now: now, leadTime: state.settings.notificationLeadTime)
         for id in due {
             guard let index = index(of: id) else { continue }

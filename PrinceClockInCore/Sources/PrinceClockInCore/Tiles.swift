@@ -132,7 +132,7 @@ public func tilePresentation(
         name: login.displayName,
         symbol: pending?.symbol ?? .systemImage(timer.symbolName),
         colour: pending.map(\.colour) ?? timer.colour,
-        subtitle: timer.subtitle(kind: kind, locale: locale, calendar: calendar),
+        subtitle: timer.subtitle(kind: kind, now: now, locale: locale, calendar: calendar),
         trailing: trailing,
         trailingOnHover: clickLogsIn ? .logIn : trailing,
         clickLogsIn: clickLogsIn,
@@ -223,7 +223,7 @@ private func detail(
     case .possibleLogin(let time, let isFoundOnWake):
         let when = calendar.isDate(time, inSameDayAs: now)
             ? "at \(clockTimeText(time, locale: locale, calendar: calendar))"
-            : dayAndTimeText(time, locale: locale, calendar: calendar)
+            : dayAndTimeAfterAVerbText(time, locale: locale, calendar: calendar)
         let changed = isFoundOnWake ? "\(when), while this Mac slept" : when
         return .possibleLogin(
             question: "Its login changed \(changed). Was that you?", confirmTitle: "Mark as Logged In \(when)")
@@ -309,14 +309,14 @@ private enum TileTimer {
     /// `ago` is the time since it expired, or since it was found invalid if that came first.
     case expired(ago: TimeInterval)
     case loggedOut
-    case stillValid(checkedAt: Date?)
+    case stillValid(check: DatabricksCheckRecord?)
     /// Logged in, with no session length to time it.
     case noExpiry
     case unknown
 
     init(_ login: Login, now: Date, leadTime: TimeInterval) {
         if isStillValid(login, now: now) {
-            self = .stillValid(checkedAt: login.lastDatabricksAnswer?.at)
+            self = .stillValid(check: login.lastDatabricksAnswer)
             return
         }
         if isLoggedInWithNoExpiry(login) {
@@ -351,7 +351,7 @@ private enum TileTimer {
         }
     }
 
-    func subtitle(kind: String, locale: Locale, calendar: Calendar) -> TileSubtitle {
+    func subtitle(kind: String, now: Date, locale: Locale, calendar: Calendar) -> TileSubtitle {
         switch self {
         case .expiring(let remaining):
             .status("Expiring · \(timeLeftText(remaining, locale: locale)) left")
@@ -359,8 +359,8 @@ private enum TileTimer {
             .status("Expired \(agoText(ago, locale: locale)) ago")
         case .loggedOut:
             .status("Logged out")
-        case .stillValid(let checkedAt?):
-            .status("Checked \(clockTimeText(checkedAt, locale: locale, calendar: calendar)) · valid")
+        case .stillValid(let check?):
+            .status(databricksCheckText(check, now: now, locale: locale, calendar: calendar))
         case .ok, .stillValid(nil), .noExpiry, .unknown:
             .kind(kind)
         }
