@@ -6,6 +6,8 @@ private let hour: TimeInterval = 3600
 private let british = Locale(identifier: "en_GB")
 private let workspace = DatabricksProfile(name: "analytics-dev", accountLevel: false)
 private let account = DatabricksProfile(name: "account", accountLevel: true)
+private let contosoDev = AzureTenant(
+    account: AzureAccount(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"), displayName: "Contoso Dev")
 
 @Suite struct AddLoginsTests {
     // MARK: The + menu
@@ -36,7 +38,7 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func foundLoginsComeUnderTheirHeaderThenCustomLogin() {
-        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace], gcloud: []))
+        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace], gcloud: [], azure: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -47,7 +49,7 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func accountProfilesComeAfterWorkspaceProfiles() {
-        let menu = addMenu(found: (aws: [], databricks: [account, workspace], gcloud: []))
+        let menu = addMenu(found: (aws: [], databricks: [account, workspace], gcloud: [], azure: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -58,13 +60,16 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
     }
 
     @Test func nothingNewSaysSoAboveCustomLogin() {
-        let menu = addMenu(found: (aws: [], databricks: [], gcloud: []))
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: [], azure: []))
 
-        #expect(menu == [.note("No new AWS SSO sessions, Databricks profiles or gcloud accounts"), .customLogin])
+        #expect(menu == [
+            .note("No new AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI tenants"), .customLogin,
+        ])
     }
 
     @Test func gcloudAccountsComeLastAndShowTheirEmail() {
-        let menu = addMenu(found: (aws: ["qa"], databricks: [account], gcloud: ["dev@example.com#example.goog"]))
+        let menu = addMenu(
+            found: (aws: ["qa"], databricks: [account], gcloud: ["dev@example.com#example.goog"], azure: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -83,6 +88,33 @@ private let account = DatabricksProfile(name: "account", accountLevel: true)
         ])
 
         #expect(names.gcloud == ["dev@example.com#example.goog"])
+    }
+
+    @Test func azureTenantsComeAfterGcloudAccountsAndShowTheirName() {
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: ["dev@example.com"], azure: [contosoDev]))
+
+        #expect(menu == [
+            .header("Found in your config files"),
+            .found(.gcloudAccount(account: "dev@example.com")),
+            .found(.azureTenant(contosoDev)),
+            .customLogin,
+        ])
+        #expect(menu[2].title == "Contoso Dev")
+        #expect(menu[2].kind == "Azure CLI tenant")
+    }
+
+    @Test func trackingAnAzureTenantChangesTheTrackedConfigNames() {
+        let names = TrackedConfigNames(logins: [AddLoginCandidate.azureTenant(contosoDev).login()])
+
+        #expect(names.azure == [contosoDev.account])
+    }
+
+    @Test func aFoundAzureTenantIsTrackedByUserAndTenantNamedAsFoundWithNoSessionLength() {
+        let login = AddLoginCandidate.azureTenant(contosoDev).login()
+
+        #expect(login.displayName == "Contoso Dev")
+        #expect(login.kind == .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"))
+        #expect(login.sessionLength == nil)
     }
 
     @Test func whileTheConfigFilesAreReadOnlyCustomLoginIsOffered() {

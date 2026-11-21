@@ -9,7 +9,8 @@ private let home = URL(filePath: "/Users/someone")
 private let paths = ConfigPaths(
     awsConfig: URL(filePath: "/Users/someone/.aws/config"),
     databricksConfig: URL(filePath: "/Users/someone/.databrickscfg"),
-    gcloudConfig: URL(filePath: "/Users/someone/.config/gcloud"))
+    gcloudConfig: URL(filePath: "/Users/someone/.config/gcloud"),
+    azureConfig: URL(filePath: "/Users/someone/.azure"))
 
 private var stockholm: Calendar {
     var calendar = Calendar(identifier: .gregorian)
@@ -53,6 +54,21 @@ private func form(_ login: Login) -> LoginSettingsForm {
         #expect(loginKindSymbolName(.databricksProfile(name: "account", accountLevel: true)) == "square.stack.3d.up")
         #expect(loginKindSymbolName(.custom(command: nil)) == "terminal")
         #expect(loginKindSymbolName(.gcloudAccount(account: "dev@example.com")) == "person.badge.key")
+    }
+
+    @Test func anAzureTenantShowsItsKindCheckAndProfile() {
+        let checked = DatabricksCheckRecord(at: now.addingTimeInterval(-hour), result: .invalid)
+        let dev = Login(
+            displayName: "Contoso Dev", kind: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"),
+            lastDatabricksCheck: checked)
+
+        #expect(loginKindSymbolName(dev.kind) == "building.2")
+        #expect(subtitle(dev) == "Azure CLI tenant · No timer · Checked 12:00 · invalid")
+        #expect(form(dev).source == LoginSource(label: "Tenant", value: "00000000-0000-0000-0000-000000000001 for dev@example.com in ~/.azure"))
+        #expect(form(dev).lastCheck == LastCheck(text: "Checked 12:00 · invalid", note: nil))
+        var unchecked = dev
+        unchecked.lastDatabricksCheck = nil
+        #expect(form(unchecked).lastCheck == LastCheck(text: "Not checked yet", note: nil))
     }
 
     @Test func aGcloudAccountShowsItsKindCheckAndStore() {
@@ -131,7 +147,8 @@ private func form(_ login: Login) -> LoginSettingsForm {
         let elsewhere = ConfigPaths(
             awsConfig: URL(filePath: "/etc/aws/config"),
             databricksConfig: URL(filePath: "/Users/someoneelse/.databrickscfg"),
-            gcloudConfig: URL(filePath: "/Users/someoneelse/.config/gcloud"))
+            gcloudConfig: URL(filePath: "/Users/someoneelse/.config/gcloud"),
+            azureConfig: URL(filePath: "/Users/someoneelse/.azure"))
 
         let awsForm = loginSettingsForm(
             for: aws(), paths: elsewhere, home: home, now: now, locale: british, calendar: stockholm)

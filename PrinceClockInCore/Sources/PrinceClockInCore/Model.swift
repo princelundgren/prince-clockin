@@ -15,17 +15,20 @@ public enum LoginKind: Hashable, Sendable {
     /// `account` is the `account_id` of gcloud's credential store: the account's email, followed by
     /// `#<universe domain>` outside the default universe.
     case gcloudAccount(account: String)
+    /// One user's sign-in to one tenant in the Azure CLI: `user` is the `user.name` of
+    /// `azureProfile.json`'s subscriptions, `tenant` their `tenantId`.
+    case azureTenant(user: String, tenant: String)
     /// `command` is plain text in the state file, so it must not hold a secret.
     case custom(command: String?)
 }
 
 extension LoginKind: Codable {
     private enum CodingKeys: String, CodingKey {
-        case type, name, accountLevel, account, command
+        case type, name, accountLevel, account, user, tenant, command
     }
 
     private enum TypeTag: String, Codable {
-        case awsSSOSession, databricksProfile, gcloudAccount, custom
+        case awsSSOSession, databricksProfile, gcloudAccount, azureTenant, custom
     }
 
     public init(from decoder: any Decoder) throws {
@@ -39,6 +42,10 @@ extension LoginKind: Codable {
                 accountLevel: try container.decode(Bool.self, forKey: .accountLevel))
         case .gcloudAccount:
             self = .gcloudAccount(account: try container.decode(String.self, forKey: .account))
+        case .azureTenant:
+            self = .azureTenant(
+                user: try container.decode(String.self, forKey: .user),
+                tenant: try container.decode(String.self, forKey: .tenant))
         case .custom:
             self = .custom(command: try container.decodeIfPresent(String.self, forKey: .command))
         }
@@ -57,6 +64,10 @@ extension LoginKind: Codable {
         case .gcloudAccount(let account):
             try container.encode(TypeTag.gcloudAccount, forKey: .type)
             try container.encode(account, forKey: .account)
+        case .azureTenant(let user, let tenant):
+            try container.encode(TypeTag.azureTenant, forKey: .type)
+            try container.encode(user, forKey: .user)
+            try container.encode(tenant, forKey: .tenant)
         case .custom(let command):
             try container.encode(TypeTag.custom, forKey: .type)
             try container.encodeIfPresent(command, forKey: .command)
@@ -76,8 +87,8 @@ public struct AWSCacheRecord: Codable, Hashable, Sendable {
     }
 }
 
-/// What one live check, of a Databricks profile or a gcloud account, found. A skipped check has no
-/// result.
+/// What one live check, of a Databricks profile, a gcloud account or an Azure CLI tenant, found. A
+/// skipped check has no result.
 public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case valid
     /// The CLI's no-credentials error.
@@ -86,7 +97,7 @@ public enum DatabricksCheckResult: String, Codable, Hashable, Sendable {
     case couldntCheck
 }
 
-/// A Databricks or gcloud login's last check that wasn't skipped: when, and what it found.
+/// A Databricks, gcloud or Azure login's last check that wasn't skipped: when, and what it found.
 public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
     public let at: Date
     public let result: DatabricksCheckResult
@@ -100,10 +111,10 @@ public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
 
 /// Why a login was invalidated.
 public enum InvalidationReason: String, Codable, Hashable, Sendable {
-    /// Its AWS cache file disappeared, as `aws sso logout` does, or its gcloud credential did, as
-    /// `gcloud auth revoke` does.
+    /// Its AWS cache file disappeared, as `aws sso logout` does, its gcloud credential did, as
+    /// `gcloud auth revoke` does, or its Azure subscriptions did, as `az logout` does.
     case loggedOut
-    /// A Databricks or gcloud check found it invalid.
+    /// A Databricks, gcloud or Azure check found it invalid.
     case foundInvalid
 }
 
@@ -114,8 +125,8 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Whole seconds; `nil` until known (a Databricks login has no default).
     public var sessionLength: TimeInterval?
     public var loginTime: Date?
-    /// Set when the AWS cache file or the gcloud credential disappears, or a check says invalid. The login counts
-    /// as expired while `loginTime` is `nil` or not newer.
+    /// Set when the AWS cache file, the gcloud credential or the Azure subscriptions disappear, or
+    /// a check says invalid. The login counts as expired while `loginTime` is `nil` or not newer.
     public var invalidatedAt: Date?
     /// Why `invalidatedAt` was set. `nil` in a file written before the reason was stored, which
     /// `isLoggedOut` reads by the kind's only earlier cause.
@@ -127,7 +138,10 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// The gcloud account's row in `credentials.db` when last seen, missing or with its `rowid`;
     /// gcloud gives the row a new, larger one at each login. `nil` until first seen.
     public var lastGcloudRow: GcloudRowState?
-    /// The last live check, Databricks or gcloud, that wasn't skipped.
+    /// Whether `azureProfile.json` listed the Azure user and tenant when last read. `nil` until
+    /// first seen.
+    public var lastAzurePresence: AzurePresence?
+    /// The last live check, Databricks, gcloud or Azure, that wasn't skipped.
     public var lastDatabricksCheck: DatabricksCheckRecord?
     /// The last check that answered, valid or invalid; a couldn't-check result leaves it as it was.
     /// Still valid is read from it.
@@ -145,6 +159,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         notifiedForExpiry: Date? = nil,
         lastAWSCache: AWSCacheRecord? = nil,
         lastGcloudRow: GcloudRowState? = nil,
+        lastAzurePresence: AzurePresence? = nil,
         lastDatabricksCheck: DatabricksCheckRecord? = nil,
         lastDatabricksAnswer: DatabricksCheckRecord? = nil
     ) {
@@ -158,6 +173,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.notifiedForExpiry = notifiedForExpiry?.wholeSeconds
         self.lastAWSCache = lastAWSCache
         self.lastGcloudRow = lastGcloudRow
+        self.lastAzurePresence = lastAzurePresence
         self.lastDatabricksCheck = lastDatabricksCheck
         self.lastDatabricksAnswer = lastDatabricksAnswer
     }
@@ -166,7 +182,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     public static func defaultSessionLength(for kind: LoginKind) -> TimeInterval? {
         switch kind {
         case .awsSSOSession: 8 * 3600
-        case .databricksProfile, .gcloudAccount, .custom: nil
+        case .databricksProfile, .gcloudAccount, .azureTenant, .custom: nil
         }
     }
 
@@ -178,6 +194,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
             notifiedForExpiry: notifiedForExpiry,
             lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
             lastGcloudRow: lastGcloudRow,
+            lastAzurePresence: lastAzurePresence,
             lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) },
             lastDatabricksAnswer: lastDatabricksAnswer.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
     }

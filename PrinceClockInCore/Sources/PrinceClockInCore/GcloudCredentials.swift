@@ -96,6 +96,7 @@ public enum GcloudRowState: Codable, Hashable, Sendable {
     case present(rowID: Int64)
 }
 
+/// What a read of gcloud's credential store, or of the Azure CLI's profile, means for one login.
 public enum GcloudObservation: Equatable, Sendable {
     case noChange
     case newLogin(at: Date)

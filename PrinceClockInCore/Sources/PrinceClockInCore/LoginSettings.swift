@@ -6,21 +6,22 @@ public func loginKindSymbolName(_ kind: LoginKind) -> String {
     case .awsSSOSession: "cloud"
     case .databricksProfile: "square.stack.3d.up"
     case .gcloudAccount: "person.badge.key"
+    case .azureTenant: "building.2"
     case .custom: "terminal"
     }
 }
 
 /// A login's row subtitle in Settings → Logins: its kind, its session length ("No timer" when
-/// unknown) and, for Databricks and gcloud, its last check ("Databricks profile · 3-day session ·
-/// Checked 14:02 · valid"). An account profile ends with "Not checked"; a login never checked has
-/// no check in it.
+/// unknown) and, for Databricks, gcloud and Azure, its last check ("Databricks profile · 3-day
+/// session · Checked 14:02 · valid"). An account profile ends with "Not checked"; a login never
+/// checked has no check in it.
 public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calendar: Calendar) -> String {
     let session = login.sessionLength.map { "\(sessionLengthAdjective($0)) session" } ?? "No timer"
     var parts = [loginKindName(login.kind), session]
     switch login.kind {
     case .databricksProfile(_, accountLevel: true):
         parts.append("Not checked")
-    case .databricksProfile, .gcloudAccount:
+    case .databricksProfile, .gcloudAccount, .azureTenant:
         if let check = login.lastDatabricksCheck {
             parts.append(checkText(check, now: now, locale: locale, calendar: calendar))
         }
@@ -30,9 +31,10 @@ public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calend
     return parts.joined(separator: " · ")
 }
 
-/// Where an AWS SSO session, Databricks profile or gcloud account comes from, as the form shows it.
+/// Where an AWS SSO session, Databricks profile, gcloud account or Azure tenant comes from, as the
+/// form shows it.
 public struct LoginSource: Equatable, Sendable {
-    /// "SSO session", "Profile" or "Account".
+    /// "SSO session", "Profile", "Account" or "Tenant".
     public let label: String
     /// The CLI's name in the config file, "qa in ~/.aws/config".
     public let value: String
@@ -43,7 +45,7 @@ public struct LoginSource: Equatable, Sendable {
     }
 }
 
-/// A Databricks profile's or gcloud account's last check, as the form shows it.
+/// A Databricks profile's, gcloud account's or Azure tenant's last check, as the form shows it.
 public struct LastCheck: Equatable, Sendable {
     /// "Checked 14:02 · valid", "Not checked yet", or "Not checked" for an account profile.
     public let text: String
@@ -62,7 +64,7 @@ public struct LoginSettingsForm: Equatable, Sendable {
     public let nameNote: String
     /// `nil` for a custom login.
     public let source: LoginSource?
-    /// `nil` for anything but a Databricks profile or gcloud account.
+    /// `nil` for anything but a Databricks profile, gcloud account or Azure tenant.
     public let lastCheck: LastCheck?
     /// Under a custom login's Command; `nil` for the other kinds.
     public let commandNote: String?
@@ -104,6 +106,17 @@ public func loginSettingsForm(
             source: LoginSource(
                 label: "Account",
                 value: "\(account) in \(displayPath(paths.gcloudConfig, home: home))"),
+            lastCheck: LastCheck(
+                text: login.lastDatabricksCheck.map { checkText($0, now: now, locale: locale, calendar: calendar) }
+                    ?? "Not checked yet",
+                note: nil),
+            commandNote: nil)
+    case .azureTenant(let user, let tenant):
+        return LoginSettingsForm(
+            nameNote: "\(shown); the tenant in the Azure CLI stays as it is.",
+            source: LoginSource(
+                label: "Tenant",
+                value: "\(tenant) for \(user) in \(displayPath(paths.azureConfig, home: home))"),
             lastCheck: LastCheck(
                 text: login.lastDatabricksCheck.map { checkText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",

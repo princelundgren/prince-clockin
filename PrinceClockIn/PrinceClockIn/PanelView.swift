@@ -110,7 +110,9 @@ struct PanelView: View {
         let found = await coordinator.discoverCandidates()
         guard !Task.isCancelled else { return }
         session.showEmptyPanel(
-            emptyPanel(aws: found.aws, databricks: found.databricks, gcloud: found.gcloud, locale: .current),
+            emptyPanel(
+                aws: found.aws, databricks: found.databricks, gcloud: found.gcloud, azure: found.azure,
+                locale: .current),
             forOpening: opening)
     }
 

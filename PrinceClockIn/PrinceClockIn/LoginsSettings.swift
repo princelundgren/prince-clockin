@@ -77,7 +77,7 @@ struct LoginsSettings: View {
             }
             .controlSize(.small)
             .disabled(!coordinator.canCheckNow)
-            .help("Ask the Databricks and gcloud CLIs whether each of their logins is still valid.")
+            .help("Ask the Databricks, gcloud and Azure CLIs whether each of their logins is still valid.")
         }
     }
 
@@ -101,8 +101,8 @@ struct LoginsSettings: View {
     }
 
     /// Reads the config files for the + menu when the pane appears and whenever a tracked AWS SSO
-    /// session, Databricks profile or gcloud account is added or removed, a new read cancelling the one before; a
-    /// cancelled read's answer is dropped.
+    /// session, Databricks profile, gcloud account or Azure tenant is added or removed, a new read
+    /// cancelling the one before; a cancelled read's answer is dropped.
     private func discover() async {
         candidates = nil
         let found = await coordinator.discoverCandidates()
