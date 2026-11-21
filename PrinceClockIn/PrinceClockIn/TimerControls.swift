@@ -2,16 +2,15 @@ import PrinceClockInCore
 import SwiftUI
 
 /// Set Timer for one login: Expires In or Logged In At, a Session Length pop-up, a caption that
-/// says when the login would expire or why Set refuses, then `cancelTitle` and Set. Shown inline,
+/// says when the login would expire or why Set refuses, then Cancel and Set. Shown inline,
 /// never as a sheet, since a sheet in the popover loses focus with it. The draft belongs to the
-/// caller, so it outlives the form's redraws; `note`, when given, is a line on how long it is
-/// kept. `onClose` runs after Cancel or Set.
+/// caller, so it outlives the form's redraws; `note` is a line on how long it is kept. `onClose`
+/// runs after Cancel or Set.
 struct SetTimerForm: View {
     let id: UUID
     @Binding var draft: SetTimerDraft
     let coordinator: Coordinator
-    let note: String?
-    let cancelTitle: String
+    let note: String
     let defaults: PanelDefaults
     let focus: FocusState<PanelFocus?>.Binding
     let onClose: () -> Void
@@ -58,14 +57,12 @@ struct SetTimerForm: View {
                 Text(caption)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let note {
-                Text(note)
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(note)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button(cancelTitle, action: onClose)
+                Button("Cancel", action: onClose)
                     .escapeKey(defaults.cancelledByEscape == id)
                 Button("Set") { set() }
                     .prominent(defaults.prominent == .set(id: id))

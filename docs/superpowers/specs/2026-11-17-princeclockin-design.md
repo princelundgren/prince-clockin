@@ -521,8 +521,8 @@ without its text, so no earlier text shows.
   actions, so there is no Mark as Logged In Now or Edit in Settings…. A SwiftUI menu in the panel
   closed on the first click after the panel opened, the app's activation arriving with that click
   (macOS 27.2.1), and the owner chose fewer actions over working around it. Session length is set
-  in Settings, and Set Timer opens from a "Was that you?" question and from Settings'
-  prompt after adding a login. A login whose timer is wrong with no question, or a custom login
+  in Settings, and Set Timer opens from a "Was that you?" question. A login whose timer is wrong
+  with no question, or a custom login
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
@@ -555,8 +555,7 @@ without its text, so no earlier text shows.
     time and a session length. With No timer chosen the caption reads "Choose a session length";
     an empty or non-numeric field, negative hours or minutes outside 0 to 59 leave it empty.
     Custom… shows a field for a number of hours, and keeps a length the list doesn't have exactly
-    until it is edited. Settings' prompt after adding a login opens this form in its place from
-    Set Timer…, with Skip in place of Cancel.
+    until it is edited.
 - **Tints:** a tile has a 10% tint of its state's colour. Text uses `.primary` and `.secondary`;
   on a light-appearance tint, which brings `.secondary` to about 3.7:1, the text is `.primary`
   only.
@@ -626,11 +625,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
     Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
     says Log In waits for the user to click Done.
-  - Right after a discovered login is added: "Already logged in to qa? Set its timer now so it can
-    notify you before it expires, or skip and log in from the panel later." with Skip and Set
-    Timer…, so a login the user has already done gets a known timer instead of the "Was that
-    you?" question later. It is asked once: selecting another login or removing this one
-    ends it.
+  - Adding a discovered login asks nothing more (owner, 2026-11-21): the owner found a Set Timer
+    prompt there more confusing than useful. Its timer stays unknown until it logs in from the
+    panel or answers a "Was that you?" question.
 - **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
   the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
   the tracked logins not in it) and −. Drag is the only way to reorder, with no Move Up or Move Down
@@ -699,9 +696,7 @@ A token has only the meanings its row lists.
 - Return and Escape are key equivalents (`keyboardShortcut(.defaultAction)` on the default,
   `.cancelAction` on Set Timer's Cancel, and the panel's `cancelOperation(_:)` otherwise), so
   neither needs focus: Return triggers the default from anywhere but a text field, which it
-  commits instead, and Escape works from a text field too. Settings' Set Timer prompt after adding
-  a login takes Return and Escape the same way, Set the default and Escape its Skip; before Set
-  Timer… is chosen, Escape is Skip and Return has no default. The rest
+  commits instead, and Escape works from a text field too. The rest
   follows the user's Keyboard Navigation setting, since buttons and menus, the tiles among them,
   take focus only with it on, as is conventional on the Mac: with it on, Tab, Space, the arrows
   and focus on the first tile work as above; with it off, Tab moves only between text fields,
@@ -1075,8 +1070,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in
     order, on to the footer's two icons; Return and Escape while a tile or
     button has focus. With it off, Return, Escape, and Escape from a text field were checked on
-    macOS 27.2.1. In Settings' prompt after adding a login, Return sets and Escape skips without
-    closing the window.
+    macOS 27.2.1.
   - The session length field stores nothing while typing: "9000" then Return leaves the length
     and the tile as they were and shows the refusal; a valid length stores on Return and when
     focus leaves the field.

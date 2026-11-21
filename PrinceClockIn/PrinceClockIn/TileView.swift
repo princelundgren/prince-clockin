@@ -187,7 +187,7 @@ struct TileView: View {
             get: { session.setTimerDrafts[login.id] ?? newSetTimerDraft() },
             set: { session.setTimerDrafts[login.id] = $0 })
         return SetTimerForm(
-            id: login.id, draft: draft, coordinator: coordinator, note: PanelSession.setTimerNote, cancelTitle: "Cancel",
+            id: login.id, draft: draft, coordinator: coordinator, note: PanelSession.setTimerNote,
             defaults: defaults, focus: focus, onClose: closeSetTimer)
     }
 

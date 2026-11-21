@@ -54,9 +54,8 @@ one expires, and logs in to the ones you pick, one after another, when you click
    control Terminal.
 4. Click the menu bar icon, then **Add Logins…**. Settings opens on Logins with its + menu: the AWS
    SSO sessions, Databricks profiles, gcloud accounts and Azure CLI tenants found in your config
-   files, and Custom Login…. After you add a found one, it offers to set its timer if you're already
-   logged in. To keep the timers running after you log out or restart, turn on **Launch at login**
-   in Settings → General; it is off by default.
+   files, and Custom Login…. To keep the timers running after you log out or restart, turn on
+   **Launch at login** in Settings → General; it is off by default.
 
 After that, PrinceClockIn updates itself with [Sparkle](https://sparkle-project.org). It checks
 once a day; when an update is waiting, a dot appears beside the menu bar icon, the panel says
