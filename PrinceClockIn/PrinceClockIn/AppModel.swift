@@ -70,10 +70,10 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         // No timer or cache change ticks before the coordinator has started and taken its baseline.
         Task {
             await coordinator.start()
-            await coordinator.tick()
+            await coordinator.tick(calendar: .current)
             scheduleTicks()
             awsCacheWatcher = AWSCacheWatcher(directory: home.appending(path: ".aws/sso/cache")) { [weak self] in
-                Task { await self?.coordinator.tick() }
+                Task { await self?.coordinator.tick(calendar: .current) }
             }
         }
     }
@@ -168,7 +168,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
                 options: .userInitiatedAllowingIdleSystemSleep, reason: "Timing logins and notifying before they expire")
         }
         let timer = Timer(fire: deadline, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in await self?.coordinator.tick() }
+            Task { @MainActor in await self?.coordinator.tick(calendar: .current) }
         }
         timer.tolerance = Self.tickTolerance
         RunLoop.main.add(timer, forMode: .common)
@@ -180,7 +180,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 self?.coordinator.systemDidWake()
-                await self?.coordinator.tick()
+                await self?.coordinator.tick(calendar: .current)
             }
         }
         let changes: [(NotificationCenter, Notification.Name)] = [
@@ -189,7 +189,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
         ]
         for (center, name) in changes {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.coordinator.tick() }
+                Task { @MainActor in await self?.coordinator.tick(calendar: .current) }
             }
         }
         voiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled) { [weak self] workspace, _ in

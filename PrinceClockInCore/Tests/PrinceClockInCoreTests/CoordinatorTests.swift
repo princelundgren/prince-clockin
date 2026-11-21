@@ -5,6 +5,11 @@ import PrinceClockInCore
 
 private let hour: TimeInterval = 3600
 private let launch = at("2026-11-17T09:00:00Z")
+private let utc: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+}()
 private let authError = ProcessOutcome.exited(
     code: 1, output: "Error: error getting token: cache: no cached credentials; run `databricks auth login` to sign in\n")
 
@@ -354,7 +359,7 @@ private final class GatedLogins: Sendable {
         await coordinator.start()
 
         fixture.clock.advance(by: 30)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(coordinator.now == launch.addingTimeInterval(30))
     }
@@ -368,7 +373,7 @@ private final class GatedLogins: Sendable {
         let loggedIn = launch.addingTimeInterval(60)
         fixture.aws.set("dev", snapshot(modified: loggedIn, expiresAt: loggedIn.addingTimeInterval(hour)))
         fixture.clock.advance(by: 120)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(coordinator.login(dev.id)?.loginTime == loggedIn)
         #expect(fixture.stored?.logins.first?.loginTime == loggedIn)
@@ -380,13 +385,70 @@ private final class GatedLogins: Sendable {
         let fixture = try Fixture(logins: [dev, prod])
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
         #expect(fixture.notifier.expiryNotifications.isEmpty)
 
         fixture.clock.advance(by: 3 * hour)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(fixture.notifier.expiryNotifications.map { $0.map(\.id) } == [[dev.id, prod.id]])
+    }
+
+    @Test func tickHoldsNotificationsOutsideWorkingHoursAndPostsThemAtTheStart() async throws {
+        let dev = login(remaining: 9 * hour, now: launch, name: "dev")
+        let prod = login(remaining: 10 * hour, now: launch, name: "prod")
+        let fixture = try Fixture(logins: [dev, prod])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.updateSettings(Settings(workingHours: WorkingHours(isOn: true)))
+
+        fixture.clock.advance(by: 9 * hour)
+        await coordinator.tick(calendar: utc)
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
+
+        fixture.clock.advance(by: 15 * hour)
+        await coordinator.tick(calendar: utc)
+
+        #expect(fixture.notifier.expiryNotifications.map { $0.map(\.id) } == [[dev.id, prod.id]])
+        let posted = try #require(fixture.notifier.expiryNotifications.first)
+        let content = expiryNotificationContent(posted, now: fixture.clock.read(), locale: Locale(identifier: "en_US"))
+        #expect(content.body == "dev: expired\nprod: expired")
+    }
+
+    @Test func tickChecksDatabricksAtNotificationTimeOutsideWorkingHours() async throws {
+        let expiring = databricks("analytics-dev", remaining: 600)
+        let fixture = try Fixture(logins: [expiring])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.updateSettings(Settings(workingHours: WorkingHours(isOn: true, startMinute: 10 * 60)))
+
+        await coordinator.tick(calendar: utc)
+        fixture.clock.advance(by: 360)
+        await coordinator.tick(calendar: utc)
+
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
+    }
+
+    @Test func databricksLoginFoundInvalidOutsideWorkingHoursIsNotifiedAsExpiredAtTheirStart() async throws {
+        let expiring = databricks("analytics-dev", remaining: 600)
+        let fixture = try Fixture(logins: [expiring], checkRunner: ArgumentRunner { _ in authError })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        coordinator.updateSettings(Settings(workingHours: WorkingHours(isOn: true, startMinute: 10 * 60)))
+
+        await coordinator.tick(calendar: utc)
+        #expect(fixture.notifier.expiryNotifications.isEmpty)
+        #expect(coordinator.nextTickDeadline(shown: .none, calendar: utc) == at("2026-11-17T10:00:00Z"))
+
+        fixture.clock.advance(by: hour)
+        await coordinator.tick(calendar: utc)
+
+        let posted = try #require(fixture.notifier.expiryNotifications.first)
+        #expect(posted.map(\.id) == [expiring.id])
+        let title = expiryNotificationContent(posted, now: fixture.clock.read(), locale: Locale(identifier: "en_GB")).title
+        #expect(title == "analytics-dev expired")
+        #expect(fixture.checkRunner.calls.count == 1)
     }
 
     @Test func relaunchDoesNotNotifyAgain() async throws {
@@ -394,12 +456,12 @@ private final class GatedLogins: Sendable {
         let fixture = try Fixture(logins: [dev])
         let first = fixture.makeCoordinator()
         await first.start()
-        await first.tick()
+        await first.tick(calendar: utc)
         #expect(fixture.notifier.expiryNotifications.count == 1)
 
         let relaunched = fixture.makeCoordinator()
         await relaunched.start()
-        await relaunched.tick()
+        await relaunched.tick(calendar: utc)
 
         #expect(fixture.notifier.expiryNotifications.count == 1)
     }
@@ -411,9 +473,9 @@ private final class GatedLogins: Sendable {
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
 
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
         fixture.clock.advance(by: 600)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile=analytics-dev"]])
     }
@@ -424,7 +486,7 @@ private final class GatedLogins: Sendable {
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
 
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         let posted = try #require(fixture.notifier.expiryNotifications.first)
         #expect(posted.first?.invalidatedAt == launch)
@@ -438,9 +500,9 @@ private final class GatedLogins: Sendable {
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
 
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
         fixture.clock.advance(by: 10 * 60)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
         #expect(fixture.notifier.expiryNotifications.isEmpty)
@@ -461,11 +523,11 @@ private final class GatedLogins: Sendable {
             })
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
-        let first = Task { await coordinator.tick() }
+        let first = Task { await coordinator.tick(calendar: utc) }
         #expect(await eventually { fixture.checkRunner.calls.count == 1 })
 
         fixture.clock.advance(by: 30)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
         #expect(coordinator.now == launch)
 
         await gate.open()
@@ -525,7 +587,7 @@ private final class GatedLogins: Sendable {
         coordinator.logIn([expiring.id])
         #expect(await eventually { coordinator.batch != nil })
 
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         #expect(fixture.checkRunner.calls.isEmpty)
         #expect(fixture.notifier.expiryNotifications.count == 1)
@@ -574,7 +636,7 @@ private final class GatedLogins: Sendable {
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
 
-        let tick = Task { await coordinator.tick() }
+        let tick = Task { await coordinator.tick(calendar: utc) }
         #expect(await eventually { fixture.checkRunner.calls.count == 1 })
         #expect(coordinator.isCheckingDatabricks)
 
@@ -1043,12 +1105,6 @@ private final class GatedLogins: Sendable {
         return (dev, fixture)
     }
 
-    private func utc() -> Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        return calendar
-    }
-
     @Test func aPossibleLoginFoundByTheFirstCheckAfterWakingSaysTheMacSlept() async throws {
         let (dev, fixture) = try devWithACache()
         let coordinator = fixture.makeCoordinator()
@@ -1061,12 +1117,12 @@ private final class GatedLogins: Sendable {
         fixture.clock.advance(by: 8 * hour)
         rewriteDevCache(fixture, at: launch.addingTimeInterval(hour))
         coordinator.systemDidWake()
-        await coordinator.tick()
-        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc())?.detail == asleepQuestion)
+        await coordinator.tick(calendar: utc)
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc)?.detail == asleepQuestion)
 
         fixture.clock.advance(by: 60)
-        await coordinator.tick()
-        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc())?.detail == asleepQuestion)
+        await coordinator.tick(calendar: utc)
+        #expect(coordinator.tile(for: dev.id, locale: british, calendar: utc)?.detail == asleepQuestion)
     }
 
     @Test func aPossibleLoginFoundAfterTheFirstCheckAfterWakingDoesntMentionSleep() async throws {
@@ -1074,13 +1130,13 @@ private final class GatedLogins: Sendable {
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
         coordinator.systemDidWake()
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
         rewriteDevCache(fixture, at: launch.addingTimeInterval(110 * 60))
         fixture.clock.advance(by: 2 * hour)
-        await coordinator.tick()
+        await coordinator.tick(calendar: utc)
 
-        #expect(coordinator.tile(for: dev.id, locale: Locale(identifier: "en_GB"), calendar: utc())?.detail
+        #expect(coordinator.tile(for: dev.id, locale: Locale(identifier: "en_GB"), calendar: utc)?.detail
             == .possibleLogin(
                 question: "Its login changed at 10:50. Was that you?", confirmTitle: "Mark as Logged In at 10:50"))
     }

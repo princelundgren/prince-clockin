@@ -123,9 +123,9 @@ struct SettingsNote: View {
 
 // MARK: Notifications
 
-/// Settings → Notifications: how long before expiry a login is notified, and whether notifications
-/// are on. The permission is read again when the pane appears and when the app becomes active, as
-/// after the user changes it in System Settings.
+/// Settings → Notifications: how long before expiry a login is notified, the working hours
+/// notifications wait for, and whether notifications are on. The permission is read again when the
+/// pane appears and when the app becomes active, as after the user changes it in System Settings.
 private struct NotificationsSettings: View {
     let appModel: AppModel
 
@@ -137,6 +137,7 @@ private struct NotificationsSettings: View {
                     title: "Notify before a login expires", listed: listedNotificationLeadTimes,
                     value: \.notificationLeadTime, coordinator: appModel.coordinator)
             }
+            WorkingHoursSection(coordinator: appModel.coordinator, calendar: .current)
             Section {
                 VStack(alignment: .leading, spacing: 4) {
                     LabeledContent("Notifications") {
@@ -155,6 +156,78 @@ private struct NotificationsSettings: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await appModel.refreshNotificationPermission() }
         }
+    }
+}
+
+/// Settings → Notifications' working hours: the toggle, and while it is on, the hours and the days
+/// they start on. The last day picked can't be unpicked, so the hours always name one.
+private struct WorkingHoursSection: View {
+    let coordinator: Coordinator
+    let calendar: Calendar
+
+    var body: some View {
+        let hours = coordinator.model.state.settings.workingHours
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Only notify during working hours", isOn: isOn)
+                SettingsNote("Notifications from outside these hours arrive when they start.")
+            }
+            if hours.isOn {
+                DatePicker("From", selection: clockTime(\.startMinute), displayedComponents: .hourAndMinute)
+                VStack(alignment: .leading, spacing: 4) {
+                    DatePicker("To", selection: clockTime(\.endMinute), displayedComponents: .hourAndMinute)
+                    if hours.endMinute <= hours.startMinute { SettingsNote("They end the next day.") }
+                }
+                LabeledContent("Days") {
+                    HStack(spacing: 4) {
+                        ForEach(weekdaysInDisplayOrder(calendar: calendar), id: \.self) { weekday in
+                            let isLastPicked = hours.weekdays == [weekday]
+                            let toggle = Toggle(calendar.shortWeekdaySymbols[weekday - 1], isOn: day(weekday))
+                                .toggleStyle(.button)
+                                .disabled(isLastPicked)
+                                .accessibilityLabel(calendar.weekdaySymbols[weekday - 1])
+                            if isLastPicked { toggle.help("At least one day stays picked.") } else { toggle }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func update(_ change: (inout WorkingHours) -> Void) {
+        var settings = coordinator.model.state.settings
+        change(&settings.workingHours)
+        coordinator.updateSettings(settings)
+    }
+
+    private var isOn: Binding<Bool> {
+        Binding(
+            get: { coordinator.model.state.settings.workingHours.isOn },
+            set: { isOn in update { $0.isOn = isOn } })
+    }
+
+    /// A minute of the day as today's date at that time, which is what a time picker edits.
+    private func clockTime(_ value: WritableKeyPath<WorkingHours, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minute = coordinator.model.state.settings.workingHours[keyPath: value]
+                return calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now)
+                    ?? calendar.startOfDay(for: .now)
+            },
+            set: { date in
+                let parts = calendar.dateComponents([.hour, .minute], from: date)
+                update { $0[keyPath: value] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0) }
+            })
+    }
+
+    private func day(_ weekday: Int) -> Binding<Bool> {
+        Binding(
+            get: { coordinator.model.state.settings.workingHours.weekdays.contains(weekday) },
+            set: { isPicked in
+                update { hours in
+                    if isPicked { hours.weekdays.insert(weekday) } else { hours.weekdays.remove(weekday) }
+                }
+            })
     }
 }
 

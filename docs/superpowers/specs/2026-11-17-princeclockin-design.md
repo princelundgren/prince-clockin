@@ -25,7 +25,8 @@ arrives before it does, and one click logs in to the logins you choose, in seque
 
 - A timer per login, and in the menu bar a symbol that says whether one needs you, with no
   countdown.
-- A notification a set time before a login expires: 30 minutes by default, changeable in settings.
+- A notification a set time before a login expires: 30 minutes by default, changeable in settings,
+  and, if the user turns on working hours, held until they start (owner, 2026-11-20).
 - Logging in only when the user clicks: one login, every due login, or a preset. There is no
   multi-select; a set of logins used together is a preset (owner, 2026-11-18).
 - Presets the user defines and edits (e.g. "AWS dev + Databricks dev"); nothing hard-coded like
@@ -209,10 +210,11 @@ the AWS file-time rule above, or set by hand.
 Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/`, on
 wake from sleep, on a clock change and on a time-zone change, with no polling, so a menu bar app
 that runs all day does no work while nothing happens. Each recomputation also reads the AWS cache
-files and sends any notification now due.
+files and sends any notification now due and, with working hours on, inside them.
 
 - **The next moment** is the soonest notification time or expiry, or at once while a notification
-  is due and unsent. What is on screen adds more:
+  is due and unsent, or, while one waits outside the working hours, their next start. What is on
+  screen adds more:
   - the panel or Settings open: the next minute of each tile's time left or time since expiry, and
     each minute of the clock, which Set Timer's caption and a shown "tomorrow" are timed against;
   - VoiceOver on with both closed: the next minute of the one time left the menu bar label speaks.
@@ -234,8 +236,11 @@ files and sends any notification now due.
 
 The check asks the Databricks CLI whether a tracked profile is still valid, one profile at a time,
 for tracked profiles only, at most every 5 minutes per profile, and never while a `databricks`
-login is running. It runs when a Databricks login enters its notification time, and when the user
-clicks Check Databricks Now in Settings → Logins.
+login is running. It runs when a Databricks login enters its notification time, outside the
+working hours too, where only the notification waits: a waiting login is checked once per launch
+for that notification time, and the notification at the hours' start reads what the check stored.
+A login found invalid while its notification waits stays owed it, so it is sent as expired. It
+also runs when the user clicks Check Databricks Now in Settings → Logins.
 
 - A profile reported invalid moves its timer to expired, even if time remains.
 - A profile reported valid whose timer says expired is still valid (see Timers). Its tile says
@@ -505,8 +510,13 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
   selected preset at once.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
-  hours (30 minutes by default), and Notifications: their state, Open System Settings…, and, while
-  they're off, "With notifications off, only the menu bar shows that a login is about to expire."
+  hours (30 minutes by default); "Only notify during working hours", off by default, with
+  "Notifications from outside these hours arrive when they start.", and while it is on, From and To
+  time pickers (09:00 and 17:00 by default; "They end the next day." when To is at or before
+  From) and Days, a button per weekday in the calendar's order, Monday to Friday by default, the
+  last one picked disabled so the hours always name a day; and Notifications: their state, Open
+  System Settings…, and, while they're off, "With notifications off, only the menu bar shows that
+  a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
@@ -628,14 +638,27 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its notification time. Logins that enter it at the same
-  moment, or while the Mac slept or the app wasn't running, are grouped into one notification. A
-  login whose notification time passed while the app wasn't running is announced once at the next
-  launch, as expired if it has.
+- One notification when a login enters its notification time, or, with working hours on and
+  outside them, at their next start. Logins that enter it at the same moment, or while the Mac
+  slept or the app wasn't running, are grouped into one notification. A login whose notification
+  time passed while the app wasn't running is announced once at the next launch, or the next start
+  of the working hours if that launch is outside them, as expired if it has.
 - Its Log In action starts those logins. That is the user starting them, not the app.
 - Clicking a notification itself, rather than one of its buttons, opens the panel while the app
   runs and logs nothing in. A click that launches the app opens no panel: the status item's window
   has no place in the menu bar yet, and the popover doesn't show.
+- **Working hours** (owner, 2026-11-20), when the user turns them on in Settings → Notifications:
+  an expiry notification that falls due outside them waits, and every one waiting is sent at their
+  next start as one grouped notification, each login described as it is then ("expired" for one
+  that expired meanwhile). One set of hours, read in the Mac's time zone, applies to every day
+  picked. Hours that end at or before they start run past midnight and belong to the day they
+  start, so equal times make a 24-hour span. A start inside the hour a clock change skips is
+  skipped that day. The menu bar and panel don't wait: they show expiring and expired as always,
+  and a Databricks check still runs at the notification time. A login that check finds invalid
+  still waits and is sent as expired; one it finds still valid isn't sent, as at any other time.
+  Only expiry notifications wait; Done and a failed save are about what is happening now. macOS
+  Focus can silence the app on a schedule; holding the notification and sending it when the hours
+  start is what the app adds.
 - A custom login waiting for Done posts a notification with a Done action: "vpn is waiting in
   Terminal" and "Finish the login there, then click Done.", or without a command the batch card's
   "vpn is waiting for you" and "Log in your own way, then click Done."
@@ -716,7 +739,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   check, the expiry the last notification was for (so a relaunch doesn't notify twice), for
   Databricks, whether the profile is account-level (as last read from its config), the time and
   result of its last check and of its last answer (valid or invalid), and, for AWS, the cache
-  file's last-seen modified and `expiresAt` times. Fingerprints are never stored.
+  file's last-seen modified and `expiresAt` times. Fingerprints are never stored. The working
+  hours are stored as their on/off, start and end minutes and weekdays; a file written before
+  they existed has none and reads as off, so they need no new format version.
 - The file is `state.json`, with a format version. A format-1 file, as v1.0.0 to v1.0.2 wrote it,
   loads with its two renamed keys read as `notifiedForExpiry` and `notificationLeadTime`, and is
   written in format 2 at the next save. One that won't decode, or has a format version other than 1

@@ -25,7 +25,9 @@ private func sampleState() -> AppState {
     return AppState(
         logins: [aws, databricks, checked, custom],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
-        settings: Settings(notificationLeadTime: 15 * 60, loginTimeout: 120))
+        settings: Settings(
+            notificationLeadTime: 15 * 60, loginTimeout: 120,
+            workingHours: WorkingHours(isOn: true, startMinute: 22 * 60, endMinute: 6 * 60, weekdays: [2, 3])))
 }
 
 private func encodeFlat(_ kind: LoginKind) throws -> String {
@@ -325,6 +327,20 @@ private func version1State() throws -> AppState {
         #expect(text.contains(#""loginTime" : "2026-11-17T09:00:00Z""#))
         #expect(!text.contains("fingerprint"))
         #expect(text.contains(#""invalidationReason" : "loggedOut""#))
+    }
+}
+
+@Test func fileWithoutWorkingHoursLoadsWithThemOff() throws {
+    try withTemporaryDirectory { directory in
+        let json = #"{"version": 2, "presets": [], "logins": [], "settings": {"notificationLeadTime": 1800, "loginTimeout": 300}}"#
+        try Data(json.utf8).write(to: directory.appending(path: "state.json"))
+
+        guard case .loaded(let state) = StateStore(directory: directory).load() else {
+            Issue.record("expected .loaded")
+            return
+        }
+
+        #expect(state.settings == Settings(notificationLeadTime: 1800, loginTimeout: 300, workingHours: WorkingHours()))
     }
 }
 

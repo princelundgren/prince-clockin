@@ -17,13 +17,19 @@ public struct ExpiryNotificationContent: Equatable, Sendable {
 
 /// The logins, in the order given, that have reached their notification time and haven't been
 /// notified for their current expiry. That includes ones that expired while the Mac slept or the app
-/// wasn't running. An unknown timer, a login invalidated since its last login time, or a Still
-/// valid login is never notified.
+/// wasn't running. An unknown timer or a Still valid login is never notified, and neither is a
+/// login invalidated since its last login time, unless a check found it invalid at or after its
+/// notification time: that one, held by the working hours, is still owed its notification.
 public func expiryNotificationsDue(_ logins: [Login], now: Date, leadTime: TimeInterval) -> [UUID] {
     logins.filter { login in
-        guard let expiry = expiry(of: login), !isInvalidated(login), !isStillValid(login, now: now)
-        else { return false }
-        return now >= expiry.addingTimeInterval(-leadTime) && login.notifiedForExpiry != expiry
+        guard let expiry = expiry(of: login), !isStillValid(login, now: now) else { return false }
+        let notificationTime = expiry.addingTimeInterval(-leadTime)
+        if isInvalidated(login) {
+            guard login.invalidationReason == .foundInvalid, let invalidatedAt = login.invalidatedAt,
+                  invalidatedAt >= notificationTime
+            else { return false }
+        }
+        return now >= notificationTime && login.notifiedForExpiry != expiry
     }
     .map(\.id)
 }

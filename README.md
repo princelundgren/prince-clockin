@@ -20,7 +20,8 @@ one expires, and logs in to the ones you pick, one after another, when you click
   in the order you drag them into in Settings → Logins, with its time left.
 - **Notifies once** before a login expires, 30 minutes ahead by default, which you change in
   Settings → Notifications. Logins that need it at the same time, or while the Mac slept, share
-  one notification, whose Log In button starts them.
+  one notification, whose Log In button starts them. With working hours on in Settings →
+  Notifications, one due outside them arrives when they start.
 - **Logs in when you click**: any tile that isn't running, queued, failed, awaiting approval or
   asking, Log In to N Due when several are due, or a preset you make in Settings → Presets, such
   as "AWS dev + Databricks dev". Logins run one at a time, since several browser sign-ins at once

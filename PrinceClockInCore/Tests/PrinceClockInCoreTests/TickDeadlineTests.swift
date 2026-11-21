@@ -22,8 +22,10 @@ private func notified(_ login: Login) -> Login {
     return login
 }
 
-private func deadline(_ logins: [Login], now: String, shown: ShownTimes = .none) -> Date? {
-    nextTickDeadline(logins, now: at(now), leadTime: lead, shown: shown, calendar: utc)
+private func deadline(
+    _ logins: [Login], now: String, shown: ShownTimes = .none, workingHours: WorkingHours = WorkingHours()
+) -> Date? {
+    nextTickDeadline(logins, now: at(now), leadTime: lead, workingHours: workingHours, shown: shown, calendar: utc)
 }
 
 @Test func noTimerNeedsNoTick() {
@@ -55,6 +57,22 @@ private func deadline(_ logins: [Login], now: String, shown: ShownTimes = .none)
 
     #expect(deadline([login], now: now) == at(now))
     #expect(deadline([notified(login)], now: now) == at("2026-11-17T17:00:00Z"))
+}
+
+@Test func unsentNotificationOutsideWorkingHoursTicksAtTheirStart() {
+    let login = timed("2026-11-17T12:00:00Z")
+    let hours = WorkingHours(isOn: true, startMinute: 9 * 60, endMinute: 17 * 60)
+
+    #expect(deadline([login], now: "2026-11-17T19:40:00Z", workingHours: hours) == at("2026-11-17T20:00:00Z"))
+    #expect(deadline([login], now: "2026-11-17T20:10:00Z", workingHours: hours) == at("2026-11-18T09:00:00Z"))
+    let dueInside = timed("2026-11-17T09:00:00Z")
+    #expect(deadline([dueInside], now: "2026-11-17T16:40:00Z", workingHours: hours) == at("2026-11-17T16:40:00Z"))
+}
+
+@Test func turningWorkingHoursOffSendsAWaitingNotificationAtOnce() {
+    let login = timed("2026-11-17T12:00:00Z")
+
+    #expect(deadline([login], now: "2026-11-17T20:10:00Z", workingHours: WorkingHours()) == at("2026-11-17T20:10:00Z"))
 }
 
 @Test func shownTimeLeftTicksJustPastEachMinute() {
