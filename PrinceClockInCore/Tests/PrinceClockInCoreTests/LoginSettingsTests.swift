@@ -69,7 +69,8 @@ private func lengthNote(_ kind: LoginKind, choice: SessionLengthChoice = .length
         #expect(loginKindSymbolName(dev.kind) == "building.2")
         #expect(subtitle(dev) == "Azure CLI tenant · No timer · Checked 12:00 · invalid")
         #expect(form(dev).source == LoginSource(
-            label: "Tenant", value: "00000000-0000-0000-0000-000000000001 for dev@example.com", note: "In ~/.azure."))
+            label: "Tenant", value: "00000000-0000-0000-0000-000000000001 for dev@example.com", note: "In ~/.azure.",
+            file: paths.azureConfig))
         #expect(form(dev).lastCheck == LastCheck(text: "Checked 12:00 · invalid", note: nil))
         var unchecked = dev
         unchecked.lastDatabricksCheck = nil
@@ -84,7 +85,8 @@ private func lengthNote(_ kind: LoginKind, choice: SessionLengthChoice = .length
 
         #expect(subtitle(dev) == "gcloud account · No timer · Checked 12:00 · valid")
         #expect(form(dev).source == LoginSource(
-            label: "Account", value: "dev@example.com#example.goog", note: "In ~/.config/gcloud."))
+            label: "Account", value: "dev@example.com#example.goog", note: "In ~/.config/gcloud.",
+            file: paths.gcloudConfig))
         #expect(form(dev).lastCheck == LastCheck(text: "Checked 12:00 · valid", note: nil))
         var unchecked = dev
         unchecked.lastDatabricksCheck = nil
@@ -135,12 +137,14 @@ private func lengthNote(_ kind: LoginKind, choice: SessionLengthChoice = .length
     @Test func anAWSSessionsSourceIsItsSessionInTheConfigFile() {
         let source = form(aws()).source
 
-        #expect(source == LoginSource(label: "SSO session", value: "qa", note: "In ~/.aws/config."))
+        #expect(source == LoginSource(
+            label: "SSO session", value: "qa", note: "In ~/.aws/config.", file: paths.awsConfig))
     }
 
     @Test func aDatabricksProfilesSourceIsItsProfileInTheConfigFile() {
         #expect(form(databricks()).source
-            == LoginSource(label: "Profile", value: "analytics-dev", note: "In ~/.databrickscfg."))
+            == LoginSource(
+                label: "Profile", value: "analytics-dev", note: "In ~/.databrickscfg.", file: paths.databricksConfig))
     }
 
     @Test func theSourceNamesTheCLIsNameNotTheDisplayName() {
@@ -164,6 +168,7 @@ private func lengthNote(_ kind: LoginKind, choice: SessionLengthChoice = .length
 
         #expect(awsForm.source?.note == "In /etc/aws/config.")
         #expect(databricksForm.source?.note == "In /Users/someoneelse/.databrickscfg.")
+        #expect(awsForm.source?.file == elsewhere.awsConfig)
     }
 
     @Test func aCustomLoginHasNoSourceAndTheCommandsNote() {
