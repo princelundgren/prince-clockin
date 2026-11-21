@@ -145,7 +145,7 @@ Issue…** in the right-click menu or Settings → About.
 
 ## Building from source
 
-You need macOS 26 and Xcode 26.6, the version CI builds with. From the repository root:
+You need macOS 26 and Xcode 27.2, the version CI builds with. From the repository root:
 
 ```sh
 swift test --package-path PrinceClockInCore    # the core's tests
