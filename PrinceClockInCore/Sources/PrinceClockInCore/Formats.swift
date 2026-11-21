@@ -37,6 +37,20 @@ public func dayAndTimeText(_ date: Date, locale: Locale, calendar: Calendar) -> 
     return formatter.string(from: date)
 }
 
+/// A Databricks check, for Settings and the Still valid tile: "Checked 14:02 · valid", with the day
+/// as well when the check wasn't on `now`'s day.
+func databricksCheckText(_ check: DatabricksCheckRecord, now: Date, locale: Locale, calendar: Calendar) -> String {
+    let when = calendar.isDate(check.at, inSameDayAs: now)
+        ? clockTimeText(check.at, locale: locale, calendar: calendar)
+        : dayAndTimeText(check.at, locale: locale, calendar: calendar)
+    let result = switch check.result {
+    case .valid: "valid"
+    case .invalid: "invalid"
+    case .couldntCheck: "couldn't check"
+    }
+    return "Checked \(when) · \(result)"
+}
+
 /// A batch's progress, in its one form ("1 of 2").
 public func batchProgressText(_ progress: BatchProgress) -> String {
     "\(progress.position) of \(progress.total)"

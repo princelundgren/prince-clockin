@@ -32,6 +32,18 @@ private func stillValid(checkedAt: Date) -> Login {
     return login
 }
 
+/// The tile at `now` of a Databricks workspace login with a 1-hour session, logged in two days
+/// before `checkedAt` and found valid at `checkedAt`.
+private func stillValidTile(checkedAt: Date, now: Date) -> TilePresentation {
+    var login = Login(
+        displayName: "analytics-dev", kind: .databricksProfile(name: "analytics-dev", accountLevel: false),
+        sessionLength: hour, loginTime: checkedAt.addingTimeInterval(-48 * hour))
+    login.lastDatabricksAnswer = DatabricksCheckRecord(at: checkedAt, result: .valid)
+    return tilePresentation(
+        for: login, now: now, leadTime: thirtyMinutes, facts: TileFacts(), locale: british,
+        calendar: calendar(british))
+}
+
 private func noTimer(_ name: String = "analytics-prod") -> Login {
     Login(displayName: name, kind: .databricksProfile(name: name, accountLevel: false))
 }
@@ -200,6 +212,28 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
 
         #expect(valid.subtitle == .status("Checked 12:30 · valid"))
         #expect(valid.trailing == .stateWord("Still valid"))
+    }
+
+    @Test(arguments: [
+        (daysBefore: 0, subtitle: "Checked 12:30 · valid"),
+        (daysBefore: 1, subtitle: "Checked yesterday at 12:30 · valid"),
+    ])
+    func aStillValidTileGivesTheDayOnlyForACheckBeforeToday(daysBefore: Int, subtitle: String) throws {
+        // `DateFormatter`'s relative formatting reads the real clock, so the fixture is built from it.
+        let britishCalendar = calendar(british)
+        let today = Date.now
+        let day = try #require(britishCalendar.date(byAdding: .day, value: -daysBefore, to: today))
+        let checkedAt = try #require(britishCalendar.date(bySettingHour: 12, minute: 30, second: 0, of: day))
+
+        #expect(stillValidTile(checkedAt: checkedAt, now: today).subtitle == .status(subtitle))
+    }
+
+    @Test func aStillValidTileGivesTheDateOfAnOlderCheck() {
+        // Before any real date this test runs on, so the real clock never names its day.
+        let checkedAt = at("2026-11-01T11:30:00Z")
+
+        #expect(stillValidTile(checkedAt: checkedAt, now: .now).subtitle
+            == .status("Checked 1 Nov 2026 at 12:30 · valid"))
     }
 
     @Test func aPendingItemShowsItsStateWordInsteadOfLogIn() {

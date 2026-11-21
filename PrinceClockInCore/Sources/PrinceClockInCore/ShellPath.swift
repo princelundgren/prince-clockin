@@ -33,11 +33,18 @@ public struct ResolvedPath: Equatable, Sendable {
     }
 }
 
+/// Finds the directories to search for the CLIs.
+public protocol PathResolving: Sendable {
+    /// The directories to search; each call may read them again, so a caller that needs them twice
+    /// keeps the first answer.
+    func resolvePath() async -> ResolvedPath
+}
+
 /// Reads `PATH` from the user's login shell, since a GUI app doesn't inherit it (Homebrew, mise).
 /// Empty and relative entries are dropped, since they would resolve against the app's working
 /// directory. Only `zsh` and `bash` are read; any other shell gets the standard `PATH`. Only a
 /// successful read is kept, so a failed one is tried again on the next call.
-public actor ShellPathResolver {
+public actor ShellPathResolver: PathResolving {
     private static let startMarker = "__PCI_PATH__"
     private static let endMarker = "__PCI_END__"
     private static let readTimeout = Duration.seconds(5)

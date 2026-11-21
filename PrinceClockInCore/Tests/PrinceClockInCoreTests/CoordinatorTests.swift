@@ -415,7 +415,7 @@ private final class GatedLogins: Sendable {
         fixture.clock.advance(by: 600)
         await coordinator.tick()
 
-        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile", "analytics-dev"]])
+        #expect(fixture.checkRunner.calls == [["current-user", "me", "--profile=analytics-dev"]])
     }
 
     @Test func invalidDatabricksCheckBeforeNotificationTimePostsExpired() async throws {
@@ -541,7 +541,7 @@ private final class GatedLogins: Sendable {
 
         await coordinator.checkNow()
 
-        #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev", "analytics-prod"])
+        #expect(fixture.checkRunner.calls.map(\.last) == ["--profile=analytics-dev", "--profile=analytics-prod"])
     }
 
     @Test func checkNowIsPublishedWhileItRuns() async throws {
@@ -635,6 +635,33 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.count == 1)
     }
 
+    @Test func aStoredAnswerHoldsTheIntervalAcrossLaunches() async throws {
+        var dev = databricks("analytics-dev", remaining: 5 * hour)
+        let answer = DatabricksCheckRecord(at: launch.addingTimeInterval(-60), result: .valid)
+        dev.lastDatabricksCheck = answer
+        dev.lastDatabricksAnswer = answer
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.isEmpty)
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == answer)
+    }
+
+    @Test func aStoredCouldntCheckLeavesTheIntervalFreeAfterARelaunch() async throws {
+        var dev = databricks("analytics-dev", remaining: 5 * hour)
+        dev.lastDatabricksCheck = DatabricksCheckRecord(at: launch.addingTimeInterval(-60), result: .couldntCheck)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.count == 1)
+    }
+
     @Test func theAccountFlagIsReadFromTheConfigBeforeACheck() async throws {
         var workspace = databricks("analytics-dev", remaining: 5 * hour)
         workspace.kind = .databricksProfile(name: "analytics-dev", accountLevel: true)
@@ -656,7 +683,7 @@ private final class GatedLogins: Sendable {
 
         await coordinator.checkNow()
 
-        #expect(fixture.checkRunner.calls.map(\.last) == ["analytics-dev"])
+        #expect(fixture.checkRunner.calls.map(\.last) == ["--profile=analytics-dev"])
         #expect(fixture.stored?.logins.map(\.kind) == [
             .databricksProfile(name: "analytics-dev", accountLevel: false),
             .databricksProfile(name: "analytics-account", accountLevel: true),

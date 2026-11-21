@@ -245,9 +245,15 @@ clicks Check Databricks Now in Settings → Logins.
 - A check of one profile returns **valid**, **invalid**, **couldn't check** (the check failed)
   or **skipped** (an account profile, checked within the last 5 minutes, or a login running), kept
   apart. The core keeps each profile's last check, its time and one of the first three results, and
-  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
+  publishes whether a check is running. Settings shows it as "Checked 14:02 · valid", with the
+  day as well for a check on an earlier day ("Checked yesterday at 12:30 · valid"); the Still
+  valid tile shows its last valid answer the same way.
 - A press of Check Databricks Now within 5 minutes of a profile's last check skips that profile,
   which keeps its last check, so a skip never reads as a fresh result.
+- The 5 minutes hold across launches: they count from the stored time of the profile's last valid
+  or invalid answer. A stored couldn't check doesn't count, since it may be a check that never
+  ran the CLI, and neither does a stored time after the clock's, so a clock set back never blocks
+  checks until it catches up.
 - Check Databricks Now is disabled while a check runs, while a Databricks login runs, and when no
   workspace profile is tracked.
 
@@ -408,8 +414,8 @@ without its text, so no earlier text shows.
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
     (owner, 2026-11-19). After a sleep, each login asks on its own tile.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
-    session length may be too short." with Edit Session Length…. Its subtitle carries the check:
-    "Checked 22:30 · valid".
+    session length may be too short." with Edit Session Length…. Its subtitle carries the check,
+    as Settings shows it: "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
     Not Now. Run It is never the default and never prominent.
   - **Session length:** a Databricks login that logged in with no session length asks for it (see
@@ -800,7 +806,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Recorded 2026-11-17, on AWS CLI 2.39.0 and Databricks CLI 1.22.1:
   - **Refresh token (AWS):** a renewal keeps it and a login changes it, on the same session, so
     the hash is kept and decides first.
-  - **Databricks check:** `databricks current-user me --profile <name>` exits 0 for a valid
+  - **Databricks check:** `databricks current-user me --profile=<name>` exits 0 for a valid
     profile. For one with no usable login it exits 1 and prints
     `Error: error getting token: cache: no cached credentials; run `databricks auth login` to sign in`,
     which is the one failure read as invalid. That line was recorded from a logged-out profile, not
