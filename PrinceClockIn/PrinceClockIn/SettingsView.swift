@@ -148,7 +148,7 @@ struct DurationPopUp: View {
 
 // MARK: Notifications
 
-/// Settings → Notifications: how long before expiry a login is notified, the working hours
+/// Settings → Notifications: how long before expiry a login is notified, the notification schedule
 /// notifications wait for, and whether notifications are on. The permission is read again when the
 /// pane appears and when the app becomes active, as after the user changes it in System Settings.
 private struct NotificationsSettings: View {
@@ -184,8 +184,9 @@ private struct NotificationsSettings: View {
     }
 }
 
-/// Settings → Notifications' working hours: the toggle, and while it is on, the hours and the days
-/// they start on. The last day picked can't be unpicked, so the hours always name one.
+/// Settings → Notifications' notification schedule, the stored working hours: the toggle, and while
+/// it is on, the hours and the days they start on. The last day picked can't be unpicked, so the
+/// hours always name one.
 private struct WorkingHoursSection: View {
     let coordinator: Coordinator
     let calendar: Calendar
@@ -194,8 +195,10 @@ private struct WorkingHoursSection: View {
         let hours = coordinator.model.state.settings.workingHours
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Toggle("Only notify during working hours", isOn: isOn)
-                SettingsNote("Notifications from outside these hours arrive when they start.")
+                Toggle("Notification schedule", isOn: isOn)
+                SettingsNote(
+                    "Notifications are sent only from From to To, starting on the days picked. Any due at other times are held and sent together at the next From."
+                )
             }
             if hours.isOn {
                 DatePicker("From", selection: clockTime(\.startMinute), displayedComponents: .hourAndMinute)

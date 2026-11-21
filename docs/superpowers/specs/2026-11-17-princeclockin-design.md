@@ -26,7 +26,7 @@ arrives before it does, and one click logs in to the logins you choose, in seque
 - A timer per login, and in the menu bar a symbol that says whether one needs you, with no
   countdown.
 - A notification a set time before a login expires: 30 minutes by default, changeable in settings,
-  and, if the user turns on working hours, held until they start (owner, 2026-11-20).
+  and, if the user turns on a notification schedule, held until its next start (owner, 2026-11-20).
 - Logging in only when the user clicks: one login, every due login, or a preset. There is no
   multi-select; a set of logins used together is a preset (owner, 2026-11-18).
 - Presets the user defines and edits (e.g. "AWS dev + Databricks dev"); nothing hard-coded like
@@ -280,7 +280,8 @@ Times are recomputed at the next moment one can change, on any change in `~/.aws
 gcloud config directory or the Azure CLI's `azureProfile.json`, on wake from sleep, on a clock
 change and on a time-zone change, with no polling, so a menu bar app that runs all day does no work
 while nothing happens. Each recomputation also reads the AWS cache files, gcloud's credential store
-and `azureProfile.json` and sends any notification now due and, with working hours on, inside them.
+and `azureProfile.json` and sends any notification now due and, with the notification schedule on,
+inside the working hours.
 
 - **The next moment** is the soonest notification time or expiry, or at once while a notification
   is due and unsent, or, while one waits outside the working hours, their next start. What is on
@@ -639,8 +640,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
   selected preset at once.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
-  hours (30 minutes by default); "Only notify during working hours", off by default, with
-  "Notifications from outside these hours arrive when they start.", and while it is on, From and To
+  hours (30 minutes by default); "Notification schedule", off by default, with "Notifications are
+  sent only from From to To, starting on the days picked. Any due at other times are held and sent
+  together at the next From.", and while it is on, From and To
   time pickers (09:00 and 17:00 by default; "They end the next day." when To is at or before
   From) and Days, a button per weekday in the calendar's order, Monday to Friday by default, the
   last one picked disabled so the hours always name a day; and Notifications: their state, Open
@@ -767,8 +769,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Notifications
 
-- One notification when a login enters its notification time, or, with working hours on and
-  outside them, at their next start. Logins that enter it at the same moment, or while the Mac
+- One notification when a login enters its notification time, or, with the notification schedule
+  on and outside the working hours, at their next start. Logins that enter it at the same moment, or while the Mac
   slept or the app wasn't running, are grouped into one notification. A login whose notification
   time passed while the app wasn't running is announced once at the next launch, or the next start
   of the working hours if that launch is outside them, as expired if it has.
@@ -776,7 +778,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Clicking a notification itself, rather than one of its buttons, opens the panel while the app
   runs and logs nothing in. A click that launches the app opens no panel: the status item's window
   has no place in the menu bar yet, and the popover doesn't show.
-- **Working hours** (owner, 2026-11-20), when the user turns them on in Settings → Notifications:
+- **Working hours** (owner, 2026-11-20), shown in Settings → Notifications as its notification
+  schedule (owner, 2026-11-21, who found "Only notify during working hours" and "arrive when they
+  start" unclear, and chose Slack's allowed-times framing over quiet hours, which inverted the
+  stored hours), when the user turns them on there:
   an expiry notification that falls due outside them waits, and every one waiting is sent at their
   next start as one grouped notification, each login described as it is then ("expired" for one
   that expired meanwhile). One set of hours, read in the Mac's time zone, applies to every day
