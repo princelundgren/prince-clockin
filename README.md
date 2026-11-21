@@ -54,13 +54,39 @@ one expires, and logs in to the ones you pick, one after another, when you click
    control Terminal.
 4. Click the menu bar icon, then **Add Logins…**. Settings opens on Logins with its + menu: the AWS
    SSO sessions, Databricks profiles, gcloud accounts and Azure CLI tenants found in your config
-   files, and Custom Login…. To keep the timers running after you log out or restart, turn on
-   **Launch at login** in Settings → General; it is off by default.
+   files, and Custom Login…; one it doesn't list yet is set up with its CLI first
+   ([Set up your logins](#set-up-your-logins)). To keep the timers running after you log out or
+   restart, turn on **Launch at login** in Settings → General; it is off by default.
 
 After that, PrinceClockIn updates itself with [Sparkle](https://sparkle-project.org). It checks
 once a day; when an update is waiting, a dot appears beside the menu bar icon, the panel says
 "Update <version> available" with **View…**, and the right-click menu offers **Install Update
 <version>…**. An update installed while logins run relaunches the app once they finish.
+
+## Set up your logins
+
+PrinceClockIn doesn't set up SSO itself, and you don't edit config files by hand for it: it lists
+what each CLI's own setup command wrote. Run the command once in a terminal, then choose the login
+from the + menu in Settings → Logins.
+
+| To track | Run | What the + menu lists |
+|---|---|---|
+| An AWS IAM Identity Center session | `aws configure sso`, giving it an SSO session name | The `[sso-session <name>]` it writes to `~/.aws/config` |
+| A Databricks workspace | `databricks auth login --host <workspace-url>` | The profile it saves to `~/.databrickscfg`, with `auth_type = databricks-cli` |
+| A Databricks account | `databricks auth login --host <account-console-url> --account-id <account-id>` | The account profile it saves |
+| A gcloud user account | `gcloud auth login` | The account, by its email |
+| An Azure CLI tenant | `az login` (or `az login --tenant <tenant>`) | The tenant, by its name |
+
+`aws configure sso` without a session name writes the older profile-only form, which the + menu
+doesn't list. Anything else, such as a VPN, a password manager or a CLI not listed here, can be a
+custom login: Custom Login… in the + menu takes a name, an optional command to run in Terminal and
+a session length.
+
+Each login's **Session length** is how long a sign-in lasts before you must log in again; the
+countdown and the notification are based on it. None of these CLIs reports it, so it comes from
+whoever runs the sign-in: IAM Identity Center's session duration, the Databricks account's OAuth
+token policy, Google Cloud session control or Entra Conditional Access's sign-in frequency. Ask
+your administrator if you don't know yours.
 
 ## Requirements
 

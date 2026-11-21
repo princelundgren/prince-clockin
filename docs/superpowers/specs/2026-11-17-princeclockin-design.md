@@ -601,9 +601,16 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   Dragging a login reorders the list, and the panel's tiles with it. + is the + menu; − removes the
   selected login at once, or, for a login in a preset, first asks "Remove vpn? It also leaves the
   presets Morning and Night shift." with Remove (destructive) and Cancel (owner, 2026-11-19); it is
-  disabled with nothing selected. Below + and −, in the list's section: Login timeout, a pop-up
-  of 2, 5, 10 and 15 minutes (5 minutes by default; "A login that takes longer than the login
-  timeout is stopped and marked failed."). It sits with the logins it applies to, not in General
+  disabled with nothing selected. Under + and −, a note says where the + menu's logins come from
+  and how to add one it doesn't list ("+ lists the logins your AWS, Databricks, gcloud and Azure
+  CLIs are set up for. To add a new one, set it up with its CLI first (aws configure sso,
+  databricks auth login, gcloud auth login or az login), then choose it from +. Track any other
+  login as a custom login."), with a Setup Guide link to the README's "Set up your logins"
+  (owner, 2026-11-21): nothing in the app said that SSO is set up with each CLI's own command,
+  not in PrinceClockIn and not by editing its config files. Below those, in the list's section:
+  Login timeout, a pop-up of 2, 5, 10 and 15 minutes (5 minutes by default; "A login that takes
+  longer than the login timeout is stopped and marked failed."). It sits with the logins it
+  applies to, not in General
   beside Launch at login, where "login" also meant logging in to the Mac, and inside the list's
   section, so that the selected login's form follows the list directly (owner, 2026-11-21). The
   selected login's form, headed by its kind's symbol, its name and its kind ("AWS SSO session"):
@@ -634,7 +641,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
     Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
-    says Log In waits for the user to click Done.
+    says Log In waits for the user to click Done. Session length has a custom login's note, as in
+    the login's form (owner, 2026-11-21).
   - Adding a discovered login asks nothing more (owner, 2026-11-21): the owner found a Set Timer
     prompt there more confusing than useful. Its timer stays unknown until it logs in from the
     panel or answers a "Was that you?" question.
@@ -941,8 +949,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   never collected.
 - Website opens the app's page on the maintainer's products website, `https://princeworks.app/clockin/`,
   with no `?ref=` tag, since the app reports nothing about its use. The repository's README stays a
-  landing page of its own: what the app does, how to install it, support through GitHub issues, and
-  a privacy statement saying the above (owner, 2026-11-17).
+  landing page of its own: what the app does, how to install it, how to set up each kind of login
+  with its CLI ("Set up your logins", which Settings → Logins' Setup Guide opens), support through
+  GitHub issues, and a privacy statement saying the above (owner, 2026-11-17).
 
 ### Release
 

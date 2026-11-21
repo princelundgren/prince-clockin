@@ -6,6 +6,8 @@ enum AppLinks {
     static let reportIssue = URL(string: "https://github.com/princelundgren/prince-clockin/issues/new")!
     /// The app's page on the products website, with nothing appended that would report its use.
     static let website = URL(string: "https://princeworks.app/clockin/")!
+    /// The README's "Set up your logins", for Settings → Logins' Setup Guide.
+    static let setupGuide = URL(string: "https://github.com/princelundgren/prince-clockin#set-up-your-logins")!
     /// System Settings → Notifications → PrinceClockIn. Apple documents no URL for it on macOS; this
     /// is the scheme its Notifications settings extension declares, and its undocumented `id`
     /// query picks the app's own page.

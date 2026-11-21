@@ -36,7 +36,13 @@ struct LoginsSettings: View {
                 }
                 .frame(minHeight: 160)
                 .accessibilityLabel("Logins")
-                listButtons
+                VStack(alignment: .leading, spacing: 4) {
+                    listButtons
+                    SettingsNote(addLoginsNote)
+                    Link("Setup Guide", destination: AppLinks.setupGuide)
+                        .font(.caption)
+                        .foregroundStyle(Color("Link"))
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     DurationPopUp(
                         title: "Login timeout", listed: listedLoginTimeouts, value: \.loginTimeout,
@@ -331,7 +337,10 @@ private struct NewCustomLoginForm: View {
                     SettingsNote(noCommandNote)
                 }
             }
-            SessionLengthPopUp(selection: $draft.sessionLength)
+            VStack(alignment: .leading, spacing: 4) {
+                SessionLengthPopUp(selection: $draft.sessionLength)
+                SettingsNote(sessionLengthNote(for: .custom(command: nil), choice: draft.sessionLength))
+            }
             if draft.sessionLength == .custom {
                 VStack(alignment: .leading, spacing: 2) {
                     LabeledContent("Custom length") {

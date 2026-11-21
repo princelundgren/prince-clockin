@@ -111,6 +111,12 @@ public func addMenu(found: DiscoveredLogins?) -> [AddMenuItem] {
     return [.header("Found in your config files")] + candidates.map(AddMenuItem.found) + [.customLogin]
 }
 
+/// Under + and −: where the + menu's logins come from, and how to set up one it doesn't list yet.
+public let addLoginsNote =
+    "+ lists the logins your AWS, Databricks, gcloud and Azure CLIs are set up for. To add a new one, "
+    + "set it up with its CLI first (aws configure sso, databricks auth login, gcloud auth login or "
+    + "az login), then choose it from +. Track any other login as a custom login."
+
 /// −'s help tag: the login it removes.
 public func removeLoginHelp(for login: Login?) -> String {
     guard let login else { return "Remove the selected login." }
