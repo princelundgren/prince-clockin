@@ -23,7 +23,7 @@ public func removePresetHelp(for preset: Preset?) -> String {
 /// The times Settings → Notifications' "Notify before a login expires" pop-up offers.
 public let listedNotificationLeadTimes: [TimeInterval] = [5, 10, 15, 30, 60, 120].map { $0 * 60 }
 
-/// The times Settings → General's "Login timeout" pop-up offers.
+/// The times Settings → Logins' "Login timeout" pop-up offers.
 public let listedLoginTimeouts: [TimeInterval] = [2, 5, 10, 15].map { $0 * 60 }
 
 /// The times a settings pop-up shows, in ascending order: `listed`, plus `stored` when it isn't
