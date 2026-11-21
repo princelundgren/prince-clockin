@@ -110,13 +110,14 @@ private struct PresetRow: View {
 }
 
 /// The selected preset's form, headed by the preset symbol, its name and how many logins it has:
-/// Name, and "Logs in to, in order": its logins, which a drag reorders, with + (the tracked logins
-/// not in it) and − below them.
+/// Name, and "Logs in to, in order": its logins, which a drag reorders, each with a remove button,
+/// then the tracked logins not in it, each with an add button. With no logins tracked, it offers
+/// Settings → Logins instead.
 private struct PresetForm: View {
     let preset: Preset
     let coordinator: Coordinator
     let focusesName: Bool
-    @State private var selection: UUID?
+    @AppStorage(SettingsView.paneKey) private var pane: SettingsPane = .logins
 
     private var logins: [Login] { coordinator.model.logins(in: preset) }
     private var members: ListOrder { ListOrder(logins.map(\.id)) }
@@ -146,54 +147,55 @@ private struct PresetForm: View {
             .accessibilityElement(children: .combine)
         }
         Section("Logs in to, in order") {
-            List(selection: $selection) {
+            if coordinator.model.state.logins.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SettingsNote("No logins are tracked yet.")
+                    Button("Show Logins") { pane = .logins }
+                        .controlSize(.small)
+                }
+            } else {
+                loginsList
+                SettingsNote("Logs in one at a time, top to bottom. Drag to change the order.")
+            }
+        }
+    }
+
+    /// The preset's logins, numbered, then every other tracked login under "Not in this preset".
+    private var loginsList: some View {
+        let loginsToAdd = members.loginsToAdd(from: coordinator.model.state.logins)
+        return List {
+            Section {
                 ForEach(Array(logins.enumerated()), id: \.element.id) { index, login in
-                    Text("\(index + 1). \(login.displayName)")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .tag(login.id)
+                    PresetLoginRow(
+                        login: login, number: index + 1,
+                        action: removeFromPresetAction(for: login, preset: preset), systemImage: "minus.circle"
+                    ) {
+                        edit { $0.remove(login.id) }
+                    }
                 }
                 .onMove { offsets, destination in
                     edit { $0.move(fromOffsets: offsets, toOffset: destination) }
                 }
+                if logins.isEmpty {
+                    Text("No logins yet. Add them from the list below.")
+                        .foregroundStyle(.secondary)
+                }
             }
-            .frame(minHeight: 120)
-            .accessibilityLabel("Logs in to, in order")
-            memberButtons
-        }
-    }
-
-    private var memberButtons: some View {
-        let loginsToAdd = members.loginsToAdd(from: coordinator.model.state.logins)
-        return HStack(spacing: 4) {
-            Menu {
-                ForEach(loginsToAdd) { login in
-                    Button(login.displayName) {
-                        edit { $0.add(login.id) }
-                        selection = login.id
+            if !loginsToAdd.isEmpty {
+                Section("Not in this preset") {
+                    ForEach(loginsToAdd) { login in
+                        PresetLoginRow(
+                            login: login, number: nil,
+                            action: addToPresetAction(for: login, preset: preset), systemImage: "plus.circle"
+                        ) {
+                            edit { $0.add(login.id) }
+                        }
                     }
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .accessibilityLabel("Add Login")
             }
-            .menuStyle(.button)
-            .buttonStyle(.borderless)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .disabled(loginsToAdd.isEmpty)
-            .help("Add a login to this preset.")
-            Button("Remove Login", systemImage: "minus") {
-                guard let selection else { return }
-                edit { $0.remove(selection) }
-                self.selection = nil
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            .disabled(selection == nil)
-            .help("Remove the selected login from this preset.")
-            Spacer()
         }
+        .frame(minHeight: 200)
+        .accessibilityLabel("Logs in to, in order")
     }
 
     private func edit(_ change: (inout ListOrder) -> Void) {
@@ -202,5 +204,42 @@ private struct PresetForm: View {
         var saved = preset
         saved.loginIDs = edited.ids
         coordinator.savePreset(saved)
+    }
+}
+
+/// A login in "Logs in to, in order": its step in the preset (blank for a login not in it), its
+/// kind's symbol, its name and kind, and the button that adds it to the preset or removes it.
+private struct PresetLoginRow: View {
+    let login: Login
+    let number: Int?
+    let action: PresetMemberAction
+    let systemImage: String
+    let perform: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Text(number.map(String.init) ?? "")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, alignment: .trailing)
+                Image(systemName: loginKindSymbolName(login.kind))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Text(login.displayName)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(loginKindName(login.kind))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            Button(action.label, systemImage: systemImage, action: perform)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(action.help)
+        }
     }
 }
