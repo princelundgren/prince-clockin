@@ -147,7 +147,7 @@ private struct NotificationsSettings: View {
                                 .controlSize(.small)
                         }
                     }
-                    if let note = notifications.note { SettingsNote(note) }
+                    SettingsNote(notifications.note)
                 }
             }
         }

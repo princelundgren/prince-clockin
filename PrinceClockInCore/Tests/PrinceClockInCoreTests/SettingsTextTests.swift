@@ -64,13 +64,16 @@ private let minute: TimeInterval = 60
 
     // MARK: Notifications
 
-    @Test func notificationsOnSayNoMore() {
-        #expect(notificationsSetting(areOff: false) == NotificationsSetting(state: "On", note: nil))
+    @Test func notificationsOnSayWhereToTurnThemOff() {
+        #expect(notificationsSetting(areOff: false) == NotificationsSetting(
+            state: "On", note: "Turn notifications on or off in System Settings → Notifications."))
     }
 
-    @Test func notificationsOffSayOnlyTheMenuBarShowsIt() {
+    @Test func notificationsOffSayOnlyTheMenuBarShowsItAndWhereToTurnThemOn() {
         #expect(notificationsSetting(areOff: true) == NotificationsSetting(
-            state: "Off", note: "With notifications off, only the menu bar shows that a login is about to expire."))
+            state: "Off",
+            note: "With notifications off, only the menu bar shows that a login is about to expire. "
+                + "Turn them on in System Settings → Notifications."))
     }
 
     // MARK: General

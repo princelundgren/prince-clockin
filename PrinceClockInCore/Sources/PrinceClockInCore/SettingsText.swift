@@ -36,10 +36,11 @@ public func durationOptions(_ listed: [TimeInterval], showing stored: TimeInterv
 public struct NotificationsSetting: Equatable, Sendable {
     /// "On" or "Off".
     public let state: String
-    /// Under the row while notifications are off: what shows the expiry instead.
-    public let note: String?
+    /// Under the row: where notifications are turned on or off, and while they're off, what shows
+    /// the expiry instead.
+    public let note: String
 
-    public init(state: String, note: String?) {
+    public init(state: String, note: String) {
         self.state = state
         self.note = note
     }
@@ -47,9 +48,13 @@ public struct NotificationsSetting: Equatable, Sendable {
 
 /// The Notifications row for notifications that the user has turned off (`areOff`) or not.
 public func notificationsSetting(areOff: Bool) -> NotificationsSetting {
-    guard areOff else { return NotificationsSetting(state: "On", note: nil) }
+    guard areOff else {
+        return NotificationsSetting(state: "On", note: "Turn notifications on or off in System Settings → Notifications.")
+    }
     return NotificationsSetting(
-        state: "Off", note: "With notifications off, only the menu bar shows that a login is about to expire.")
+        state: "Off",
+        note: "With notifications off, only the menu bar shows that a login is about to expire. "
+            + "Turn them on in System Settings → Notifications.")
 }
 
 /// The app's login item as the system reports it.

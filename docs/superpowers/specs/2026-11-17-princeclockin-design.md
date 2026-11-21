@@ -635,8 +635,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   time pickers (09:00 and 17:00 by default; "They end the next day." when To is at or before
   From) and Days, a button per weekday in the calendar's order, Monday to Friday by default, the
   last one picked disabled so the hours always name a day; and Notifications: their state, Open
-  System Settings… (the same page as the banner's), and, while they're off, "With notifications
-  off, only the menu bar shows that a login is about to expire."
+  System Settings… (the same page as the banner's), and "Turn notifications on or off in System
+  Settings → Notifications.", or while they're off, "With notifications off, only the menu bar
+  shows that a login is about to expire. Turn them on in System Settings → Notifications."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
