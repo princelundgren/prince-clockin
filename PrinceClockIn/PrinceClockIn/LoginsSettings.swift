@@ -2,8 +2,9 @@ import AppKit
 import PrinceClockInCore
 import SwiftUI
 
-/// Settings → Logins: the tracked logins, which a drag reorders for the panel, with + and − below
-/// them and Check Now in the header, then the selected login's form, or New custom login.
+/// Settings → Logins: a section headed by Check Now, holding the tracked logins, which a drag
+/// reorders for the panel, + and − below them and the login timeout below those; then the selected
+/// login's form, or New custom login.
 struct LoginsSettings: View {
     let appModel: AppModel
     let request: LoginsPaneRequest
@@ -38,6 +39,12 @@ struct LoginsSettings: View {
                 .frame(minHeight: 160)
                 .accessibilityLabel("Logins")
                 listButtons
+                VStack(alignment: .leading, spacing: 4) {
+                    DurationPopUp(
+                        title: "Login timeout", listed: listedLoginTimeouts, value: \.loginTimeout,
+                        coordinator: coordinator)
+                    SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
+                }
             } header: {
                 header
             }
