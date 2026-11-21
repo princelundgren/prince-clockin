@@ -40,11 +40,14 @@ public struct LoginSource: Equatable, Sendable {
     public let value: String
     /// Under the row: the config file it is in, "In ~/.aws/config.".
     public let note: String
+    /// That config file, or for gcloud and Azure their config folder, for Show in Finder.
+    public let file: URL
 
-    public init(label: String, value: String, note: String) {
+    public init(label: String, value: String, note: String, file: URL) {
         self.label = label
         self.value = value
         self.note = note
+        self.file = file
     }
 }
 
@@ -113,12 +116,14 @@ public func loginSettingsForm(
     for login: Login, paths: ConfigPaths, home: URL, now: Date, locale: Locale, calendar: Calendar
 ) -> LoginSettingsForm {
     let renamingOnlyHere = "Only changes the name in PrinceClockIn, not in"
-    func inFile(_ url: URL) -> String { "In \(displayPath(url, home: home))." }
+    func source(_ label: String, _ value: String, in file: URL) -> LoginSource {
+        LoginSource(label: label, value: value, note: "In \(displayPath(file, home: home)).", file: file)
+    }
     switch login.kind {
     case .awsSSOSession(let name):
         return LoginSettingsForm(
             nameNote: "\(renamingOnlyHere) your config.",
-            source: LoginSource(label: "SSO session", value: name, note: inFile(paths.awsConfig)),
+            source: source("SSO session", name, in: paths.awsConfig),
             lastCheck: nil, commandNote: nil)
     case .databricksProfile(let name, let accountLevel):
         let lastCheck = if accountLevel {
@@ -133,12 +138,12 @@ public func loginSettingsForm(
         }
         return LoginSettingsForm(
             nameNote: "\(renamingOnlyHere) your config.",
-            source: LoginSource(label: "Profile", value: name, note: inFile(paths.databricksConfig)),
+            source: source("Profile", name, in: paths.databricksConfig),
             lastCheck: lastCheck, commandNote: nil)
     case .gcloudAccount(let account):
         return LoginSettingsForm(
             nameNote: "\(renamingOnlyHere) gcloud.",
-            source: LoginSource(label: "Account", value: account, note: inFile(paths.gcloudConfig)),
+            source: source("Account", account, in: paths.gcloudConfig),
             lastCheck: LastCheck(
                 text: login.lastDatabricksCheck.map { databricksCheckText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",
@@ -147,7 +152,7 @@ public func loginSettingsForm(
     case .azureTenant(let user, let tenant):
         return LoginSettingsForm(
             nameNote: "\(renamingOnlyHere) the Azure CLI.",
-            source: LoginSource(label: "Tenant", value: "\(tenant) for \(user)", note: inFile(paths.azureConfig)),
+            source: source("Tenant", "\(tenant) for \(user)", in: paths.azureConfig),
             lastCheck: LastCheck(
                 text: login.lastDatabricksCheck.map { databricksCheckText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",

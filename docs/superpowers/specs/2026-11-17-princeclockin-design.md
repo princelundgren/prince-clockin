@@ -629,7 +629,9 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     "Only changes the name in PrinceClockIn, not in your config." (gcloud: "not in gcloud.",
     Azure: "not in the Azure CLI."); a custom login's has none (owner, 2026-11-21);
   - its source, where it has one, is the CLI's name for it as a plain value, with the file it is
-    in under it ("In ~/.aws/config.");
+    in under it ("In ~/.aws/config.") and a Show in Finder… link beside that, which selects the
+    file in Finder, or opens gcloud's or Azure's config folder, for a user who needs to fix it
+    (owner, 2026-11-21);
   - AWS SSO session: its source ("qa");
   - Databricks profile: its source ("analytics-dev", in ~/.databrickscfg) and its last check
     ("Not checked yet" before the first); an account profile says "Not checked" and why;
@@ -705,7 +707,7 @@ A token has only the meanings its row lists.
 | Logged in | a login with time left, still valid, or logged in with no expiry | `#1E7466` | `#4DB8A6` | `#155B50` | `#7FD3C5` |
 | Running | a login in progress or queued | `#5B45B5` | `#B8A8F0` | `#47358F` | `#D2C8F8` |
 | Accent | the one prominent button's fill, under white text | `#3A78AC` | `#3A78AC` | `#2F6797` | `#2F6797` |
-| Link | About's inline links only | `#2F6797` | `#8FC3EA` | `#24557F` | `#B5D8F3` |
+| Link | inline links in About and Settings → Logins | `#2F6797` | `#8FC3EA` | `#24557F` | `#B5D8F3` |
 
 - Expiring is the house Warning colour, not system orange. Expired, Running and Link are new to
   this app. The Accent passes 4.5:1 under white text.

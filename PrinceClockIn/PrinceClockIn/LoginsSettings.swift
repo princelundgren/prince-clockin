@@ -242,6 +242,15 @@ private struct LoginForm: View {
         try? coordinator.setSessionLength(id: login.id, to: length)
     }
 
+    /// Opens a config folder on its contents, and selects a config file in its folder.
+    private func showInFinder(_ url: URL) {
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
     var body: some View {
         let form = loginSettingsForm(
             for: login, paths: coordinator.configPaths, home: appModel.homeDirectory, now: coordinator.now,
@@ -259,7 +268,13 @@ private struct LoginForm: View {
             if let source = form.source {
                 VStack(alignment: .leading, spacing: 4) {
                     LabeledContent(source.label, value: source.value)
-                    SettingsNote(source.note)
+                    HStack(alignment: .firstTextBaseline) {
+                        SettingsNote(source.note)
+                        Button("Show in Finder…") { showInFinder(source.file) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            .foregroundStyle(Color("Link"))
+                    }
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
