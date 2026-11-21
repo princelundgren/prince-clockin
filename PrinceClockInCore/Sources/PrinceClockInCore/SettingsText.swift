@@ -20,6 +20,44 @@ public func removePresetHelp(for preset: Preset?) -> String {
     return "Remove \(preset.name)."
 }
 
+/// A preset's login count under its name in Settings → Presets: "No logins", "1 login", "3 logins".
+public func presetLoginCount(_ count: Int) -> String {
+    switch count {
+    case 0: "No logins"
+    case 1: "1 login"
+    default: "\(count) logins"
+    }
+}
+
+/// The title and help tag of a ⊕ or ⊖ button on a login's row in Settings → Presets.
+public struct PresetMemberAction: Equatable, Sendable {
+    public let label: String
+    public let help: String
+
+    public init(label: String, help: String) {
+        self.label = label
+        self.help = help
+    }
+}
+
+/// ⊕ on a login not in `preset`: "Add qa", "Add qa to Morning.".
+public func addToPresetAction(for login: Login, preset: Preset) -> PresetMemberAction {
+    PresetMemberAction(label: "Add \(login.displayName)", help: "Add \(login.displayName) to \(preset.name).")
+}
+
+/// ⊖ on a login in `preset`: "Remove dev", "Remove dev from Morning.".
+public func removeFromPresetAction(for login: Login, preset: Preset) -> PresetMemberAction {
+    PresetMemberAction(label: "Remove \(login.displayName)", help: "Remove \(login.displayName) from \(preset.name).")
+}
+
+/// The preset Settings → Presets selects after − removes `id` from `ids`: the one after it, else the
+/// one before it, else none.
+public func selectionAfterRemoving(_ id: UUID, from ids: [UUID]) -> UUID? {
+    guard let index = ids.firstIndex(of: id) else { return nil }
+    if index + 1 < ids.count { return ids[index + 1] }
+    return index > 0 ? ids[index - 1] : nil
+}
+
 /// The times Settings → Notifications' "Notify before a login expires" pop-up offers.
 public let listedNotificationLeadTimes: [TimeInterval] = [5, 10, 15, 30, 60, 120].map { $0 * 60 }
 

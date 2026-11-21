@@ -4,6 +4,10 @@ import PrinceClockInCore
 
 private let minute: TimeInterval = 60
 
+private func named(_ name: String) -> Login {
+    Login(displayName: name, kind: .awsSSOSession(name: name))
+}
+
 @Suite struct SettingsTextTests {
     // MARK: Duration pop-ups
 
@@ -60,6 +64,37 @@ private let minute: TimeInterval = 60
     @Test func minusHelpTagNamesTheSelectedPreset() {
         #expect(removePresetHelp(for: Preset(name: "Morning", loginIDs: [])) == "Remove Morning.")
         #expect(removePresetHelp(for: nil) == "Remove the selected preset.")
+    }
+
+    @Test func aPresetsLoginCountReadsNoneOneOrMany() {
+        #expect(presetLoginCount(0) == "No logins")
+        #expect(presetLoginCount(1) == "1 login")
+        #expect(presetLoginCount(3) == "3 logins")
+    }
+
+    @Test func aLoginsRowButtonsNameTheLoginAndThePreset() {
+        let preset = Preset(name: "Morning", loginIDs: [])
+        #expect(
+            addToPresetAction(for: named("qa"), preset: preset)
+                == PresetMemberAction(label: "Add qa", help: "Add qa to Morning."))
+        #expect(
+            removeFromPresetAction(for: named("dev"), preset: preset)
+                == PresetMemberAction(label: "Remove dev", help: "Remove dev from Morning."))
+    }
+
+    @Test func removingAPresetSelectsTheOneThatTookItsPlace() {
+        let (a, b, c) = (UUID(), UUID(), UUID())
+        #expect(selectionAfterRemoving(b, from: [a, b, c]) == c)
+    }
+
+    @Test func removingTheLastPresetSelectsTheOneAbove() {
+        let (a, b) = (UUID(), UUID())
+        #expect(selectionAfterRemoving(b, from: [a, b]) == a)
+    }
+
+    @Test func removingTheOnlyPresetSelectsNothing() {
+        let a = UUID()
+        #expect(selectionAfterRemoving(a, from: [a]) == nil)
     }
 
     // MARK: Notifications

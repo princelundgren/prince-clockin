@@ -70,19 +70,24 @@ struct SettingsView: View {
 /// when it goes away (its window closes, or its pane or form is replaced), not on every keystroke,
 /// so a command is approved and saved only once it is typed out. `commit` returns whether it took
 /// the text; if not, the field shows `text` again. `prompt`, when given, is the empty field's
-/// placeholder.
+/// placeholder; with `focusesOnAppear`, the field takes focus when it appears.
 struct CommitField: View {
     let title: String
     let text: String
     let prompt: String?
+    let focusesOnAppear: Bool
     let commit: (String) -> Bool
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
-    init(_ title: String, text: String, prompt: String? = nil, commit: @escaping (String) -> Bool) {
+    init(
+        _ title: String, text: String, prompt: String? = nil, focusesOnAppear: Bool = false,
+        commit: @escaping (String) -> Bool
+    ) {
         self.title = title
         self.text = text
         self.prompt = prompt
+        self.focusesOnAppear = focusesOnAppear
         self.commit = commit
         _draft = State(initialValue: text)
     }
@@ -94,6 +99,9 @@ struct CommitField: View {
             .onChange(of: isFocused) { _, isFocused in
                 if !isFocused { save() }
             }
+            // The window has already appeared, so `defaultFocus` wouldn't apply; setting the focus
+            // state moves focus.
+            .onAppear { if focusesOnAppear { isFocused = true } }
             // Closing the window while the field is focused ends no focus first.
             .onDisappear(perform: save)
             .onChange(of: text) { _, text in draft = text }

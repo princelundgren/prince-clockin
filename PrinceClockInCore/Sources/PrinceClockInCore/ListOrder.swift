@@ -11,7 +11,8 @@ public struct ListOrder: Equatable, Sendable {
         self.ids = ids
     }
 
-    /// A preset's + menu: the tracked `logins` not in the list, in their stored order.
+    /// A preset's "Not in this preset" logins: the tracked `logins` not in the list, in their stored
+    /// order.
     public func loginsToAdd(from logins: [Login]) -> [Login] {
         logins.filter { !ids.contains($0.id) }
     }
