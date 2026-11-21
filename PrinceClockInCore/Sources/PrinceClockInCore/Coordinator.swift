@@ -171,8 +171,26 @@ public final class Coordinator {
     /// workspace profile, which unlike an account profile can be checked, a gcloud account or an
     /// Azure tenant is tracked.
     public var canCheckNow: Bool {
-        !isChecking && runningDatabricksID == nil && runningGcloudID == nil && runningAzureID == nil
-            && model.state.logins.contains { $0.kind.isCheckable }
+        !isChecking && !isCLICheckedLoginRunning && isCheckableLoginTracked
+    }
+
+    /// Check Now's help tag: what it does, or while it is disabled, why; with several reasons, the
+    /// first of nothing to check, a check running and a login running.
+    public var checkNowHelp: String {
+        if !isCheckableLoginTracked {
+            "Nothing to check: no Databricks workspace profile, gcloud account or Azure tenant is tracked."
+        } else if isChecking {
+            "A check is running."
+        } else if isCLICheckedLoginRunning {
+            "Available once the Databricks, gcloud or Azure login that's running ends."
+        } else {
+            "Ask the Databricks, gcloud and Azure CLIs whether each of their logins is still valid."
+        }
+    }
+
+    private var isCheckableLoginTracked: Bool { model.state.logins.contains { $0.kind.isCheckable } }
+    private var isCLICheckedLoginRunning: Bool {
+        runningDatabricksID != nil || runningGcloudID != nil || runningAzureID != nil
     }
 
     /// Where discovery reads the AWS and Databricks config files, gcloud's credential store and the

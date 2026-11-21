@@ -371,7 +371,9 @@ expired. It also runs when the user clicks Check Now in Settings → Logins.
   ran the CLI, and neither does a stored time after the clock's, so a clock set back never blocks
   checks until it catches up.
 - Check Now is disabled while a check runs, while a Databricks, gcloud or Azure login runs, and
-  when no workspace profile, gcloud account or Azure tenant is tracked.
+  when no workspace profile, gcloud account or Azure tenant is tracked. Its help tag then says
+  why, nothing to check first, then a check running, then a login running, rather than what it
+  does (owner, 2026-11-21), since a disabled button otherwise gives no reason.
 
 ### Menu bar and panel
 

@@ -669,6 +669,7 @@ private final class GatedLogins: Sendable {
         let check = Task { await coordinator.checkNow() }
         #expect(await eventually { fixture.checkRunner.calls.count == 1 })
         #expect(coordinator.isChecking && !coordinator.canCheckNow)
+        #expect(coordinator.checkNowHelp == "A check is running.")
 
         await gate.open()
         await check.value
@@ -700,10 +701,34 @@ private final class GatedLogins: Sendable {
         let fixture = try Fixture(logins: [aws("dev"), account])
         let coordinator = fixture.makeCoordinator()
         #expect(!coordinator.canCheckNow)
+        #expect(coordinator.checkNowHelp
+            == "Nothing to check: no Databricks workspace profile, gcloud account or Azure tenant is tracked.")
 
         coordinator.addLogin(databricks("analytics-dev", remaining: 5 * hour))
 
         #expect(coordinator.canCheckNow)
+        #expect(coordinator.checkNowHelp
+            == "Ask the Databricks, gcloud and Azure CLIs whether each of their logins is still valid.")
+    }
+
+    @Test func checkNowsHelpPutsNothingToCheckBeforeARunningCheck() async throws {
+        let gate = Gate()
+        let dev = databricks("analytics-dev", remaining: 5 * hour)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
+            await gate.wait()
+            return .exited(code: 0, output: "")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let check = Task { await coordinator.checkNow() }
+        #expect(await eventually { coordinator.isChecking })
+
+        coordinator.removeLogin(id: dev.id)
+
+        #expect(coordinator.checkNowHelp
+            == "Nothing to check: no Databricks workspace profile, gcloud account or Azure tenant is tracked.")
+        await gate.open()
+        await check.value
     }
 
     @Test func checkNowWaitsForADatabricksLogin() async throws {
@@ -714,6 +739,7 @@ private final class GatedLogins: Sendable {
 
         coordinator.logIn([dev.id])
         #expect(await eventually { !coordinator.canCheckNow })
+        #expect(coordinator.checkNowHelp == "Available once the Databricks, gcloud or Azure login that's running ends.")
 
         coordinator.cancelBatch()
         #expect(await eventually { coordinator.canCheckNow })
