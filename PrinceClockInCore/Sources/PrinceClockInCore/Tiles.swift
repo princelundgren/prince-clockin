@@ -201,7 +201,7 @@ private func sessionLengthUnits(_ length: TimeInterval) -> (count: Int, unit: St
 }
 
 /// The kind as the glossary names it ("AWS SSO session").
-func loginKindName(_ kind: LoginKind) -> String {
+public func loginKindName(_ kind: LoginKind) -> String {
     switch kind {
     case .awsSSOSession: "AWS SSO session"
     case .databricksProfile(_, accountLevel: false): "Databricks profile"

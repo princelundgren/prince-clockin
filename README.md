@@ -38,7 +38,7 @@ one expires, and logs in to the ones you pick, one after another, when you click
   expires or when you logged in.
 - **Runs a custom login's command in Terminal**, so you can type passwords or MFA codes there, or
   waits while you log in your own way. Its timer starts when you click Done, within the login
-  timeout (5 minutes by default, set in Settings → General).
+  timeout (5 minutes by default, set in Settings → Logins).
 - **Works from the keyboard**: Return triggers the panel's one highlighted button, and Escape
   cancels an open Set Timer, else closes the panel. With Keyboard Navigation on, the arrow keys
   move between tiles.

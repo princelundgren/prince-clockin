@@ -121,6 +121,31 @@ struct SettingsNote: View {
     }
 }
 
+/// A setting chosen from a short list of times, stored in the settings in seconds.
+struct DurationPopUp: View {
+    let title: String
+    let listed: [TimeInterval]
+    let value: WritableKeyPath<PrinceClockInCore.Settings, TimeInterval>
+    let coordinator: Coordinator
+
+    var body: some View {
+        let stored = coordinator.model.state.settings[keyPath: value]
+        let selection = Binding<TimeInterval>(
+            get: { stored },
+            set: { duration in
+                var settings = coordinator.model.state.settings
+                settings[keyPath: value] = duration
+                coordinator.updateSettings(settings)
+            })
+        Picker(title, selection: selection) {
+            ForEach(durationOptions(listed, showing: stored), id: \.self) { duration in
+                Text(sessionLengthText(duration)).tag(duration)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+}
+
 // MARK: Notifications
 
 /// Settings → Notifications: how long before expiry a login is notified, the working hours
@@ -231,34 +256,9 @@ private struct WorkingHoursSection: View {
     }
 }
 
-/// A setting chosen from a short list of times, stored in the settings in seconds.
-private struct DurationPopUp: View {
-    let title: String
-    let listed: [TimeInterval]
-    let value: WritableKeyPath<PrinceClockInCore.Settings, TimeInterval>
-    let coordinator: Coordinator
-
-    var body: some View {
-        let stored = coordinator.model.state.settings[keyPath: value]
-        let selection = Binding<TimeInterval>(
-            get: { stored },
-            set: { duration in
-                var settings = coordinator.model.state.settings
-                settings[keyPath: value] = duration
-                coordinator.updateSettings(settings)
-            })
-        Picker(title, selection: selection) {
-            ForEach(durationOptions(listed, showing: stored), id: \.self) { duration in
-                Text(sessionLengthText(duration)).tag(duration)
-            }
-        }
-        .pickerStyle(.menu)
-    }
-}
-
 // MARK: General
 
-/// Settings → General: Launch at login and Login timeout.
+/// Settings → General: Launch at login.
 /// The login item's status is read again when the pane appears and when the app becomes active,
 /// since the user can change it in System Settings.
 private struct GeneralSettings: View {
@@ -272,6 +272,7 @@ private struct GeneralSettings: View {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Launch at login", isOn: launchAtLoginBinding(isOn: launchAtLogin.isOn))
+                    SettingsNote("PrinceClockIn opens automatically when you log in to your Mac.")
                     switch launchAtLogin.note {
                     case .needsApproval(let note):
                         HStack {
@@ -285,12 +286,6 @@ private struct GeneralSettings: View {
                     case nil:
                         EmptyView()
                     }
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    DurationPopUp(
-                        title: "Login timeout", listed: listedLoginTimeouts, value: \.loginTimeout,
-                        coordinator: appModel.coordinator)
-                    SettingsNote("A login that takes longer than the login timeout is stopped and marked failed.")
                 }
             }
         }

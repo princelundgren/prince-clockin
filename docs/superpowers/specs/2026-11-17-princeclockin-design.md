@@ -601,17 +601,27 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   Dragging a login reorders the list, and the panel's tiles with it. + is the + menu; − removes the
   selected login at once, or, for a login in a preset, first asks "Remove vpn? It also leaves the
   presets Morning and Night shift." with Remove (destructive) and Cancel (owner, 2026-11-19); it is
-  disabled with nothing selected. The selected login's form:
-  - every kind: Name, which is only what PrinceClockIn shows, and Session length, Set Timer's
-    pop-up of the one list, on No timer while the length is unknown; Custom… shows the hours
-    field, which stores and refuses as Timers says (owner, 2026-11-19);
-  - AWS SSO session: its source ("qa in ~/.aws/config");
-  - Databricks profile: its source ("analytics-dev in ~/.databrickscfg") and its last check
+  disabled with nothing selected. Below + and −, in the list's section: Login timeout, a pop-up
+  of 2, 5, 10 and 15 minutes (5 minutes by default; "A login that takes longer than the login
+  timeout is stopped and marked failed."). It sits with the logins it applies to, not in General
+  beside Launch at login, where "login" also meant logging in to the Mac, and inside the list's
+  section, so that the selected login's form follows the list directly (owner, 2026-11-21). The
+  selected login's form, headed by its kind's symbol, its name and its kind ("AWS SSO session"):
+  - every kind: Name, a bordered field, since it is the form's one editable text, and Session
+    length, Set Timer's pop-up of the one list, on No timer while the length is unknown; Custom…
+    shows the hours field, which stores and refuses as Timers says (owner, 2026-11-19). Name is
+    only what PrinceClockIn shows, and its note says so where the login has a name elsewhere:
+    "Only changes the name in PrinceClockIn, not in your config." (gcloud: "not in gcloud.",
+    Azure: "not in the Azure CLI."); a custom login's has none (owner, 2026-11-21);
+  - its source, where it has one, is the CLI's name for it as a plain value, with the file it is
+    in under it ("In ~/.aws/config.");
+  - AWS SSO session: its source ("qa");
+  - Databricks profile: its source ("analytics-dev", in ~/.databrickscfg) and its last check
     ("Not checked yet" before the first); an account profile says "Not checked" and why;
-  - gcloud account: its source, the whole `account_id` ("dev@example.com in ~/.config/gcloud"),
+  - gcloud account: its source, the whole `account_id` ("dev@example.com", in ~/.config/gcloud),
     and its last check ("Not checked yet" before the first);
   - Azure CLI tenant: its source, labelled Tenant ("00000000-0000-0000-0000-000000000001 for
-    dev@example.com in ~/.azure"), and its last check ("Not checked yet" before the first);
+    dev@example.com", in ~/.azure), and its last check ("Not checked yet" before the first);
   - custom login: Command, optional, with "The command runs in Terminal and is saved as plain
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
@@ -638,11 +648,11 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   System Settings… (the same page as the banner's), and "Turn notifications on or off in System
   Settings → Notifications.", or while they're off, "With notifications off, only the menu bar
   shows that a login is about to expire. Turn them on in System Settings → Notifications."
-- **General:** Launch at login, with its needs-approval state ("Needs your approval in System
+- **General:** Launch at login, with "PrinceClockIn opens automatically when you log in to your
+  Mac." under it, its needs-approval state ("Needs your approval in System
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
-  the change happened); Login timeout, a pop-up of 2, 5, 10 and 15 minutes (5 minutes by default;
-  "A login that takes longer than the login timeout is stopped and marked failed."). It carries no
+  the change happened). It carries no
   note that removing the icon from the menu bar quits the app, which wasn't needed (owner,
   2026-11-20).
 - Both time pop-ups replace steppers, which took many clicks to cross their range (owner,
