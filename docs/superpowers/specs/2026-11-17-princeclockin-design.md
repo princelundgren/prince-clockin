@@ -417,7 +417,8 @@ without its text, so no earlier text shows.
   whose Done timed out, gets a new timer by logging in again.
 - **Below a tile**, in the tile itself:
   - **Failed:** the core's own message ("aws not found on your login shell's PATH", "The login
-    timed out"), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
+    timed out", "The login was stopped by signal 9" for a CLI ended by a signal the app didn't
+    send), with Try Again and Show Output…, which expands a scrolling box with Hide Output.
     A denied permission to control Terminal also offers Open System Settings… (see Running logins).
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02, Log In and Set Timer…. A question the first check after the Mac wakes raises says
@@ -681,10 +682,18 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - A failed or timed-out login is reported on its tile, and the queue goes on to the next.
 - A login removed while it is queued leaves the queue, and the total shrinks with it. Removing the
   running login cancels it, and the queue goes on.
+- Quitting while a batch runs cancels it, as Cancel All does, and the app quits once the batch has
+  finished, or 3 seconds later if it hasn't. An update's relaunch postponed for the batch then
+  doesn't go ahead, so the app stays quit. As it quits, the app kills every CLI still running, with
+  its process group, and what is left of the group of each one it stopped.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser. A login runs with the stored timeout held between 2 minutes and 24 hours, or with the
   default if the stored value isn't finite, so a hand-edited state file can't end every login at
-  once or crash the app; the stored value itself is kept as it is.
+  once or crash the app; the stored value itself is kept as it is. For a custom login it covers
+  opening Terminal and the wait for Done together, and the timeout and Cancel All end either step,
+  even a Terminal that never answers.
+  Ending a CLI sends `SIGTERM` to its process group, so to what it started too unless that left the
+  group, and `SIGKILL` to any of them still running 2 seconds later.
 - AWS and Databricks logins run as an executable plus an argument list, never through a shell
   string, so a session or profile name can't inject a command. The name is joined to its flag
   (`--profile=<name>`), so a name starting with `-` can't be read as a flag of its own. No debug or
@@ -714,13 +723,20 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - The Notifications off banner's dismissal is also kept in the app's user defaults
   (`notificationsBannerDismissed`), and cleared once notifications are found on again.
 - A custom command opens in Terminal through a `do script` Apple event, never a file Terminal
-  executes. The command is passed as the parameter of a handler in a constant, compiled script, so
-  it is never quoted into script source. The app launches Terminal first, then asks for the
-  Automation permission off the main thread. A denied permission fails the login: its tile says
-  Failed, with a message that says where to allow it and Open System Settings…, which opens System
-  Settings → Privacy & Security → Automation, and the queue goes on. This was chosen over quoting
-  the command into script source, and over `osascript`, whose permission would be asked for on
-  behalf of a different process.
+  executes. The app builds the event itself, with the command as its direct parameter, so it is
+  never quoted into script source. The app launches Terminal first, then checks the Automation
+  permission off the main thread, asking the user only when no answer is on record. A denied
+  permission fails the login: its tile says Failed, with a message that says where to allow it and
+  Open System Settings…, which opens System Settings → Privacy & Security → Automation, and the
+  queue goes on. The `activate` and `do script` events are sent off the main thread, each waiting
+  at most 30 seconds for Terminal's reply, and none is sent once the login has timed out or been
+  cancelled. The permission check and the sends run on a Dispatch queue of their own, not Swift's
+  concurrency pool, since a call already made can't be cancelled: an abandoned one holds a thread
+  until Terminal or the user answers, and must not starve the app's other work. This was chosen
+  over quoting the command into script source, over `osascript`, whose
+  permission would be asked for on behalf of a different process, and over a compiled AppleScript
+  handler, since `NSAppleScript` runs only on the main thread, where a Terminal that doesn't answer
+  would freeze the app.
 
 ### Platform
 
@@ -785,7 +801,8 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   Update… show Sparkle's window, as does Check for Updates…, in the right-click menu and About.
   This departs on purpose from Sparkle's example for dockless apps, which brings back the Dock
   icon: the menu bar is where this app is looked at.
-- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty.
+- An update's relaunch is postponed while a batch runs, and goes ahead when the queue is empty,
+  unless the user quits first (see Running logins).
 - Sparkle's license ships in the app from `PrinceClockIn/PrinceClockIn/ThirdPartyNotices.txt`, a
   copy of the pinned release's `LICENSE`; a release fails if the two differ.
 - The release workflow lives in this repository. Its build, signing and upload jobs run on

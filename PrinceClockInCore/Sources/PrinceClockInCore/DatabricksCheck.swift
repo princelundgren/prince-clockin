@@ -82,7 +82,7 @@ public actor DatabricksChecker {
         switch outcome {
         case .exited(0, _): return .valid
         case .exited(_, let output): return output.contains(Self.authFailure) ? .invalid : .couldntCheck
-        case .timedOut: return .couldntCheck
+        case .timedOut, .signalled: return .couldntCheck
         case .cancelled, .launchFailed:
             lastCheck[profile] = previousCheck
             return .couldntCheck

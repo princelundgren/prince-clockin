@@ -102,8 +102,12 @@ public actor ShellPathResolver: PathResolving {
         let outcome = await runner.run(
             executable: shell, arguments: ["-i", "-l", "-c", script],
             environment: environment, timeout: readTimeout)
-        guard case .exited(_, let output) = outcome,
-            let start = output.range(of: startMarker),
+        let output: String
+        switch outcome {
+        case .exited(_, let text), .signalled(_, let text): output = text
+        case .timedOut, .cancelled, .launchFailed: return nil
+        }
+        guard let start = output.range(of: startMarker),
             let end = output.range(of: endMarker, range: start.upperBound..<output.endIndex)
         else { return nil }
         let directories = output[start.upperBound..<end.lowerBound]

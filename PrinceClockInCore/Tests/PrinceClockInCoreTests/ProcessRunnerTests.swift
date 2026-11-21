@@ -47,6 +47,11 @@ import PrinceClockInCore
         #expect(output.contains("out") && output.contains("err"))
     }
 
+    @Test func runnerReportsASignalApartFromAnExitCode() async {
+        let outcome = await run("/bin/sh", ["-c", "echo before; kill -9 $$"])
+        #expect(outcome == .signalled(signal: 9, output: "before\n"))
+    }
+
     @Test func runnerReportsLaunchFailure() async {
         let outcome = await run("/nonexistent/tool", [])
         guard case .launchFailed = outcome else {
@@ -84,6 +89,101 @@ import PrinceClockInCore
             return
         }
         #expect(ContinuousClock.now - started < .seconds(6))
+    }
+
+    /// Runs `script` under `sh` with a file for it to write a pid to, until the 1-second timeout,
+    /// and returns the outcome and that pid.
+    private func runForking(_ script: String) async throws -> (ProcessOutcome, pid_t) {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let outcome = await run("/bin/sh", ["-c", script, "sh", pidFile.path], timeout: .seconds(1))
+        let text = try String(contentsOf: pidFile, encoding: .utf8)
+        let pid = try #require(pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+        return (outcome, pid)
+    }
+
+    /// Whether `pid` is gone within `deadline`, polled since launchd reaps an orphan shortly after
+    /// it dies. Kills it on the way out, so a failing test leaves nothing running.
+    private func isGone(_ pid: pid_t, within deadline: Duration) async -> Bool {
+        let end = ContinuousClock.now + deadline
+        while ContinuousClock.now < end {
+            if kill(pid, 0) == -1 && errno == ESRCH { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        kill(pid, SIGKILL)
+        return false
+    }
+
+    @Test func aTimeoutEndsWhatTheChildStarted() async throws {
+        let (outcome, grandchild) = try await runForking(#"sleep 30 & echo $! > "$1"; wait"#)
+        guard case .timedOut = outcome else {
+            Issue.record("expected timedOut, got \(outcome)")
+            return
+        }
+        #expect(await isGone(grandchild, within: .seconds(2)))
+    }
+
+    @Test func aTimeoutKillsADescendantThatIgnoresTerminate() async throws {
+        let (outcome, grandchild) = try await runForking(
+            #"(trap "" TERM; exec sleep 30) & echo $! > "$1"; wait"#)
+        guard case .timedOut = outcome else {
+            Issue.record("expected timedOut, got \(outcome)")
+            return
+        }
+        #expect(await isGone(grandchild, within: .seconds(4)))
+    }
+
+    @Test func killAllEndsARunningChildAndWhatItStarted() async throws {
+        let runner = FoundationProcessRunner()
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let task = Task {
+            await runner.run(
+                executable: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", #"sleep 30 & echo $! > "$1"; wait"#, "sh", pidFile.path],
+                environment: ["PATH": "/usr/bin:/bin"], timeout: .seconds(30))
+        }
+        let grandchild = try await waitForPid(in: pidFile)
+
+        runner.killAll()
+
+        #expect(await task.value == .signalled(signal: SIGKILL, output: ""))
+        #expect(await isGone(grandchild, within: .seconds(1)))
+    }
+
+    @Test func killAllDoesntWaitForAStoppedGroupsPendingKill() async throws {
+        let runner = FoundationProcessRunner()
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        let task = Task {
+            await runner.run(
+                executable: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", #"(trap "" TERM; exec sleep 30) & echo $! > "$1"; wait"#, "sh", pidFile.path],
+                environment: ["PATH": "/usr/bin:/bin"], timeout: .seconds(30))
+        }
+        let grandchild = try await waitForPid(in: pidFile)
+        task.cancel()
+        #expect(await task.value == .cancelled)
+
+        runner.killAll()
+
+        // Well inside the 2 seconds after which the stop's own SIGKILL would have come.
+        #expect(await isGone(grandchild, within: .milliseconds(500)))
+    }
+
+    /// The pid a script writes to `file`, once it has.
+    private func waitForPid(in file: URL) async throws -> pid_t {
+        for _ in 0..<100 {
+            if let text = try? String(contentsOf: file, encoding: .utf8),
+               let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return pid
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return try #require(nil as pid_t?, "no pid written to \(file.lastPathComponent)")
     }
 
     @Test func runnerDrainsLargeOutput() async {
