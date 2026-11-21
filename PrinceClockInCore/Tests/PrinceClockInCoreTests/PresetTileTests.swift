@@ -20,6 +20,18 @@ private func named(_ name: String) -> Login {
             accessibilityLabel: "Morning preset", isEnabled: true))
     }
 
+    @Test func theHelpTagJoinsTheLoginsAsTheLocaleJoinsAList() {
+        let logins = [named("dev"), named("prod"), named("staging")]
+
+        for identifier in ["en_US", "en_SE"] {
+            let tile = presetTile(
+                for: Preset(name: "Morning", loginIDs: []), logins: logins, locale: Locale(identifier: identifier))
+
+            #expect(tile.subtitle == "dev, prod, staging", "\(identifier)")
+            #expect(tile.helpTag == "Logs in to dev, prod, and staging", "\(identifier)")
+        }
+    }
+
     @Test func aPresetOfOneLoginNamesIt() {
         let preset = Preset(name: "Prod only", loginIDs: [])
 

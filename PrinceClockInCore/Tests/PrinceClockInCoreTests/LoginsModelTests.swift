@@ -272,6 +272,7 @@ private func model(_ logins: [Login], presets: [Preset] = []) -> LoginsModel {
         #expect(TimerError.longerThanSessionLength.message == "That's longer than the session length")
         #expect(TimerError.sessionLengthTooLong.message == "A session length can be at most a year")
         #expect(TimerError.sessionLengthNotPositive.message == "A session length must be more than zero")
+        #expect(TimerError.sessionLengthUnderAMinute.message == "A session length must be at least a minute")
     }
 
     @Test func aSessionLengthThatIsNotFiniteOrOverAYearIsRefused() {

@@ -6,11 +6,14 @@ public enum SessionLengthRefusal: Error, Equatable, Sendable {
     case notANumberOfHours
     /// Longer than `maximumSessionLength`.
     case tooLong
+    /// Shorter than `minimumSessionLength`.
+    case tooShort
 
     public var message: String {
         switch self {
         case .notANumberOfHours: "Enter a number of hours"
         case .tooLong: TimerError.sessionLengthTooLong.message
+        case .tooShort: TimerError.sessionLengthUnderAMinute.message
         }
     }
 }
@@ -19,7 +22,8 @@ public enum SessionLengthRefusal: Error, Equatable, Sendable {
 /// `nil` for empty text, which makes the session length unknown, else the length in seconds,
 /// rounded down.
 /// - Throws: `.notANumberOfHours` for text that isn't a positive, finite number of hours, or one
-///   under a second; `.tooLong` for a length over `maximumSessionLength`.
+///   under a second; `.tooShort` for a length under `minimumSessionLength`; `.tooLong` for one over
+///   `maximumSessionLength`.
 public func sessionLength(fieldText text: String, locale: Locale) throws(SessionLengthRefusal) -> TimeInterval? {
     guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
     guard let length = sessionLengthFromHours(text, locale: locale) else { throw .notANumberOfHours }
@@ -27,6 +31,8 @@ public func sessionLength(fieldText text: String, locale: Locale) throws(Session
         return try checkedSessionLength(length)
     } catch .sessionLengthNotPositive {
         throw .notANumberOfHours
+    } catch .sessionLengthUnderAMinute {
+        throw .tooShort
     } catch {
         throw .tooLong
     }
@@ -41,13 +47,14 @@ public func sessionLengthHoursText(_ length: TimeInterval?, locale: Locale) -> S
         .number.grouping(.never).precision(.fractionLength(0...6)).locale(locale))
 }
 
-/// `text` as a positive, finite number of hours in `locale`'s format, in seconds rounded to the
-/// nearest, since a decimal number of hours such as a third is never exact; `nil` otherwise.
+/// `text` as a finite number of hours in `locale`'s format, zero or less included, in seconds
+/// rounded to the nearest, since a decimal number of hours such as a third is never exact; `nil`
+/// otherwise.
 func sessionLengthFromHours(_ text: String, locale: Locale) -> TimeInterval? {
     // A whole match, since parsing takes a leading number and ignores what follows it.
     let text = text.trimmingCharacters(in: .whitespaces)
     guard let hours = text.wholeMatch(of: FloatingPointFormatStyle<Double>(locale: locale))?.output,
-          hours.isFinite, hours > 0
+          hours.isFinite
     else { return nil }
     return (hours * secondsPerHour).rounded()
 }

@@ -50,7 +50,7 @@ public struct SetTimerDraft: Equatable, Sendable {
     /// What the draft tells Set Timer, or `nil` while a field it needs is empty or not a number,
     /// Expires In's hours are negative or its minutes outside 0 to 59, or no finite session length
     /// is chosen. An empty hours or minutes field counts as zero, as long as the other isn't empty
-    /// too.
+    /// too. A Custom… length of zero or less is told as it is, for Set Timer to refuse.
     public func entry(locale: Locale) -> TimerEntry? {
         guard let length = sessionLengthValue(locale: locale) else { return nil }
         switch mode {

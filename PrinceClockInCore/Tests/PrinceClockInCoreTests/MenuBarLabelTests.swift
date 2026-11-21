@@ -3,7 +3,8 @@ import Testing
 import PrinceClockInCore
 
 private let british = Locale(identifier: "en_GB")
-private let swedish = Locale(identifier: "sv_SE")
+/// What an English-only app gets on a Mac set to Swedish.
+private let swedishRegion = Locale(identifier: "en_SE")
 private let prod = Login(displayName: "prod", kind: .awsSSOSession(name: "prod"))
 private let nineteenMinutes: TimeInterval = 19 * 60
 private let fiveHoursThirteen: TimeInterval = 5 * 3600 + 13 * 60
@@ -37,8 +38,8 @@ private func label(
     @Test func voiceOverReadsOneLabelWithTheWideFormat() {
         #expect(label(.expiring(id: prod.id, remaining: nineteenMinutes)).accessibilityLabel
             == "PrinceClockIn, prod expiring in 19 minutes")
-        #expect(label(.expiring(id: prod.id, remaining: nineteenMinutes), locale: swedish).accessibilityLabel
-            == "PrinceClockIn, prod expiring in 19 minuter")
+        #expect(label(.expiring(id: prod.id, remaining: nineteenMinutes), locale: swedishRegion).accessibilityLabel
+            == "PrinceClockIn, prod expiring in 19 minutes")
         #expect(label(.expiring(id: prod.id, remaining: 30)).accessibilityLabel
             == "PrinceClockIn, prod expiring in less than a minute")
         #expect(label(.ok(id: prod.id, remaining: fiveHoursThirteen)).accessibilityLabel

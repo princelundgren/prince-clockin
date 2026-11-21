@@ -1442,7 +1442,7 @@ private final class GatedLogins: Sendable {
         #expect(coordinator.login(dev.id)?.sessionLength == nil)
     }
 
-    @Test func aSessionLengthOfZeroOrLessIsNotStored() async throws {
+    @Test func aSessionLengthUnderAMinuteIsNotStored() async throws {
         let dev = aws("dev")
         let fixture = try Fixture(logins: [dev])
         let coordinator = fixture.makeCoordinator()
@@ -1456,8 +1456,12 @@ private final class GatedLogins: Sendable {
         }
 
         #expect(coordinator.login(dev.id)?.sessionLength == 8 * hour)
-        try coordinator.setSessionLength(id: dev.id, to: 1)
-        #expect(coordinator.login(dev.id)?.sessionLength == 1)
+        #expect(throws: TimerError.sessionLengthUnderAMinute) {
+            try coordinator.setSessionLength(id: dev.id, to: 59.9)
+        }
+        #expect(coordinator.login(dev.id)?.sessionLength == 8 * hour)
+        try coordinator.setSessionLength(id: dev.id, to: 60)
+        #expect(coordinator.login(dev.id)?.sessionLength == 60)
     }
 
     @Test func editsAreSaved() async throws {

@@ -7,7 +7,8 @@ private let minute: TimeInterval = 60
 private let thirtyMinutes: TimeInterval = 30 * minute
 private let now = at("2026-11-19T12:00:00Z")
 private let british = Locale(identifier: "en_GB")
-private let swedish = Locale(identifier: "sv_SE")
+/// What an English-only app gets on a Mac set to Swedish.
+private let swedishRegion = Locale(identifier: "en_SE")
 
 private func calendar(_ locale: Locale) -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
@@ -252,12 +253,12 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(tile(expired, facts: TileFacts(activity: .queued)).trailing == .stateWord("Queued"))
     }
 
-    @Test func swedishTimesJoinNumberAndUnit() {
-        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now), locale: swedish)
-        let qa = tile(login(remaining: 19 * minute, now: now), locale: swedish)
+    @Test func aSwedishRegionReadsEnglishTimes() {
+        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now), locale: swedishRegion)
+        let qa = tile(login(remaining: 19 * minute, now: now), locale: swedishRegion)
 
-        #expect(prod.trailing == .timeLeft("5\u{202F}h 13\u{202F}m"))
-        #expect(qa.subtitle == .status("Expiring · 19\u{202F}m left"))
+        #expect(prod.trailing == .timeLeft("5h 13m"))
+        #expect(qa.subtitle == .status("Expiring · 19m left"))
     }
 
     // MARK: Click
@@ -369,6 +370,17 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             confirmTitle: "Mark as Logged In yesterday at 23:40"))
     }
 
+    @Test func aPossibleLoginBeforeYesterdaySaysOnItsDate() {
+        // Before yesterday on the real clock too, which `DateFormatter`'s relative formatting reads.
+        let changed = at("2026-11-17T22:38:00Z")
+
+        let detail = tile(login(remaining: 10 * minute, now: now), facts: TileFacts(possibleLoginAt: changed)).detail
+
+        #expect(detail == .possibleLogin(
+            question: "Its login changed on 17 Nov 2026 at 23:38. Was that you?",
+            confirmTitle: "Mark as Logged In on 17 Nov 2026 at 23:38"))
+    }
+
     @Test func aStillValidTileSaysItsSessionLengthMayBeTooShort() {
         #expect(tile(stillValid(checkedAt: now)).detail == .stillValid(
             message: "Its 1-day timer ran out, but Databricks says the login still works. The session length may be too short."))
@@ -476,6 +488,8 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
         #expect(sessionLengthText(72 * hour) == "3 days")
         #expect(sessionLengthText(36 * hour) == "36 hours")
         #expect(sessionLengthText(90 * minute) == "90 minutes")
+        #expect(sessionLengthText(20 * minute + 30) == "20 minutes")
+        #expect(sessionLengthText(minute) == "1 minute")
     }
 
     // MARK: VoiceOver
@@ -518,9 +532,9 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             == "analytics-prod, Databricks profile, failed, No timer")
     }
 
-    @Test func voiceOverReadsSwedishDurationsWide() {
-        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now, name: "prod"), locale: swedish)
+    @Test func voiceOverReadsEnglishDurationsWideInASwedishRegion() {
+        let prod = tile(login(remaining: 5 * hour + 13 * minute, now: now, name: "prod"), locale: swedishRegion)
 
-        #expect(prod.accessibilityLabel == "prod, AWS SSO session, logged in, 5 timmar, 13 minuter left")
+        #expect(prod.accessibilityLabel == "prod, AWS SSO session, logged in, 5 hours, 13 minutes left")
     }
 }

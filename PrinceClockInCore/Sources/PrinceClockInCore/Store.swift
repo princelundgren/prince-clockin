@@ -20,7 +20,8 @@ public final class StateStore: Sendable {
     /// A missing file gives `.empty`. A version-1 file loads as the current version, and the file
     /// stays as it is until the next `save`. A file that won't decode, or whose version is neither 1
     /// nor `AppState.currentVersion`, is renamed to `state-YYYYMMDD-HHMMSS-<4 hex>.json.bak` and
-    /// gives `.setAside`. Every date and session length is rounded down to whole seconds.
+    /// gives `.setAside`. Every date and session length is rounded down to whole seconds, and a
+    /// session length `checkedSessionLength` refuses, such as one under a minute, is made unknown.
     ///
     /// If the rename itself fails, the directory isn't writable and `save` would fail the same way,
     /// so the result is `.empty`.
@@ -33,7 +34,7 @@ public final class StateStore: Sendable {
               let current = Self.inCurrentFormat(data, version: header.version),
               let state = try? Self.makeDecoder().decode(AppState.self, from: current)
         else { return setAside() }
-        return .loaded(state.roundedToWholeSeconds())
+        return .loaded(state.roundedToWholeSeconds().withRefusedSessionLengthsUnknown())
     }
 
     /// `data`, a file of format `version`, in the current format; `nil` for a version this build

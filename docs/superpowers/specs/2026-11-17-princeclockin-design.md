@@ -127,16 +127,19 @@ The login time comes from:
    session length. A time that would make the login already expired is refused with "That login
    would already have expired", a Logged In At time in the future with "That time is in the
    future", an Expires In longer than the session length with "That's longer than the session
-   length", a session length over a year with "A session length can be at most a year", and one of
-   zero or less with "A session length must be more than zero". Both limits hold for every session
-   length. The hours field of Settings' Custom… and of Edit Session Length stores its text on
-   Return or when focus leaves it within the panel or Settings, never while typing, and closing
-   the panel discards unsaved text. Empty text makes the session length unknown, text that isn't a
-   positive number of hours is refused with "Enter a number of hours", and one over a year with the
-   same words as Set Timer. A refused text stays in the field with the refusal under it until it
-   changes, and nothing is stored. While the session length is unknown, Set Timer asks for it in
-   the same form, so the time left is never stored as the session length. The core sets a login
-   time through `setLoginTime(id:at:)`.
+   length", a session length over a year with "A session length can be at most a year", one of
+   zero or less with "A session length must be more than zero", and one under a minute, the
+   smallest unit a session length's text shows, with "A session length must be at least a minute".
+   These limits hold for every session length: a stored one outside them, such as one under a
+   minute in a file an earlier version wrote, loads as unknown. The hours field of Settings'
+   Custom… and of Edit Session Length stores its text on Return or when focus leaves it within the
+   panel or Settings, never while typing, and closing the panel discards unsaved text. Empty text
+   makes the session length unknown, text that isn't a positive number of hours is refused with
+   "Enter a number of hours", and one under a minute or over a year with the same words as Set
+   Timer. A refused text stays in the field with the refusal under it until it changes, and
+   nothing is stored. While the session length is unknown, Set Timer asks for it in the same form,
+   so the time left is never stored as the session length. The core sets a login time through
+   `setLoginTime(id:at:)`.
 3. Detection of a login done outside the app, such as `aws sso login` in a terminal:
    - **AWS**: the session's file in `~/.aws/sso/cache/` is named by the SHA-1 of the session name.
      The app compares what it last saw of the file with what it reads now, in this order:
@@ -343,12 +346,14 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
    as a login tile is, so the panel reads as one piece (owner, 2026-11-20): the same frame, fill,
    hover and press, a `rectangle.stack` symbol no login uses, the name, and under it the logins in
    order ("dev, prod, staging"), each line truncated at the end. The help tag says "Logs in to dev,
-   prod and staging", and VoiceOver reads "Morning preset" with the help tag as its hint, since
-   `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts the preset. An
-   empty preset reads "No logins" under its name, is dimmed and disabled, and its help tag says to
-   add logins in Settings → Presets; VoiceOver reads "Night shift preset, no logins". Like the login
-   tiles, the presets start fresh at each opening, so no hover carries over. The list is as tall as
-   its tiles, up to five; past five it shows half of the sixth and scrolls.
+   prod and staging", the list in the locale's own form, as every list in the copy is, so en_US and
+   en_SE read "dev, prod, and staging". VoiceOver reads "Morning preset" with the help tag as its
+   hint, since `help(_:)` sets both. Under the pointer the tile shows Log In, and a click starts
+   the preset. An empty preset reads "No logins" under its name, is dimmed and disabled, and its
+   help tag says to add logins in Settings → Presets; VoiceOver reads "Night shift preset, no
+   logins". Like the login tiles, the presets start fresh at each opening, so no hover carries
+   over. The list is as tall as its tiles, up to five; past five it shows half of the sixth and
+   scrolls.
 6. **The update line**, when an update waits: "Update 1.0.1 available" with View…, which shows
    Sparkle's update window. While its installation waits for the logins to finish, it reads
    "Update 1.0.1 installs after the logins finish", without View….
@@ -412,7 +417,9 @@ without its text, so no earlier text shows.
   - **Logged in elsewhere?:** "Its login changed at 14:02. Was that you?", with Mark as Logged In
     at 14:02, Log In and Set Timer…. A question the first check after the Mac wakes raises says
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
-    (owner, 2026-11-19). After a sleep, each login asks on its own tile.
+    (owner, 2026-11-19). After a sleep, each login asks on its own tile. A time on another day
+    reads "yesterday at 23:38", or "on 17 Nov 2026 at 23:38" where the locale has no word for the
+    day.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
     session length may be too short." with Edit Session Length…. Its subtitle carries the check,
     as Settings shows it: "Checked 22:30 · valid".
@@ -603,7 +610,7 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 | Clock time | `Date.FormatStyle`, time shortened | 14:02 | 14:02 |
 | A time on another day | `DateFormatter` with `doesRelativeDateFormatting`, medium date style, short time, middle of sentence | tomorrow at 03:55 | tomorrow at 03:55 |
 | Batch progress | one form everywhere | 1 of 2 | 1 of 2 |
-| Session length | hours or days | 8 hours · 3 days | 8 hours · 3 days |
+| Session length | days when a whole number of days, else hours when a whole number of hours, else minutes, rounded down | 8 hours · 3 days · 20 minutes | 8 hours · 3 days · 20 minutes |
 
 #### Departures from Apple's guidelines
 

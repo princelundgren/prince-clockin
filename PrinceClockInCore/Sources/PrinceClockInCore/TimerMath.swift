@@ -21,6 +21,8 @@ public enum TimerError: Error, Equatable, Sendable {
     case sessionLengthTooLong
     /// A session length of zero or less, once rounded down to whole seconds.
     case sessionLengthNotPositive
+    /// A session length more than zero but under a minute, once rounded down to whole seconds.
+    case sessionLengthUnderAMinute
 
     public var message: String {
         switch self {
@@ -29,6 +31,7 @@ public enum TimerError: Error, Equatable, Sendable {
         case .longerThanSessionLength: "That's longer than the session length"
         case .sessionLengthTooLong: "A session length can be at most a year"
         case .sessionLengthNotPositive: "A session length must be more than zero"
+        case .sessionLengthUnderAMinute: "A session length must be at least a minute"
         }
     }
 }
@@ -36,13 +39,18 @@ public enum TimerError: Error, Equatable, Sendable {
 /// The longest session length a login can have: a year.
 public let maximumSessionLength: TimeInterval = 365 * 24 * 3600
 
+/// The shortest session length a login can have: a minute, the smallest unit its text shows.
+public let minimumSessionLength: TimeInterval = 60
+
 /// `length` rounded down to whole seconds, as a login stores it.
 /// - Throws: `.sessionLengthTooLong` when it isn't finite or is longer than `maximumSessionLength`;
-///   `.sessionLengthNotPositive` when it is zero or less.
+///   `.sessionLengthNotPositive` when it is zero or less; `.sessionLengthUnderAMinute` when it is
+///   under a minute.
 public func checkedSessionLength(_ length: TimeInterval) throws(TimerError) -> TimeInterval {
     let length = length.rounded(.down)
     guard length.isFinite, length <= maximumSessionLength else { throw .sessionLengthTooLong }
     guard length > 0 else { throw .sessionLengthNotPositive }
+    guard length >= minimumSessionLength else { throw .sessionLengthUnderAMinute }
     return length
 }
 
@@ -73,7 +81,8 @@ public struct TimerSetting: Equatable, Sendable {
 ///   At a session length or more ago; `.longerThanSessionLength` for an Expires In longer than the
 ///   session length; `.inFuture` for a Logged In At after `now`; `.sessionLengthTooLong` for a
 ///   session length that isn't finite or is longer than `maximumSessionLength`;
-///   `.sessionLengthNotPositive` for one of zero or less, or under a second.
+///   `.sessionLengthNotPositive` for one of zero or less, or under a second;
+///   `.sessionLengthUnderAMinute` for one under a minute.
 public func timerSetting(for entry: TimerEntry, now: Date) throws(TimerError) -> TimerSetting {
     switch entry {
     case .expiresIn(let expiresIn, let sessionLength):
