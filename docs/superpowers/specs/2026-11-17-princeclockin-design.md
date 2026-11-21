@@ -105,7 +105,26 @@ and a timer. The kinds are:
   length, as for Databricks. Service accounts (an email ending `.gserviceaccount.com`) aren't
   offered, and application-default credentials are no kind: the user can add either as a custom
   login.
-- **Custom login**: for any other login (Azure, Okta and so on), with a session length the user
+- **Azure CLI tenant**: one user's sign-in to one tenant, read from `azureProfile.json` in the
+  Azure CLI's config directory: `AZURE_CONFIG_DIR` (a leading `~` expanded), else `~/.azure`. The
+  file holds no secret: a list of subscriptions, each with its `tenantId`, its user
+  (`user.name`, `user.type`), and when the CLI knows them, `tenantDisplayName` and
+  `tenantDefaultDomain`; a tenant with no subscription has a tenant-level entry named
+  `N/A(tenant level account)`. The CLI writes it as UTF-8 with a byte order mark, which the app
+  drops before parsing. Only entries of `user.type` `user` outside Cloud Shell count: service
+  principals and managed identities (`systemAssignedIdentity`, `userAssignedIdentity`) aren't
+  offered, and the user can add one as a custom login. Each user and tenant is offered once,
+  named by the tenant's display name, else its default domain, else its id; a tenant with more
+  than one user adds the user in parentheses ("Contoso Dev (dev@example.com)"). Login runs
+  `az login --tenant=<tenantId> --allow-no-subscriptions`; without the flag az refuses a tenant
+  with no subscription ("No subscriptions found"), and with it such a tenant gets its tenant-level
+  entry. With stdin from `/dev/null` and stdout a pipe, `az login` shows no subscription
+  picker. The browser chooses the account, so the app can't pin the user, a known limit the
+  README names: a login that signs in another account still exits 0 and sets the tracked
+  login's time. No default session length: Entra's sign-in frequency is set by
+  Conditional Access. The app never opens `msal_token_cache.json`, which holds the refresh
+  tokens, or `service_principal_entries.*`.
+- **Custom login**: for any other login (Okta, a VPN and so on), with a session length the user
   sets. It can carry a command, which opens in a Terminal window so the user can type passwords,
   MFA codes or choices; the timer starts when the user clicks Done (owner, 2026-11-17). Without a
   command, logging in is the same step with nothing opened: the user logs in their own way and
@@ -119,13 +138,15 @@ A session length is picked from one list everywhere, in Set Timer and in Setting
 12 hours, 1 day, 3 days, 7 days, Custom… (any number of hours or days) and No timer, which leaves
 the session length unknown.
 
-The app discovers AWS SSO sessions, Databricks profiles and gcloud accounts and offers the ones
-not yet tracked in Settings' + menu. The user picks which to track, so nothing is tracked unasked.
+The app discovers AWS SSO sessions, Databricks profiles, gcloud accounts and Azure CLI tenants and
+offers the ones not yet tracked in Settings' + menu. The user picks which to track, so nothing is
+tracked unasked.
 It reads `~/.aws/config` and `~/.databrickscfg`, or the files `AWS_CONFIG_FILE` and
 `DATABRICKS_CONFIG_FILE` name (a leading `~` expanded), and gcloud's `credentials.db`. Of that
 store it reads only `account_id` and `rowid`, opened read-only and waiting up to 200 ms on a write
 in progress, never `value`, which holds the refresh token; a store missing or unreadable offers no
-accounts. Custom logins are added by hand.
+accounts. Of the Azure CLI it reads only `azureProfile.json`; a file missing or unparseable offers
+no tenants. Custom logins are added by hand.
 
 A **preset** is a named, ordered set of logins, created and edited in Settings → Presets. Removing
 a login also removes it from every preset. A preset left with no logins stays, says "No logins"
@@ -189,6 +210,24 @@ The login time comes from:
      A store that can't be read changes nothing. A revoke and a new login of the store's newest
      row, both while the app isn't running or within one batch of the directory watch, can give
      the row its old `rowid` back and go unseen.
+   - **Azure**: `azureProfile.json` is rewritten by `az login`, `az logout`, `az account set`,
+     `az account list --refresh` and once for the installation id, never by a token refresh, so a
+     rewrite alone can't tell a login from `az account set`. The app goes by presence: it stores
+     per login whether the file last listed its user and tenant, whatever a check or Set Timer
+     does in between, and compares; a user matches ignoring case, as `az logout` matches it:
+     1. Listed, after not: a login, at the file's modification date, the best the app knows.
+     2. Not listed, after listed: logged out, as for AWS ("Logged out"); `az logout` removes all
+        of its user's subscriptions.
+     3. Listed before and now: nothing happened, so a login done outside the app while the tenant
+        is still listed isn't seen; the user sets it by hand.
+     4. A first sight, with nothing stored: a baseline only. Adding the tenant takes it at once;
+        since only a listed tenant is offered, a login right after is rule 3 and isn't seen.
+     The CLI rewrites the file in place, so a read can catch it half-written: a file that doesn't
+     parse changes nothing. A missing file lists nothing. Entries can also go without a logout,
+     and read as one: `az login` keeps one entry per subscription id, so another user's login to a
+     shared subscription replaces this user's entry, and `az account list --refresh` rebuilds the
+     list, dropping a tenant-level entry once the user has subscriptions elsewhere and any tenant
+     that needs a new sign-in.
 
 A session length set wrong matters only where the hash can't decide, after a relaunch or for a file
 without a token. Set too short, a renewal after the timer's expiry is taken for a login, so the
@@ -209,16 +248,15 @@ Facts the timer design rests on:
   lifetime set in the account's token policy runs out.
 
 Each timer has a state: **ok**, **expiring** (within the notification time), **expired**, or
-**unknown** (no login time or no session length), shown by the `timer` symbol with nothing
-trailing, and read to VoiceOver as "No timer". An AWS SSO session, gcloud account or
-custom login with an unknown timer that has been logged in to, and not invalidated since, shows
-as **logged in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS
-session or gcloud account stays so until the app sees a logout, which makes it "Logged out"; the
-app can't see a custom login log out, so it stays so (owner, 2026-11-20). A Databricks login in
-that state asks for its session length instead (see Running logins). A Databricks workspace or
-gcloud login whose
-timer says expired but whose last check that answered (valid or invalid) since that expiry found
-it valid is **still valid** (owner, 2026-11-19).
+**unknown** (no login time or no session length), shown by the `timer` symbol with nothing trailing,
+and read to VoiceOver as "No timer". An AWS SSO session, gcloud account, Azure CLI tenant or custom
+login with an unknown timer that has been logged in to, and not invalidated since, shows as **logged
+in with no expiry**: "Logged in" in Logged in's colour and symbol, never due. An AWS session, gcloud
+account or Azure tenant stays so until the app sees a logout, which makes it "Logged out"; the app
+can't see a custom login log out, so it stays so (owner, 2026-11-20). A Databricks login in that
+state asks for its session length instead (see Running logins). A Databricks workspace, gcloud or
+Azure login whose timer says expired but whose last check that answered (valid or invalid) since
+that expiry found it valid is **still valid** (owner, 2026-11-19).
 
 A login is **due** when its timer is expiring or expired and it isn't still valid (owner,
 2026-11-18). An unknown timer isn't due. Due logins are the ones Log In to N Due starts and the
@@ -229,14 +267,15 @@ When the app starts, it reads every tracked login's state as a baseline and keep
 timers. A missing AWS cache file means logged out, and so expired, only for a session the app has
 seen logged in, one whose file times it has stored; a session it has never seen keeps the timer it
 has, unknown until a login is recorded. A gcloud account follows the same rule with its stored
-row. A login done while the app wasn't running is found only by the AWS file-time rule and the
-gcloud `rowid` rule above, or set by hand.
+row, and an Azure tenant with its stored presence. A login done while the app wasn't running is
+found only by the AWS file-time rule, the gcloud `rowid` rule and the Azure presence rule above,
+or set by hand.
 
-Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/` or
-the gcloud config directory, on wake from sleep, on a clock change and on a time-zone change, with
-no polling, so a menu bar app that runs all day does no work while nothing happens. Each
-recomputation also reads the AWS cache files and gcloud's credential store and sends any
-notification now due.
+Times are recomputed at the next moment one can change, on any change in `~/.aws/sso/cache/`, the
+gcloud config directory or the Azure CLI's `azureProfile.json`, on wake from sleep, on a clock
+change and on a time-zone change, with no polling, so a menu bar app that runs all day does no work
+while nothing happens. Each recomputation also reads the AWS cache files, gcloud's credential store
+and `azureProfile.json` and sends any notification now due.
 
 - **The next moment** is the soonest notification time or expiry, or at once while a notification
   is due and unsent. What is on screen adds more:
@@ -253,20 +292,22 @@ notification now due.
   Each watch follows the directory's path, so it also sees one created or removed after launch.
   The gcloud watch reports file events and reacts only to `credentials.db` and its SQLite journal
   (`-journal`, `-wal`), or to a batch File System Events couldn't itemize, since every gcloud
-  command writes its logs and `access_tokens.db` beside it. The files are matched under the
-  directory's name or, if it is a symlink, its target's.
-- **Opening the panel or Settings** first brings the times, the AWS sessions and the gcloud
-  accounts up to the clock, since the last recomputation may be hours old. That leaves notifying to
-  the recomputation, which a notification found due makes happen at once.
+  command writes its logs and `access_tokens.db` beside it. **The Azure config directory** is
+  watched the same way, reacting only to `azureProfile.json`, since every az command writes its
+  logs and telemetry there and a token refresh rewrites `msal_token_cache.json`. The files are
+  matched under the directory's name or, if it is a symlink, its target's.
+- **Opening the panel or Settings** first brings the times, the AWS sessions, the gcloud accounts
+  and the Azure tenants up to the clock, since the last recomputation may be hours old. That leaves
+  notifying to the recomputation, which a notification found due makes happen at once.
 - A recomputation that arrives while one runs (a live check can take seconds) makes that one
   run once more when it ends.
 
 #### The live checks
 
-A check asks a CLI whether a tracked Databricks profile or gcloud account is still valid, one
-login at a time, for tracked logins only, at most every 5 minutes per login, and never while a
-login of the same CLI is running. It runs when such a login enters its notification time, and
-when the user clicks Check Now in Settings → Logins.
+A check asks a CLI whether a tracked Databricks profile, gcloud account or Azure CLI tenant is still
+valid, one login at a time, for tracked logins only, at most every 5 minutes per login, and never
+while a login of the same CLI is running. It runs when such a login enters its notification time,
+and when the user clicks Check Now in Settings → Logins.
 
 - **Databricks** runs `databricks current-user me --profile <name>`. Only the CLI's
   no-credentials error counts as invalid.
@@ -280,6 +321,20 @@ when the user clicks Check Now in Settings → Logins.
   gcloud wraps every refresh failure, a server error, rate limit or context-aware-access denial
   too, in "There was a problem refreshing…" and the advice to run `gcloud auth login`, so neither
   counts alone: any other failure is couldn't check.
+- **Azure** runs `az account get-access-token --tenant=<tenantId> --output=none`, stdout to
+  `/dev/null` as for gcloud; `none` is an output format that prints nothing. az takes the
+  credential of the default subscription's user (`isDefault: true`, set by `az account set`), not
+  the tracked user, so before running it the app reads `azureProfile.json` (never the token cache):
+  unless the default subscription's `user.name` is the tracked user's, compared ignoring case, the
+  check is skipped without running az, and keeps the last check. No default subscription, or a file
+  that can't be read, skips it too. Invalid only when stderr contains
+  `Can't find token from MSAL cache`, `does not exist in MSAL token cache`, or an Entra code that
+  needs a new sign-in, matched with no digit after it: `AADSTS50173` (grant revoked), `AADSTS70008`
+  and `AADSTS700082` (refresh token expired from inactivity), `AADSTS70043` (sign-in frequency),
+  `AADSTS50078`, `AADSTS50076` and `AADSTS50079` (MFA expired, required or to enrol), `AADSTS50132`
+  and `AADSTS50133` (session invalid after a password change). az gives every Entra error the same
+  advice to run `az login`, a server outage too, so that advice doesn't count: any other failure is
+  couldn't check.
 - A login reported invalid moves its timer to expired, even if time remains.
 - A login reported valid whose timer says expired is still valid (see Timers). Its tile says
   "Still valid" and offers Edit Session Length…, since the session length may be too short.
@@ -293,8 +348,8 @@ when the user clicks Check Now in Settings → Logins.
   publishes whether a check is running. Settings shows it as "Checked 14:02 · valid".
 - A press of Check Now within 5 minutes of a login's last check skips that login, which keeps its
   last check, so a skip never reads as a fresh result.
-- Check Now is disabled while a check runs, while a Databricks or gcloud login runs, and when
-  neither a workspace profile nor a gcloud account is tracked.
+- Check Now is disabled while a check runs, while a Databricks, gcloud or Azure login runs, and
+  when no workspace profile, gcloud account or Azure tenant is tracked.
 
 ### Menu bar and panel
 
@@ -404,8 +459,9 @@ list scrolls sooner; any room left after the logins goes to the presets (owner, 
 **Empty states**: with no login tracked, the panel shows SwiftUI's `ContentUnavailableView` in
 place of the tiles: the menu bar's `clock` symbol, "No Logins Yet", what discovery found ("Found 3
 AWS SSO sessions and 1 Databricks profile in your config files.") and Add Logins…. When nothing is
-found, the text reads "No AWS SSO sessions, Databricks profiles or gcloud accounts in your config
-files. Log in once with the aws, databricks or gcloud CLI, or add your own command." Add Logins…
+found, the text reads "No AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI
+tenants in your config files. Log in once with the aws, databricks, gcloud or az CLI, or add your
+own command." Add Logins…
 opens Settings on Logins
 with its + menu open once the pane has read the config files. The + menu is an `NSMenu` popped up
 under +, since SwiftUI can't open a `Menu` programmatically.
@@ -420,10 +476,9 @@ without its text, so no earlier text shows.
   - A tile that isn't due: the kind as its subtitle ("AWS SSO session") and the time left
     ("5h 13m") or its state word trailing. It still logs in when clicked, and while the pointer is
     on it, its time or state word, or the empty trailing side, gives way to a Log In, never bold.
-  - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an
-    AWS session or gcloud account seen logged out, as its subtitle, and a visible Log In trailing,
-    unless it has a
-    pending item (see below).
+  - A due tile drops the kind: "Expiring · 19m left", "Expired 40m ago", or "Logged out" for an AWS
+    session, gcloud account or Azure tenant seen logged out, as its subtitle, and a visible Log In
+    trailing, unless it has a pending item (see below).
   - Log In is plain `.primary` text, not a chip, since the whole tile is the button; on the tile
     Return logs in, it is bold (owner, 2026-11-20).
   - State and time are never cut off at 320 pt; a subtitle that doesn't fit drops the kind first.
@@ -453,7 +508,8 @@ without its text, so no earlier text shows.
     "…at 07:48, while this Mac slept.", 07:48 being the file's change time, for as long as it asks
     (owner, 2026-11-19). After a sleep, each login asks on its own tile.
   - **Still valid:** "Its 1-day timer ran out, but Databricks says the login still works. The
-    session length may be too short." ("but gcloud says" for a gcloud account) with Edit Session
+    session length may be too short." ("but gcloud says" for a gcloud account, "but the Azure CLI
+    says" for an Azure tenant) with Edit Session
     Length…. Its subtitle carries the check:
     "Checked 22:30 · valid".
   - **Not yet approved:** "This command hasn't run on this Mac yet:", the command, then Run It and
@@ -488,11 +544,12 @@ without its text, so no earlier text shows.
   update window), Settings… ⌘,, Check for Updates…, Report an Issue… and Quit PrinceClockIn ⌘Q.
   Every item is also reachable from the panel or Settings.
 - **The + menu** in Settings → Logins: a "Found in your config files" section with each untracked
-  AWS SSO session, Databricks profile, Databricks account profile and gcloud account (by its
-  email), its kind beside it, then Custom Login…. With nothing new: "No new AWS SSO sessions,
-  Databricks profiles or gcloud accounts", then Custom Login…; while the pane is still reading the
-  config files, Custom Login… alone. The pane reads them when it appears and again whenever an AWS
-  SSO session, Databricks profile or gcloud account is tracked or removed, a new read cancelling
+  AWS SSO session, Databricks profile, Databricks account profile, gcloud account (by its email)
+  and Azure CLI tenant (by its discovered name), its kind beside it, then Custom Login…. With
+  nothing new: "No new AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI
+  tenants", then Custom Login…; while the pane is still reading the config files, Custom Login…
+  alone. The pane reads them when it appears and again whenever an AWS SSO session, Databricks
+  profile, gcloud account or Azure tenant is tracked or removed, a new read cancelling
   the last. Choosing a found login tracks it at once and selects it.
 - Menus and the Settings sidebar use the system selection colour, which follows the user's accent
   colour.
@@ -506,7 +563,8 @@ resizable, with zoom available, as in the maintainer's other menu bar apps (owne
 Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane restored. The panes:
 
 - **Logins:** the tracked logins, each with a `.secondary` kind symbol (`cloud` AWS,
-  `square.stack.3d.up` Databricks, `person.badge.key` gcloud, `terminal` custom) and a subtitle
+  `square.stack.3d.up` Databricks, `person.badge.key` gcloud, `building.2` Azure, `terminal`
+  custom) and a subtitle
   with its kind, session length ("No timer" when unknown) and last check ("Databricks profile ·
   3-day session · Checked 14:02 · valid"; an account profile's ends "Not checked"). Check Now in
   the pane's header.
@@ -522,6 +580,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     ("Not checked yet" before the first); an account profile says "Not checked" and why;
   - gcloud account: its source, the whole `account_id` ("dev@example.com in ~/.config/gcloud"),
     and its last check ("Not checked yet" before the first);
+  - Azure CLI tenant: its source, labelled Tenant ("00000000-0000-0000-0000-000000000001 for
+    dev@example.com in ~/.azure"), and its last check ("Not checked yet" before the first);
   - custom login: Command, optional, with "The command runs in Terminal and is saved as plain
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
@@ -627,7 +687,7 @@ are.
 | Logged in elsewhere? | Signed in elsewhere? · renewed outside the app |
 | Mark as Logged In at 14:02 | Yes |
 | Expired · Expiring · Logged out · No timer · Logged in · Queued · Logging in · Failed · Still valid · Not yet approved | Unknown · Timer ended · No known expiry |
-| AWS SSO session · Databricks profile · Databricks account profile · gcloud account · Custom login | AWS SSO · Custom · Custom command |
+| AWS SSO session · Databricks profile · Databricks account profile · gcloud account · Azure CLI tenant · Custom login | AWS SSO · Custom · Custom command · Azure tenant |
 | Set Timer… · Show Output… · Report an Issue… (an ellipsis on every item that opens a window, a form or a browser page) | Set Time… · Report an issue |
 | Login timeout · Cancel All (stops a batch) · Check Now | Give up on a login after · Cancel for a batch (Cancel only closes a form) · Check now · Check Databricks Now |
 | Notification actions: Log In · Done | Log in |
@@ -689,17 +749,19 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   running login cancels it, and the queue goes on.
 - Each login has a timeout (default 5 minutes, set in settings), since it waits on the user in the
   browser.
-- AWS, Databricks and gcloud logins run as an executable plus an argument list, never through a
-  shell string, so a session, profile or account name can't inject a command. An AWS, Databricks
-  or gcloud name is joined to its flag (`--profile=<name>`, `--account=<email>`), so a name
-  starting with `-` can't be read as a flag of its own. No debug or verbose flags.
+- AWS, Databricks, gcloud and Azure logins run as an executable plus an argument list, never
+  through a shell string, so a session, profile, account or tenant name can't inject a command.
+  Each name is joined to its flag (`--profile=<name>`, `--account=<email>`, `--tenant=<id>`), so a
+  name starting with `-` can't be read as a flag of its own. No debug or verbose flags.
 - AWS and Databricks logins need no Terminal: both CLIs, run with no controlling terminal and
   standard input from `/dev/null`, open the browser sign-in themselves and exit when it completes
-  (checked by the owner, 2026-11-17). A gcloud login runs the same way (see Left to the builder).
+  (checked by the owner, 2026-11-17). gcloud and Azure logins run the same way (see Left to the
+  builder).
 - A Databricks login run with no session length records its login time; its tile keeps its unknown
   timer, with nothing trailing, and asks for the session length inline, as Set Timer does
   ("Choose a session length" over Set Timer's Session Length pop-up), and the timer counts from
-  that login. A gcloud login with none shows logged in with no expiry, as AWS and custom logins do.
+  that login. A gcloud or Azure login with none shows logged in with no expiry, as AWS and custom
+  logins do.
 - The CLIs are found through the user's login-shell `PATH`, since a GUI app doesn't inherit it
   (Homebrew, mise). The app reads only `PATH` from the shell, with a timeout, and keeps it once a
   read succeeds. It never logs or shows the shell's other variables.
@@ -707,8 +769,10 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   and the system directories), as does a failed read, until the next try.
 - Only `refreshToken` and `expiresAt` are decoded from an AWS cache file. The token's value goes
   only into the hash and is discarded. No error or log ever includes a cache file's contents.
-- Only `account_id` and `rowid` are read from gcloud's `credentials.db`, never `value`. The gcloud
-  check's stdout is never captured (see The live checks).
+- Only `account_id` and `rowid` are read from gcloud's `credentials.db`, never `value`. Of the
+  Azure CLI's files only `azureProfile.json` is read, never `msal_token_cache.json` or
+  `service_principal_entries.*`. The gcloud and Azure checks' stdout is never captured (see The
+  live checks).
 - A login's output from its last run is kept in memory only, never written to disk, and can be
   viewed from its tile (Show Output…) to diagnose a failure.
 - A custom command is stored as plaintext in the settings file, so it must not contain secrets; the
@@ -742,12 +806,13 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   `~/Library/Application Support/PrinceClockIn/`, readable and portable. Per login they hold the
   login time, session length, the time it was last invalidated and whether by a logout or a
   check, the expiry the last notification was for (so a relaunch doesn't notify twice), for
-  Databricks, whether the profile is account-level (as last read from its config), for Databricks
-  and gcloud, the time and result of its last check and of its last answer (valid or invalid),
-  for AWS, the cache file's last-seen modified and `expiresAt` times, and, for gcloud, the
-  account's last-seen row, missing or its `rowid`, which is no secret. Fingerprints are never
-  stored. The file format version stays 2: the gcloud kind and row are additions an older file
-  decodes without.
+  Databricks, whether the profile is account-level (as last read from its config), for Databricks,
+  gcloud and Azure, the time and result of its last check and of its last answer (valid or
+  invalid), for AWS, the cache file's last-seen modified and `expiresAt` times, for gcloud, the
+  account's last-seen row, missing or its `rowid`, which is no secret, and for Azure, whether
+  `azureProfile.json` last listed its user and tenant. Fingerprints are never stored. The file
+  format version stays 2: the gcloud and Azure kinds, the row and the presence are additions an
+  older file decodes without.
 - The file is `state.json`, with a format version. One that won't decode, or has another format
   version, is renamed aside (`state-<date>-<time>-<random>.json.bak`), never overwritten, and the
   app starts empty and says so in the panel (State set aside). A save that fails keeps the state
@@ -848,6 +913,16 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     account gcloud's active one.
   - **Check:** `--format=none` printing nothing, and the stderr strings The live checks reads as
     invalid; an offline failure is expected to match none of them.
+- Read from azure-cli 2.93.0's source, not yet run against a live az:
+  - **Profile:** `azureProfile.json` written by `json.dump` with `utf-8-sig` in place, its shape,
+    which commands rewrite it, and `az logout` removing all of its user's subscriptions.
+  - **Login:** `az login --tenant=<id> --allow-no-subscriptions` with stdin from `/dev/null` and
+    stdout a pipe showing no subscription picker (it shows one only when both are terminals),
+    opening the browser and exiting 0 when the sign-in completes; without the flag, a tenant with
+    no subscription fails with "No subscriptions found".
+  - **Check:** `az account get-access-token --tenant=<id>` using the default subscription's user, and
+    the two MSAL-cache messages The live checks reads as invalid; the Entra codes are from
+    Microsoft's error-code reference, and the exact stderr az prints for each is unrecorded.
 - Checks still to run on a Mac with macOS 26, at the release rehearsal before 1.0; until then
   these behaviours are unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
@@ -869,12 +944,11 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     as removal and quits the app, and after removing it, quitting and reopening the app, the icon
     is back.
   - Every SF Symbol named here exists on macOS 26: the menu bar's `clock`,
-    `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the
-    tiles' and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`,
-    `clock.badge.checkmark`,
+    `clock.badge.exclamationmark`, `clock.badge.xmark` and `clock.arrow.circlepath`, and the tiles'
+    and Settings' `exclamationmark.triangle`, `timer`, `xmark.circle`, `clock.badge.checkmark`,
     `checkmark.circle`, `questionmark.circle`, `terminal`, `gearshape`, `cloud`,
-    `square.stack.3d.up` and `person.badge.key`, the preset tiles' `rectangle.stack`, and the
-    footer's `gear` and `power`.
+    `square.stack.3d.up`, `person.badge.key` and `building.2`, the preset tiles' `rectangle.stack`,
+    and the footer's `gear` and `power`.
   - Opening the popover makes it key, and the hidden main menu's ⌘, and ⌘Q work while it is
     open. If they don't, the right-click menu shows no shortcuts.
   - The panel's keys with Keyboard Navigation on: Tab and Shift-Tab through every control in

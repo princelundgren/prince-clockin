@@ -10,8 +10,9 @@ Everything in this repository is public: code, docs, commit messages, issues and
 - **Privacy is a product feature.** No telemetry, analytics, crash reporting or SDK that collects
   any of them. A token, client secret or shell-environment value is never stored, logged, shown or
   sent; the design's "Running logins" section has the exact rules for the AWS cache file.
-- **Logins never run through a shell string.** Run `aws`, `databricks` and `gcloud` as an executable
-  plus an argument list, so a session, profile or account name can't inject a command.
+- **Logins never run through a shell string.** Run `aws`, `databricks`, `gcloud` and `az` as an
+  executable plus an argument list, so a session, profile, account or tenant name can't inject a
+  command.
 - **Changes land through a pull request**, with signed commits. The Claude review comments on each
   pull request a person opens.
 - **CI runs on the maintainer's self-hosted pool `prince-clockin-macos`**, a fresh macOS VM per

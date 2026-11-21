@@ -46,27 +46,34 @@ private func isAccountProfile(_ values: [String: String]) -> Bool {
         && (workspaceID.isEmpty || workspaceID == "none")
 }
 
-/// What discovery found: AWS SSO session names, Databricks profiles and gcloud store `account_id`s.
-public typealias DiscoveredLogins = (aws: [String], databricks: [DatabricksProfile], gcloud: [String])
+/// What discovery found: AWS SSO session names, Databricks profiles, gcloud store `account_id`s and
+/// Azure CLI tenants.
+public typealias DiscoveredLogins = (
+    aws: [String], databricks: [DatabricksProfile], gcloud: [String], azure: [AzureTenant]
+)
 
-/// Where the AWS CLI and the Databricks CLI keep their config files, and gcloud its config
-/// directory.
+/// Where the AWS CLI and the Databricks CLI keep their config files, and gcloud and the Azure CLI
+/// their config directories.
 public struct ConfigPaths: Equatable, Sendable {
     public var awsConfig: URL
     public var databricksConfig: URL
     /// The directory that holds gcloud's `credentials.db`.
     public var gcloudConfig: URL
+    /// The directory that holds the Azure CLI's `azureProfile.json`.
+    public var azureConfig: URL
 
-    public init(awsConfig: URL, databricksConfig: URL, gcloudConfig: URL) {
+    public init(awsConfig: URL, databricksConfig: URL, gcloudConfig: URL, azureConfig: URL) {
         self.awsConfig = awsConfig
         self.databricksConfig = databricksConfig
         self.gcloudConfig = gcloudConfig
+        self.azureConfig = azureConfig
     }
 
-    /// `AWS_CONFIG_FILE`, `DATABRICKS_CONFIG_FILE` and `CLOUDSDK_CONFIG` when set and non-empty, else
-    /// `~/.aws/config`, `~/.databrickscfg` and `~/.config/gcloud`. A leading `~` or `~/` expands to
-    /// `HOME` from `environment`, or the user's home directory when `HOME` is absent. `~user` and
-    /// environment variables in a path are not expanded.
+    /// `AWS_CONFIG_FILE`, `DATABRICKS_CONFIG_FILE`, `CLOUDSDK_CONFIG` and `AZURE_CONFIG_DIR` when
+    /// set and non-empty, else `~/.aws/config`, `~/.databrickscfg`, `~/.config/gcloud` and
+    /// `~/.azure`. A leading `~` or `~/` expands to `HOME` from `environment`, or the user's home
+    /// directory when `HOME` is absent. `~user` and environment variables in a path are not
+    /// expanded.
     public static func standard(environment: [String: String]) -> ConfigPaths {
         let home = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
 
@@ -80,6 +87,7 @@ public struct ConfigPaths: Equatable, Sendable {
         return ConfigPaths(
             awsConfig: path(override: "AWS_CONFIG_FILE", default: "~/.aws/config"),
             databricksConfig: path(override: "DATABRICKS_CONFIG_FILE", default: "~/.databrickscfg"),
-            gcloudConfig: path(override: "CLOUDSDK_CONFIG", default: "~/.config/gcloud"))
+            gcloudConfig: path(override: "CLOUDSDK_CONFIG", default: "~/.config/gcloud"),
+            azureConfig: path(override: "AZURE_CONFIG_DIR", default: "~/.azure"))
     }
 }

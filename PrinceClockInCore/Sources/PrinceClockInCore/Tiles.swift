@@ -207,6 +207,7 @@ func loginKindName(_ kind: LoginKind) -> String {
     case .databricksProfile(_, accountLevel: false): "Databricks profile"
     case .databricksProfile(_, accountLevel: true): "Databricks account profile"
     case .gcloudAccount: "gcloud account"
+    case .azureTenant: "Azure CLI tenant"
     case .custom: "Custom login"
     }
 }
@@ -231,7 +232,11 @@ private func detail(
             return .needsSessionLength(prompt: "Choose a session length")
         }
         guard case .stillValid = timer, let length = login.sessionLength else { return nil }
-        let cli = if case .gcloudAccount = login.kind { "gcloud" } else { "Databricks" }
+        let cli = switch login.kind {
+        case .gcloudAccount: "gcloud"
+        case .azureTenant: "the Azure CLI"
+        case .databricksProfile, .awsSSOSession, .custom: "Databricks"
+        }
         return .stillValid(message: "Its \(sessionLengthAdjective(length)) timer ran out, but \(cli) says the "
             + "login still works. The session length may be too short.")
     }

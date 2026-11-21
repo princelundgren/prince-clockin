@@ -46,6 +46,19 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(try encodeFlat(.custom(command: nil)) == #"{"type":"custom"}"#)
     #expect(try encodeFlat(.gcloudAccount(account: "dev@example.com#example.goog"))
             == #"{"account":"dev@example.com#example.goog","type":"gcloudAccount"}"#)
+    #expect(try encodeFlat(.azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"))
+            == #"{"tenant":"00000000-0000-0000-0000-000000000001","type":"azureTenant","user":"dev@example.com"}"#)
+}
+
+@Test func azureTenantKindAndPresenceRoundTrip() throws {
+    let login = Login(
+        displayName: "Contoso Dev", kind: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"),
+        lastAzurePresence: .missing)
+
+    let decoded = try JSONDecoder().decode(Login.self, from: try JSONEncoder().encode(login))
+
+    #expect(decoded == login)
+    #expect(String(decoding: try JSONEncoder().encode(AzurePresence.present), as: UTF8.self) == #""present""#)
 }
 
 @Test func gcloudAccountKindRoundTrips() throws {
@@ -66,6 +79,7 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
 
     #expect(login.kind == .awsSSOSession(name: "dev"))
     #expect(login.lastGcloudRow == nil)
+    #expect(login.lastAzurePresence == nil)
 }
 
 @Test func awsDefaultsToEightHoursDatabricksToNil() {
@@ -74,6 +88,7 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(Login.defaultSessionLength(for: .databricksProfile(name: "analytics-dev", accountLevel: false)) == nil)
     #expect(Login.defaultSessionLength(for: .custom(command: nil)) == nil)
     #expect(Login.defaultSessionLength(for: .gcloudAccount(account: "dev@example.com")) == nil)
+    #expect(Login.defaultSessionLength(for: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001")) == nil)
 }
 
 @Test func loginKindDecodesItsFlatShape() throws {

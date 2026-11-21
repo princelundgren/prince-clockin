@@ -36,7 +36,8 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
-    /// Records what gcloud's credential store showed for login `id`. A logout counts from `now`.
+    /// Records what gcloud's credential store or the Azure CLI's profile showed for login `id`. A
+    /// logout counts from `now`.
     public mutating func apply(_ observation: GcloudObservation, login id: UUID, now: Date) {
         switch observation {
         case .newLogin(let time):
@@ -54,9 +55,9 @@ public struct LoginsModel: Equatable, Sendable {
         setLoginTime(id: id, at: possibleLogin.time)
     }
 
-    /// Records a Databricks or gcloud check of login `id` made at `now`, whatever it found, and a
-    /// valid or invalid one as its last answer. Invalid invalidates the login. Valid after being
-    /// found invalid is a login at `now`, the best time the app knows. Couldn't check changes
+    /// Records a Databricks, gcloud or Azure check of login `id` made at `now`, whatever it found,
+    /// and a valid or invalid one as its last answer. Invalid invalidates the login. Valid after
+    /// being found invalid is a login at `now`, the best time the app knows. Couldn't check changes
     /// nothing else.
     public mutating func apply(_ result: DatabricksCheckResult, login id: UUID, now: Date) {
         guard let index = index(of: id) else { return }
@@ -84,13 +85,13 @@ public struct LoginsModel: Equatable, Sendable {
         return due
     }
 
-    /// The Databricks and gcloud logins among `ids`, which a live check can ask about, in the order
-    /// of `ids`.
+    /// The Databricks, gcloud and Azure logins among `ids`, which a live check can ask about, in
+    /// the order of `ids`.
     public func checkedLogins(among ids: [UUID]) -> [Login] {
         trackedLogins(ids).filter(isChecked)
     }
 
-    /// Every tracked Databricks and gcloud login, for Check Now.
+    /// Every tracked Databricks, gcloud and Azure login, for Check Now.
     public func checkNowTargets() -> [Login] {
         state.logins.filter(isChecked)
     }
@@ -194,7 +195,7 @@ private func ordered<Item: Identifiable>(_ items: [Item], by ids: [UUID]) -> [It
 
 private func isChecked(_ login: Login) -> Bool {
     switch login.kind {
-    case .databricksProfile, .gcloudAccount: true
+    case .databricksProfile, .gcloudAccount, .azureTenant: true
     case .awsSSOSession, .custom: false
     }
 }

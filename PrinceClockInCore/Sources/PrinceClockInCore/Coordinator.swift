@@ -54,6 +54,25 @@ public struct GcloudCredentialsFileReader: GcloudCredentialsReading {
     }
 }
 
+/// Reads the Azure CLI's profile.
+public protocol AzureProfileReading: Sendable {
+    /// Every user subscription now; `nil` when the file exists but can't be read or parsed.
+    func read() -> AzureProfile?
+}
+
+/// Reads `azureProfile.json` in one directory, normally `~/.azure`.
+public struct AzureProfileFileReader: AzureProfileReading {
+    public let configDirectory: URL
+
+    public init(configDirectory: URL) {
+        self.configDirectory = configDirectory
+    }
+
+    public func read() -> AzureProfile? {
+        try? readAzureProfile(at: azureProfileFile(configDirectory: configDirectory))
+    }
+}
+
 /// Where a running batch is: the login at `position` of `total`.
 public struct BatchProgress: Equatable, Sendable {
     public let position: Int
@@ -145,16 +164,19 @@ public final class Coordinator {
         }
     }
 
-    /// Whether a Databricks or gcloud check runs now, from the notification time or Check Now.
+    /// Whether a Databricks, gcloud or Azure check runs now, from the notification time or Check
+    /// Now.
     public var isChecking: Bool { runningChecks > 0 }
-    /// Whether Check Now can run: no check, Databricks login or gcloud login runs, and a workspace
-    /// profile, which unlike an account profile can be checked, or a gcloud account is tracked.
+    /// Whether Check Now can run: no check and no Databricks, gcloud or Azure login runs, and a
+    /// workspace profile, which unlike an account profile can be checked, a gcloud account or an
+    /// Azure tenant is tracked.
     public var canCheckNow: Bool {
-        !isChecking && runningDatabricksID == nil && runningGcloudID == nil
+        !isChecking && runningDatabricksID == nil && runningGcloudID == nil && runningAzureID == nil
             && model.state.logins.contains { $0.kind.isCheckable }
     }
 
-    /// Where discovery reads the AWS and Databricks config files and gcloud's credential store.
+    /// Where discovery reads the AWS and Databricks config files, gcloud's credential store and the
+    /// Azure CLI's profile.
     public let configPaths: ConfigPaths
 
     private let store: StateStore
@@ -162,8 +184,10 @@ public final class Coordinator {
     private let pathResolver: ShellPathResolver
     private let checker: DatabricksChecker
     private let gcloudChecker: GcloudChecker
+    private let azureChecker: AzureChecker
     private let aws: AWSCacheReading
     private let gcloud: GcloudCredentialsReading
+    private let azure: AzureProfileReading
     private let notifier: Notifying
     private let approvals: ApprovalStoring
     private let clock: () -> Date
@@ -175,6 +199,7 @@ public final class Coordinator {
     @ObservationIgnored private var awsStates: [UUID: AWSCacheState] = [:]
     private var runningDatabricksID: UUID?
     private var runningGcloudID: UUID?
+    private var runningAzureID: UUID?
     private var runningChecks = 0
     private var unseenFailures: Set<UUID> = []
     @ObservationIgnored private var isFirstCheckAfterWake = false
@@ -185,8 +210,9 @@ public final class Coordinator {
     /// Loads the store at once, so a notification action that launches the app finds its logins.
     public init(
         store: StateStore, queue: LoginQueue, pathResolver: ShellPathResolver, checker: DatabricksChecker,
-        gcloudChecker: GcloudChecker, aws: AWSCacheReading, gcloud: GcloudCredentialsReading,
-        notifier: Notifying, approvals: ApprovalStoring, configPaths: ConfigPaths, clock: @escaping () -> Date
+        gcloudChecker: GcloudChecker, azureChecker: AzureChecker, aws: AWSCacheReading,
+        gcloud: GcloudCredentialsReading, azure: AzureProfileReading, notifier: Notifying,
+        approvals: ApprovalStoring, configPaths: ConfigPaths, clock: @escaping () -> Date
     ) {
         var state = AppState()
         switch store.load() {
@@ -202,8 +228,10 @@ public final class Coordinator {
         self.pathResolver = pathResolver
         self.checker = checker
         self.gcloudChecker = gcloudChecker
+        self.azureChecker = azureChecker
         self.aws = aws
         self.gcloud = gcloud
+        self.azure = azure
         self.notifier = notifier
         self.approvals = approvals
         self.configPaths = configPaths
@@ -215,9 +243,10 @@ public final class Coordinator {
         commandSink.finish()
     }
 
-    /// Starts applying the queue's events and feeding it commands, takes every AWS session's and
-    /// gcloud account's baseline, begins resolving the login shell's `PATH` without waiting for it, and reads which
-    /// Databricks logins are account profiles from the config file. Runs once.
+    /// Starts applying the queue's events and feeding it commands, takes every AWS session's,
+    /// gcloud account's and Azure tenant's baseline, begins resolving the login shell's `PATH`
+    /// without waiting for it, and reads which Databricks logins are account profiles from the
+    /// config file. Runs once.
     public func start() async {
         guard !isStarted else { return }
         isStarted = true
@@ -240,14 +269,16 @@ public final class Coordinator {
         let launchTime = clock()
         observeAWSCaches(now: launchTime)
         observeGcloudCredentials(now: launchTime)
+        observeAzureProfile(now: launchTime)
         saveIfChanged()
         Task { [pathResolver] in _ = await pathResolver.resolvePath() }
         await rereadAccountLevels()
     }
 
-    /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks and
-    /// gcloud logins among them and posts one grouped notification. A tick that arrives while one runs makes that
-    /// one run once more when it ends, so a deadline that falls during a slow check is still met.
+    /// Refreshes, then takes and saves the expiry notifications due, checks the Databricks, gcloud
+    /// and Azure logins among them and posts one grouped notification. A tick that arrives while
+    /// one runs makes that one run once more when it ends, so a deadline that falls during a slow
+    /// check is still met.
     public func tick() async {
         guard !isTicking else {
             isTickPending = true
@@ -267,13 +298,14 @@ public final class Coordinator {
         } while isTickPending
     }
 
-    /// Moves `now` to the clock and reads the AWS cache files and gcloud's credential store, without
-    /// notifying: for the panel or Settings about to show, whose times would otherwise be those of
-    /// the last tick.
+    /// Moves `now` to the clock and reads the AWS cache files, gcloud's credential store and the
+    /// Azure CLI's profile, without notifying: for the panel or Settings about to show, whose times
+    /// would otherwise be those of the last tick.
     public func refresh() {
         now = clock()
         observeAWSCaches(now: now, isFirstCheckAfterWake: isFirstCheckAfterWake)
         observeGcloudCredentials(now: now)
+        observeAzureProfile(now: now)
         isFirstCheckAfterWake = false
         saveIfChanged()
     }
@@ -286,7 +318,7 @@ public final class Coordinator {
             calendar: calendar)
     }
 
-    /// Checks every tracked Databricks and gcloud login, for Check Now.
+    /// Checks every tracked Databricks, gcloud and Azure login, for Check Now.
     public func checkNow() async {
         await check(model.checkNowTargets(), now: clock())
     }
@@ -377,30 +409,32 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// The AWS sessions, Databricks profiles and gcloud accounts in the config files that aren't
-    /// tracked yet. The files are read off the main actor; what is tracked is checked once they have
-    /// been read.
+    /// The AWS sessions, Databricks profiles, gcloud accounts and Azure tenants in the config files
+    /// that aren't tracked yet. The files are read off the main actor; what is tracked is checked
+    /// once they have been read.
     public func discoverCandidates() async -> DiscoveredLogins {
         let found = await Self.discover(in: configPaths)
         let tracked = TrackedConfigNames(logins: model.state.logins)
         return (
             found.aws.filter { !tracked.aws.contains($0) },
             found.databricks.filter { !tracked.databricks.contains($0.name) },
-            found.gcloud.filter { !tracked.gcloud.contains($0) }
+            found.gcloud.filter { !tracked.gcloud.contains($0) },
+            found.azure.filter { !tracked.azure.contains($0.account) }
         )
     }
 
-    /// Every AWS session, Databricks profile and gcloud user account at `paths`. A gcloud store that
-    /// is missing or can't be read offers no accounts.
+    /// Every AWS session, Databricks profile, gcloud user account and Azure user tenant at `paths`. A
+    /// gcloud store or Azure profile that is missing or can't be read offers none.
     @concurrent
     private nonisolated static func discover(in paths: ConfigPaths) async -> DiscoveredLogins {
         let awsText = try? String(contentsOf: paths.awsConfig, encoding: .utf8)
         let databricksText = try? String(contentsOf: paths.databricksConfig, encoding: .utf8)
         let credentials = (try? readGcloudCredentials(at: gcloudCredentialsFile(configDirectory: paths.gcloudConfig)))
             ?? .none
+        let azureProfile = (try? readAzureProfile(at: azureProfileFile(configDirectory: paths.azureConfig))) ?? .none
         return (
             discoverAWSSessions(configText: awsText), discoverDatabricksProfiles(configText: databricksText),
-            discoverGcloudAccounts(credentials)
+            discoverGcloudAccounts(credentials), discoverAzureTenants(azureProfile)
         )
     }
 
@@ -414,12 +448,13 @@ public final class Coordinator {
     }
 
     /// Tracks `login`. A custom command added here was typed by the user, so it is approved. A
-    /// gcloud login's row is read now, as its baseline.
+    /// gcloud login's row, or an Azure login's presence, is read now, as its baseline.
     public func addLogin(_ login: Login) {
         guard self.login(login.id) == nil else { return }
         model.state.logins.append(login)
         if case .custom(let command?) = login.kind { approvals.approve(approvalKey(for: command)) }
         if case .gcloudAccount = login.kind { observeGcloudCredentials(now: clock()) }
+        if case .azureTenant = login.kind { observeAzureProfile(now: clock()) }
         saveIfChanged()
     }
 
@@ -525,6 +560,7 @@ public final class Coordinator {
             switch login(id)?.kind {
             case .databricksProfile: runningDatabricksID = id
             case .gcloudAccount: runningGcloudID = id
+            case .azureTenant: runningAzureID = id
             case .awsSSOSession, .custom, nil: break
             }
         case .succeeded(let id, _), .failed(let id, _):
@@ -539,6 +575,7 @@ public final class Coordinator {
             if waitingCustomID == id { waitingCustomID = nil }
             if runningDatabricksID == id { runningDatabricksID = nil }
             if runningGcloudID == id { runningGcloudID = nil }
+            if runningAzureID == id { runningAzureID = nil }
         case .waitingForDone(let id):
             waitingCustomID = id
             if let login = login(id) { await notifier.postCustomDone(login: login) }
@@ -549,6 +586,7 @@ public final class Coordinator {
             waitingCustomID = nil
             runningDatabricksID = nil
             runningGcloudID = nil
+            runningAzureID = nil
         }
         saveIfChanged()
     }
@@ -599,6 +637,23 @@ public final class Coordinator {
         }
     }
 
+    /// Compares whether `azureProfile.json` lists each Azure login's user and tenant with what was
+    /// last seen of it. A login never seen is only read, as a baseline. A file that can't be read or
+    /// parsed, as one caught midway through a rewrite, changes nothing.
+    private func observeAzureProfile(now: Date) {
+        guard model.state.logins.contains(where: { if case .azureTenant = $0.kind { true } else { false } }),
+              let profile = azure.read()
+        else { return }
+        for login in model.state.logins {
+            guard case .azureTenant(let user, let tenant) = login.kind else { continue }
+            let current = profile.presence(of: AzureAccount(user: user, tenant: tenant))
+            let observation = observeAzurePresence(
+                previous: login.lastAzurePresence, current: current, modified: profile.modified ?? now)
+            model.apply(observation, login: login.id, now: now)
+            update(login.id) { $0.lastAzurePresence = current }
+        }
+    }
+
     /// Checks `logins` one at a time and applies each answer, after reading which are account
     /// profiles from the config file. Skipped checks change nothing.
     private func check(_ logins: [Login], now: Date) async {
@@ -614,6 +669,9 @@ public final class Coordinator {
                     profile: profile, accountLevel: accountLevel, loginRunning: runningDatabricksID != nil)
             case .gcloudAccount(let account):
                 check = await gcloudChecker.check(account: account, loginRunning: runningGcloudID != nil)
+            case .azureTenant(let user, let tenant):
+                check = await azureChecker.check(
+                    account: AzureAccount(user: user, tenant: tenant), loginRunning: runningAzureID != nil)
             case .awsSSOSession, .custom:
                 continue
             }
@@ -671,10 +729,11 @@ public final class Coordinator {
 }
 
 private extension LoginKind {
-    /// A Databricks workspace profile or a gcloud account: what a live check can ask about.
+    /// A Databricks workspace profile, a gcloud account or an Azure tenant: what a live check can ask
+    /// about.
     var isCheckable: Bool {
         switch self {
-        case .databricksProfile(_, accountLevel: false), .gcloudAccount: true
+        case .databricksProfile(_, accountLevel: false), .gcloudAccount, .azureTenant: true
         case .databricksProfile, .awsSSOSession, .custom: false
         }
     }
