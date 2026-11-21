@@ -44,6 +44,10 @@ private func form(_ login: Login) -> LoginSettingsForm {
     loginSettingsForm(for: login, paths: paths, home: home, now: now, locale: british, calendar: stockholm)
 }
 
+private func lengthNote(_ kind: LoginKind, choice: SessionLengthChoice = .length(8 * hour)) -> String {
+    sessionLengthNote(for: kind, choice: choice)
+}
+
 @Suite struct LoginSettingsTests {
     // MARK: The list's rows
 
@@ -205,5 +209,41 @@ private func form(_ login: Login) -> LoginSettingsForm {
 
     @Test func aCustomLoginsNameHasNoNote() {
         #expect(form(custom()).nameNote == nil)
+    }
+
+    // MARK: Session length's note
+
+    @Test func theSessionLengthNoteSaysWhatTheLengthIsFor() {
+        #expect(lengthNote(.awsSSOSession(name: "qa")).hasPrefix(
+            "How long a sign-in lasts before you must log in again. The CLI doesn't report it, so PrinceClockIn"
+                + " counts down from it and notifies you before it ends."))
+    }
+
+    @Test func aCustomLoginsSessionLengthNoteMentionsNoCLI() {
+        #expect(lengthNote(.custom(command: nil))
+            == "How long a sign-in lasts before you must log in again. PrinceClockIn counts down from it and"
+                + " notifies you before it ends.")
+    }
+
+    @Test func eachCLIKindSaysWhoSetsItsLength() {
+        #expect(lengthNote(.awsSSOSession(name: "qa")).hasSuffix(
+            "Your admin sets it in IAM Identity Center; its default is 8 hours."))
+        #expect(lengthNote(.databricksProfile(name: "analytics-dev", accountLevel: false)).hasSuffix(
+            "Your account admin sets it in the account's OAuth token policy."))
+        #expect(lengthNote(.gcloudAccount(account: "dev@example.com")).hasSuffix(
+            "Your Google Workspace admin sets it in Google Cloud session control."))
+        #expect(lengthNote(.azureTenant(user: "dev@example.com", tenant: "contoso")).hasSuffix(
+            "Your admin sets it as the sign-in frequency in Entra Conditional Access."))
+    }
+
+    @Test func noTimerSaysThereIsNoCountdownOrNotification() {
+        #expect(lengthNote(.awsSSOSession(name: "qa"), choice: .noTimer)
+            .hasSuffix("With No timer, this login has no countdown and no notification."))
+        #expect(!lengthNote(.awsSSOSession(name: "qa")).contains("No timer"))
+    }
+
+    /// Custom… on a login with no timer leaves its stored length unset until the hours are stored.
+    @Test func customChosenOnALoginWithNoTimerDropsTheNoTimerSentence() {
+        #expect(!lengthNote(.awsSSOSession(name: "qa"), choice: .custom).contains("No timer"))
     }
 }

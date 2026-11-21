@@ -74,6 +74,37 @@ public struct LoginSettingsForm: Equatable, Sendable {
     public let commandNote: String?
 }
 
+/// The note under Session length for a login of `kind` while its pop-up shows `choice`: what the
+/// length is for, who sets it for that kind, and, with No timer, what the login goes without.
+public func sessionLengthNote(for kind: LoginKind, choice: SessionLengthChoice) -> String {
+    let purpose = if case .custom = kind {
+        "How long a sign-in lasts before you must log in again. PrinceClockIn counts down from it and notifies"
+            + " you before it ends."
+    } else {
+        "How long a sign-in lasts before you must log in again. The CLI doesn't report it, so PrinceClockIn"
+            + " counts down from it and notifies you before it ends."
+    }
+    let noTimer = choice == .noTimer ? "With No timer, this login has no countdown and no notification." : nil
+    return [purpose, sessionLengthSetBy(kind), noTimer].compactMap(\.self).joined(separator: " ")
+}
+
+/// Where the real session length for `kind` comes from, so the user knows what to copy into
+/// Session length; `nil` for a custom login.
+private func sessionLengthSetBy(_ kind: LoginKind) -> String? {
+    switch kind {
+    case .awsSSOSession:
+        "Your admin sets it in IAM Identity Center; its default is 8 hours."
+    case .databricksProfile:
+        "Your account admin sets it in the account's OAuth token policy."
+    case .gcloudAccount:
+        "Your Google Workspace admin sets it in Google Cloud session control."
+    case .azureTenant:
+        "Your admin sets it as the sign-in frequency in Entra Conditional Access."
+    case .custom:
+        nil
+    }
+}
+
 /// The note under a custom login's Command, in its form and in New custom login.
 public let customCommandNote = "The command runs in Terminal and is saved as plain text, so don't put a secret in it."
 
@@ -123,7 +154,8 @@ public func loginSettingsForm(
                 note: nil),
             commandNote: nil)
     case .custom:
-        return LoginSettingsForm(nameNote: nil, source: nil, lastCheck: nil, commandNote: customCommandNote)
+        return LoginSettingsForm(
+            nameNote: nil, source: nil, lastCheck: nil, commandNote: customCommandNote)
     }
 }
 
