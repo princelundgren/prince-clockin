@@ -992,32 +992,45 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
     stdin from `/dev/null`, open the browser and exit 0 when the sign-in completes. A Databricks
     CLI configured with `auth_storage = secure` needs the desktop session's keychain, which an
     SSH session can't reach.
-- Read from gcloud 594.0.0's source, not yet run against a live gcloud:
-  - **Store:** `credentials.db`'s schema, `REPLACE INTO` at each login (a new, larger `rowid`, as
-    checked with `sqlite3`), a refresh touching only `access_tokens.db`, and revoke deleting the row.
-  - **`--account`:** `auth login` takes `args.account_name or args.account`, and
-    `config config-helper` loads the credential of `core/account`, which the global
-    `--account=<email>` sets, so it names the account for both.
-  - **Login:** `gcloud auth login --force --no-activate --account=<email>` with no tty and stdin
-    from `/dev/null` opening the browser and exiting 0 when the sign-in completes. `--no-activate`
-    (the inverse calliope generates for `--activate`) skips persisting `core/account` and
-    `core/project` and the confirmation message; the credential is still stored in
-    `credentials.db` first, so the login is seen.
-  - **Check:** `--force-auth-refresh` refreshing whatever the cached token's expiry,
-    `--format=none` printing nothing, and the stderr strings The live checks reads as invalid,
-    raised by the credential load and the forced refresh; an offline failure is expected to match
-    none of them. `config config-helper` is a hidden command (`@base.Hidden`), though its help
+- Recorded 2026-11-21, on gcloud 594.0.0 and azure-cli 2.93.0, each command run as the app runs
+  it (no tty, stdin from `/dev/null`, stdout a pipe), then through a Debug build of the app:
+  - **gcloud login:** `gcloud auth login --force --no-activate --account=<email>` opens the
+    browser and exits 0 when the sign-in completes. It stores the credential in `credentials.db`
+    and leaves `core/account` unset and `core/project` unchanged. A second login gave the
+    account's row a larger `rowid` (1, then 2), which the app recorded as a login.
+  - **gcloud check:** `gcloud config config-helper --force-auth-refresh --account=<email>
+    --format=none` exits 0 with nothing on stdout or stderr. It moved the token's expiry in
+    `access_tokens.db` with nearly an hour of it left and didn't touch `credentials.db`; with
+    `core/account` unset, the global `--account` named the account. Through a proxy that refuses
+    connections it exits 1 with "There was a problem refreshing your current auth tokens" and the
+    advice to run `gcloud auth login`, matching none of the invalid strings. `gcloud auth revoke`
+    deletes the row, and the check then prints
+    `Your current active account [<email>] does not have any valid credentials`.
+  - **Azure login:** `az login --tenant=<id> --allow-no-subscriptions` shows no subscription
+    picker, opens the browser and exits 0 when the sign-in completes, with only the browser
+    notice on stderr. `azureProfile.json` starts with a byte order mark. For a tenant with
+    subscriptions, every entry had `user.type` `user` and none had `tenantDisplayName` or
+    `tenantDefaultDomain`, so the app named the tenant by its id.
+  - **Azure check:** `az account get-access-token --tenant=<id> --output=none` exits 0 with
+    nothing on stdout or stderr and doesn't rewrite `azureProfile.json`. With
+    `msal_token_cache.json` removed, in a copy of the config directory, it exits 1 with
+    ``User '<name>' does not exist in MSAL token cache. Run `az login`.`` Through a proxy that
+    refuses connections it exits 0, answered from the cached access token, the known limit in
+    The live checks. `az logout` removes all of its user's subscriptions; the check then prints
+    only `Please run 'az login' to setup account.`, which the app never sees, since with no
+    default subscription it skips the check.
+  - **The app:** both logins were offered and added, Check Now read both valid, a login from each
+    tile was recorded, and after `gcloud auth revoke` and `az logout` both tiles showed "Logged
+    out".
+- Read from source, not seen live:
+  - **gcloud:** the invalid strings `Reauthentication failed`,
+    `There was a problem reauthenticating while refreshing`, `to complete reauthentication` and
+    `invalid_grant`. `config config-helper` is a hidden command (`@base.Hidden`), though its help
     documents `--force-auth-refresh`, so a gcloud release could change it without notice.
-- Read from azure-cli 2.93.0's source, not yet run against a live az:
-  - **Profile:** `azureProfile.json` written by `json.dump` with `utf-8-sig` in place, its shape,
-    which commands rewrite it, and `az logout` removing all of its user's subscriptions.
-  - **Login:** `az login --tenant=<id> --allow-no-subscriptions` with stdin from `/dev/null` and
-    stdout a pipe showing no subscription picker (it shows one only when both are terminals),
-    opening the browser and exiting 0 when the sign-in completes; without the flag, a tenant with
-    no subscription fails with "No subscriptions found".
-  - **Check:** `az account get-access-token --tenant=<id>` using the default subscription's user, and
-    the two MSAL-cache messages The live checks reads as invalid; the Entra codes are from
-    Microsoft's error-code reference, and the exact stderr az prints for each is unrecorded.
+  - **azure-cli:** `Can't find token from MSAL cache`, and the stderr for each Entra code, which
+    are from Microsoft's error-code reference; a tenant-level entry, and "No subscriptions found"
+    for a tenant with no subscription logged in without `--allow-no-subscriptions`; the check
+    using the default subscription's user when the profile holds more than one.
 - Not yet checked on a Mac with macOS 26; these behaviours stay unverified:
   - The menu bar symbol, an image view over a blank button image rather than the button's own
     image, which Apple documents as styled for the menu bar, looks right in a light menu bar, over a
