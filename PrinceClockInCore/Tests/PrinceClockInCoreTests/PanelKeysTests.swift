@@ -50,18 +50,6 @@ private func context(
         #expect(escapeResponse(openSetTimer: UUID(), tiles: [dev, prod, qa]) == .closePanel)
     }
 
-    // MARK: A Set Timer on its own
-
-    @Test func aSetTimerOnItsOwnSetsOnReturnAndCancelsOnEscapeAsInThePanel() {
-        let alone = PanelKeyContext.setTimerAlone(id: dev, isEditingText: false)
-        let editing = PanelKeyContext.setTimerAlone(id: dev, isEditingText: true)
-
-        #expect(alone.prominent == .set(id: dev))
-        #expect(panelKeyResponse(to: .returnKey, in: alone) == .perform(.set(id: dev)))
-        #expect(panelKeyResponse(to: .returnKey, in: editing) == .passThrough)
-        #expect(escapeResponse(openSetTimer: alone.openSetTimer, tiles: alone.tiles) == .cancelSetTimer(id: dev))
-    }
-
     // MARK: Arrows
 
     @Test func theArrowKeysMoveBetweenTilesInPanelOrder() {

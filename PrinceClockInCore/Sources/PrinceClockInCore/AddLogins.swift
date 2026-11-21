@@ -196,9 +196,3 @@ public enum NewCustomLoginCheck: Equatable, Sendable {
     case refused(SessionLengthRefusal)
     case ready(Login)
 }
-
-/// The prompt shown right after a login found in the config files is added.
-public func addedLoginPrompt(name: String) -> String {
-    "Already logged in to \(name)? Set its timer now so it can notify you before it expires, or skip and log in "
-        + "from the panel later."
-}

@@ -11,8 +11,6 @@ struct LoginsSettings: View {
     @State private var selection: UUID?
     /// What discovery found that isn't tracked; `nil` while the config files are read.
     @State private var candidates: DiscoveredLogins?
-    /// The login just added from the config files, which shows its Set Timer form.
-    @State private var justAdded: UUID?
     @State private var isAddingCustomLogin = false
     @State private var addMenu = AddMenuPresenter()
     /// What − asks before removing a login that is in a preset, while it asks.
@@ -51,10 +49,8 @@ struct LoginsSettings: View {
             if isAddingCustomLogin {
                 NewCustomLoginForm(onClose: closeNewCustomLogin)
             } else if let selected {
-                LoginForm(login: selected, appModel: appModel, isJustAdded: selected.id == justAdded) {
-                    justAdded = nil
-                }
-                .id(selected.id)
+                LoginForm(login: selected, appModel: appModel)
+                    .id(selected.id)
             }
         }
         .formStyle(.grouped)
@@ -64,10 +60,8 @@ struct LoginsSettings: View {
         } message: { removal in
             Text(removal.message)
         }
-        .onChange(of: selection) { old, new in
+        .onChange(of: selection) { _, new in
             if new != nil { isAddingCustomLogin = false }
-            // The prompt after adding is asked once: moving off the login ends it.
-            if old == justAdded { justAdded = nil }
         }
         .task(id: TrackedConfigNames(logins: logins)) { await discover() }
         .onChange(of: request.isAddMenuPending, initial: true) { openRequestedAddMenu() }
@@ -133,7 +127,6 @@ struct LoginsSettings: View {
             let login = candidate.login()
             coordinator.addLogin(login)
             selection = login.id
-            justAdded = login.id
         case .customLogin:
             selection = nil
             isAddingCustomLogin = true
@@ -156,7 +149,6 @@ struct LoginsSettings: View {
     private func remove(_ id: UUID) {
         coordinator.removeLogin(id: id)
         if selection == id { selection = nil }
-        if justAdded == id { justAdded = nil }
     }
 
     private var isAskingToRemove: Binding<Bool> {
@@ -211,8 +203,6 @@ private struct LoginRow: View {
 private struct LoginForm: View {
     let login: Login
     let appModel: AppModel
-    let isJustAdded: Bool
-    let closePrompt: () -> Void
     @FocusState private var focus: PanelFocus?
     @State private var sessionLengthDraft: SessionLengthFieldDraft?
     /// Custom… was chosen, so its field shows even for a listed length until another is chosen or
@@ -250,9 +240,6 @@ private struct LoginForm: View {
         let form = loginSettingsForm(
             for: login, paths: coordinator.configPaths, home: appModel.homeDirectory, now: coordinator.now,
             locale: .current, calendar: .current)
-        if isJustAdded {
-            AddedLoginPrompt(login: login, coordinator: coordinator, onClose: closePrompt)
-        }
         Section {
             VStack(alignment: .leading, spacing: 4) {
                 CommitField("Name", text: login.displayName) { name in
@@ -454,55 +441,4 @@ private struct AddMenuAnchor: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {}
-}
-
-/// The prompt right after a login found in the config files is added: whether the user is already
-/// logged in, with Skip and Set Timer…, which opens Set Timer in its place. Escape skips, at
-/// either step; `onClose` runs after Skip or Set.
-private struct AddedLoginPrompt: View {
-    let login: Login
-    let coordinator: Coordinator
-    let onClose: () -> Void
-    @State private var isSettingTimer = false
-
-    var body: some View {
-        Section {
-            if isSettingTimer {
-                JustAddedSetTimer(login: login, coordinator: coordinator, onClose: onClose)
-            } else {
-                Text(addedLoginPrompt(name: login.displayName))
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Spacer()
-                    Button("Skip", action: onClose)
-                        .keyboardShortcut(.cancelAction)
-                    Button("Set Timer…") { isSettingTimer = true }
-                }
-            }
-        }
-    }
-}
-
-/// Set Timer for a login just added, with Skip in place of Cancel and the panel's Return and
-/// Escape; `onClose` runs after Skip or Set.
-private struct JustAddedSetTimer: View {
-    let login: Login
-    let coordinator: Coordinator
-    let onClose: () -> Void
-    @State private var draft: SetTimerDraft
-    @FocusState private var focus: PanelFocus?
-
-    init(login: Login, coordinator: Coordinator, onClose: @escaping () -> Void) {
-        self.login = login
-        self.coordinator = coordinator
-        self.onClose = onClose
-        _draft = State(initialValue: SetTimerDraft(for: login, now: coordinator.now, locale: .current))
-    }
-
-    var body: some View {
-        SetTimerForm(
-            id: login.id, draft: $draft, coordinator: coordinator, note: nil, cancelTitle: "Skip",
-            defaults: PanelDefaults(keys: .setTimerAlone(id: login.id, isEditingText: focus?.isTextField ?? false)),
-            focus: $focus, onClose: onClose)
-    }
 }

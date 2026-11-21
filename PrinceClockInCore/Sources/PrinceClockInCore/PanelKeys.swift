@@ -37,13 +37,6 @@ public struct PanelKeyContext: Sendable {
         self.tiles = tiles
         self.focusedTile = focusedTile
     }
-
-    /// The keys' context for login `id`'s Set Timer shown on its own, outside the panel, such as
-    /// Settings' prompt after adding a login: Set is the default and Escape cancels the form.
-    public static func setTimerAlone(id: UUID, isEditingText: Bool) -> PanelKeyContext {
-        PanelKeyContext(
-            prominent: .set(id: id), openSetTimer: id, isEditingText: isEditingText, tiles: [id], focusedTile: nil)
-    }
 }
 
 /// What `key` does in `context`: Return triggers the prominent action wherever focus is, except in
