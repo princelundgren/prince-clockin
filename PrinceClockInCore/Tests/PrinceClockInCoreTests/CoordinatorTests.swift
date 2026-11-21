@@ -1789,7 +1789,7 @@ private final class GatedLogins: Sendable {
     @Test func aGcloudRowBackAfterALogoutAndAnInvalidCheckIsALogin() async throws {
         let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour), lastGcloudRow: .present(rowID: 2))
         let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
-            .exited(code: 1, output: "ERROR: (gcloud.auth.print-access-token) Your current active account "
+            .exited(code: 1, output: "ERROR: (gcloud.config.config-helper) Your current active account "
                 + "[dev@example.com] does not have any valid credentials\n")
         })
         fixture.gcloud.set([:], modified: launch)
@@ -1858,7 +1858,7 @@ private final class GatedLogins: Sendable {
     @Test func checkNowChecksGcloudAccountsAndAnInvalidOneExpires() async throws {
         let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour))
         let fixture = try Fixture(logins: [aws("qa"), dev], checkRunner: ArgumentRunner { _ in
-            .exited(code: 1, output: "ERROR: (gcloud.auth.print-access-token) Reauthentication failed.\n")
+            .exited(code: 1, output: "ERROR: (gcloud.config.config-helper) Reauthentication failed.\n")
         })
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
@@ -1866,7 +1866,7 @@ private final class GatedLogins: Sendable {
 
         await coordinator.checkNow()
 
-        #expect(fixture.checkRunner.calls == [["auth", "print-access-token", "--account=dev@example.com", "--format=none"]])
+        #expect(fixture.checkRunner.calls == [["config", "config-helper", "--force-auth-refresh", "--account=dev@example.com", "--format=none"]])
         let after = try #require(coordinator.login(dev.id))
         #expect(after.lastDatabricksCheck?.result == .invalid)
         #expect(timerState(for: after, now: launch, leadTime: 0) == .expired)
@@ -1881,7 +1881,7 @@ private final class GatedLogins: Sendable {
 
         coordinator.logIn([dev.id])
         #expect(await eventually { !coordinator.canCheckNow })
-        #expect(fixture.loginRunner.calls == [["auth", "login", "--force", "--account=dev@example.com"]])
+        #expect(fixture.loginRunner.calls == [["auth", "login", "--force", "--no-activate", "--account=dev@example.com"]])
         await coordinator.checkNow()
 
         #expect(fixture.checkRunner.calls.isEmpty)

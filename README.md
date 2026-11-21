@@ -95,6 +95,11 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
 - **An Azure login is checked only while its user is the Azure CLI's active account** (the
   default subscription, `az account set`), since the CLI checks as that account; otherwise the
   check is skipped and the last one stays.
+- **An Azure check can read valid after the session ends**: the Azure CLI can't be made to refresh,
+  so a session revoked or lapsed while it holds an unexpired access token (60 to 90 minutes by
+  Microsoft's default) can read valid until that token expires.
+- **A gcloud login through the app leaves gcloud's active account as it was**: it signs the
+  account in without making it active, so switch with `gcloud config set account` if you want it.
 - **An `az login` done in a terminal while the tenant is still listed isn't seen**, since
   `azureProfile.json` changes the same way for `az account set`; set its timer by hand. A login
   counts only when the tenant appears after being absent.
