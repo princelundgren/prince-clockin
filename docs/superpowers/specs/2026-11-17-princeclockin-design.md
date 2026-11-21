@@ -98,8 +98,9 @@ and a timer. The kinds are:
   config directory: `CLOUDSDK_CONFIG` (a leading `~` expanded), else `~/.config/gcloud`. It is a
   SQLite table `credentials (account_id, value)`; `account_id` is the email, or
   `email#universe_domain` outside the default universe, kept whole as the login's account and shown
-  by the part before `#`. Login runs `gcloud auth login --force --account=<email>`; without
-  `--force` gcloud only makes an account with stored credentials active and doesn't sign in. The
+  by the part before `#`. Login runs `gcloud auth login --force --no-activate --account=<email>`;
+  without `--force` gcloud doesn't sign in an account with valid stored credentials, and
+  `--no-activate` leaves gcloud's active account and project as they were. The
   login and the check pass only the email, so gcloud uses the row of its own `core/universe_domain`:
   an account outside that universe is logged in and checked in gcloud's current one instead, a
   known limit the README names. No default session
@@ -319,9 +320,12 @@ expired. It also runs when the user clicks Check Now in Settings → Logins.
 
 - **Databricks** runs `databricks current-user me --profile <name>`. Only the CLI's
   no-credentials error counts as invalid.
-- **gcloud** runs `gcloud auth print-access-token --account=<email> --format=none`:
-  `--format=none` prints nothing, and the run's stdout goes to `/dev/null` besides, so no token
-  reaches the app; only stderr is read, and only for the check's result. Invalid only when stderr
+- **gcloud** runs `gcloud config config-helper --force-auth-refresh --account=<email> --format=none`.
+  `--force-auth-refresh` refreshes the access token even when gcloud's cached one hasn't expired;
+  without it gcloud refreshes only within 5 minutes of expiry, so a lapsed session would read valid
+  for most of the token's hour. config-helper's output holds a token: `--format=none` prints
+  nothing, and the run's stdout goes to `/dev/null` besides, so no token reaches the app; only
+  stderr is read, and only for the check's result. Invalid only when stderr
   contains `Reauthentication failed` (reauthentication needed, which can't prompt here),
   `There was a problem reauthenticating while refreshing` (reauth required),
   `to complete reauthentication` (a browser login required), `invalid_grant` (the refresh token
@@ -342,7 +346,10 @@ expired. It also runs when the user clicks Check Now in Settings → Logins.
   `AADSTS50078`, `AADSTS50076` and `AADSTS50079` (MFA expired, required or to enrol), `AADSTS50132`
   and `AADSTS50133` (session invalid after a password change). az gives every Entra error the same
   advice to run `az login`, a server outage too, so that advice doesn't count: any other failure is
-  couldn't check.
+  couldn't check. az has no flag to force a refresh, and it gets the token through MSAL's silent
+  acquisition, which can answer from a cached access token: a session revoked or lapsed while az
+  holds an unexpired one (60 to 90 minutes by Microsoft's default) can read valid until that
+  token expires, a known limit the README names.
 - A login reported invalid moves its timer to expired, even if time remains.
 - A login reported valid whose timer says expired is still valid (see Timers). Its tile says
   "Still valid" and offers Edit Session Length…, since the session length may be too short.
@@ -988,13 +995,19 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Read from gcloud 594.0.0's source, not yet run against a live gcloud:
   - **Store:** `credentials.db`'s schema, `REPLACE INTO` at each login (a new, larger `rowid`, as
     checked with `sqlite3`), a refresh touching only `access_tokens.db`, and revoke deleting the row.
-  - **`--account`:** `auth login` and `auth print-access-token` both take
-    `args.account_name or args.account`, so the global `--account=<email>` names the account.
-  - **Login:** `gcloud auth login --force --account=<email>` with no tty and stdin from
-    `/dev/null` opening the browser and exiting 0 when the sign-in completes; it also makes that
-    account gcloud's active one.
-  - **Check:** `--format=none` printing nothing, and the stderr strings The live checks reads as
-    invalid; an offline failure is expected to match none of them.
+  - **`--account`:** `auth login` takes `args.account_name or args.account`, and
+    `config config-helper` loads the credential of `core/account`, which the global
+    `--account=<email>` sets, so it names the account for both.
+  - **Login:** `gcloud auth login --force --no-activate --account=<email>` with no tty and stdin
+    from `/dev/null` opening the browser and exiting 0 when the sign-in completes. `--no-activate`
+    (the inverse calliope generates for `--activate`) skips persisting `core/account` and
+    `core/project` and the confirmation message; the credential is still stored in
+    `credentials.db` first, so the login is seen.
+  - **Check:** `--force-auth-refresh` refreshing whatever the cached token's expiry,
+    `--format=none` printing nothing, and the stderr strings The live checks reads as invalid,
+    raised by the credential load and the forced refresh; an offline failure is expected to match
+    none of them. `config config-helper` is a hidden command (`@base.Hidden`), though its help
+    documents `--force-auth-refresh`, so a gcloud release could change it without notice.
 - Read from azure-cli 2.93.0's source, not yet run against a live az:
   - **Profile:** `azureProfile.json` written by `json.dump` with `utf-8-sig` in place, its shape,
     which commands rewrite it, and `az logout` removing all of its user's subscriptions.

@@ -1,9 +1,11 @@
 import Foundation
 
 /// Asks gcloud whether an account still has a usable login. Runs
-/// `gcloud auth print-access-token --account=<email> --format=none`: `--format=none` makes gcloud
-/// print nothing, and the run's stdout goes to `/dev/null` besides, so no token reaches the app. Its
-/// result is a `DatabricksCheck`, which means the same for either CLI.
+/// `gcloud config config-helper --force-auth-refresh --account=<email> --format=none`, which
+/// refreshes the token even when gcloud holds an unexpired one, so the answer isn't read from its
+/// cache. Its output holds a token: `--format=none` makes gcloud print nothing, and the run's
+/// stdout goes to `/dev/null` besides, so no token reaches the app. Its result is a
+/// `DatabricksCheck`, which means the same for either CLI.
 public actor GcloudChecker {
     /// What gcloud writes to stderr when only a new `gcloud auth login` helps: reauthentication
     /// that failed or is required, a refresh token the server refused as `invalid_grant`, or no
@@ -60,7 +62,10 @@ public actor GcloudChecker {
         let environment = path.childEnvironment(base: ProcessInfo.processInfo.environment)
         let outcome = await runner.runDiscardingStandardOutput(
             executable: executable,
-            arguments: ["auth", "print-access-token", "--account=\(gcloudAccountEmail(account))", "--format=none"],
+            arguments: [
+                "config", "config-helper", "--force-auth-refresh",
+                "--account=\(gcloudAccountEmail(account))", "--format=none",
+            ],
             environment: environment, timeout: .seconds(timeout))
         switch outcome {
         case .exited(0, _): return .valid

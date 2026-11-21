@@ -15,16 +15,16 @@ import PrinceClockInCore
         #expect(command?.arguments.contains("--debug") == false)
     }
 
-    @Test func gcloudLogsInToTheAccountsEmailWithForce() {
+    @Test func gcloudLogsInToTheAccountsEmailWithForceAndWithoutActivating() {
         #expect(loginCommand(for: .gcloudAccount(account: "dev@example.com")) == LoginCommand(
-            executable: "gcloud", arguments: ["auth", "login", "--force", "--account=dev@example.com"]))
+            executable: "gcloud", arguments: ["auth", "login", "--force", "--no-activate", "--account=dev@example.com"]))
         #expect(loginCommand(for: .gcloudAccount(account: "dev@example.com#example.goog")) == LoginCommand(
-            executable: "gcloud", arguments: ["auth", "login", "--force", "--account=dev@example.com"]))
+            executable: "gcloud", arguments: ["auth", "login", "--force", "--no-activate", "--account=dev@example.com"]))
     }
 
     @Test func aFlagLikeGcloudAccountStaysInsideItsArgument() {
         #expect(loginCommand(for: .gcloudAccount(account: "--verbosity=debug"))?.arguments
-            == ["auth", "login", "--force", "--account=--verbosity=debug"])
+            == ["auth", "login", "--force", "--no-activate", "--account=--verbosity=debug"])
     }
 
     @Test func azureLogsInToTheTenant() {

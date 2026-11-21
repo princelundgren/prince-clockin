@@ -30,21 +30,21 @@ private func makeChecker(
 private func refreshError(_ cause: String) -> ProcessOutcome {
     .exited(
         code: 1,
-        output: "ERROR: (gcloud.auth.print-access-token) There was a problem refreshing auth tokens for account "
+        output: "ERROR: (gcloud.config.config-helper) There was a problem refreshing auth tokens for account "
             + "dev@example.com: \(cause)\nPlease run:\n\n  $ gcloud auth login\n\nto obtain new credentials.\n")
 }
 private let reauthRequired = refreshError("Reauthentication failed. cannot prompt during non-interactive execution.")
 private let refreshRefused = refreshError("('invalid_grant: Token has been expired or revoked.', {'error': 'invalid_grant'})")
 private let reauthNeeded = ProcessOutcome.exited(
     code: 1,
-    output: "ERROR: (gcloud.auth.print-access-token) There was a problem reauthenticating while refreshing your "
+    output: "ERROR: (gcloud.config.config-helper) There was a problem reauthenticating while refreshing your "
         + "current auth tokens: reauth is required.\nPlease retry your command or run:\n\n  $ gcloud auth login\n")
 private let webLoginRequired = ProcessOutcome.exited(
     code: 1,
-    output: "ERROR: (gcloud.auth.print-access-token) Please run:\n\n  $ gcloud auth login\n\nto complete reauthentication.\n")
+    output: "ERROR: (gcloud.config.config-helper) Please run:\n\n  $ gcloud auth login\n\nto complete reauthentication.\n")
 private let noCredentials = ProcessOutcome.exited(
     code: 1,
-    output: "ERROR: (gcloud.auth.print-access-token) Your current active account [dev@example.com] does not have any "
+    output: "ERROR: (gcloud.config.config-helper) Your current active account [dev@example.com] does not have any "
         + "valid credentials\nPlease run:\n\n  $ gcloud auth login\n\nto obtain new credentials.\n")
 
 @Suite struct GcloudCheckTests {
@@ -54,7 +54,7 @@ private let noCredentials = ProcessOutcome.exited(
         #expect(await checker.check(account: "dev@example.com#example.goog", loginRunning: false) == .valid)
 
         let call = try #require(runner.calls.first)
-        #expect(call.arguments == ["auth", "print-access-token", "--account=dev@example.com", "--format=none"])
+        #expect(call.arguments == ["config", "config-helper", "--force-auth-refresh", "--account=dev@example.com", "--format=none"])
         #expect(call.discardsStandardOutput)
         #expect(call.timeout == .seconds(30))
     }
@@ -72,7 +72,7 @@ private let noCredentials = ProcessOutcome.exited(
             refreshError("temporarily_unavailable: The service is currently unavailable."),
             refreshError("server_error: Internal error."),
             refreshError("('access_denied: Account restricted', {'error': 'access_denied'})"),
-            .exited(code: 1, output: "ERROR: (gcloud.auth.print-access-token) You do not currently have an active "
+            .exited(code: 1, output: "ERROR: (gcloud.config.config-helper) You do not currently have an active "
                 + "account selected.\nPlease run:\n\n  $ gcloud auth login\n\nto obtain new credentials.\n"),
             .exited(code: 1, output: ""),
             .timedOut(output: ""),
