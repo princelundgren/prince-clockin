@@ -176,6 +176,7 @@ private final class Fixture {
     let aws = FakeAWSReader()
     let gcloud = FakeGcloudReader()
     let azure = FakeAzureReader()
+    let oci = FakeOCIReader()
     let notifier = FakeNotifier()
     let approvals = FakeApprovals()
     let terminal = RecordingTerminal()
@@ -195,11 +196,13 @@ private final class Fixture {
         try makeExecutable(named: "databricks", in: bin)
         try makeExecutable(named: "gcloud", in: bin)
         try makeExecutable(named: "az", in: bin)
+        try makeExecutable(named: "oci", in: bin)
         configPaths = ConfigPaths(
             awsConfig: directory.appending(path: "aws-config"),
             databricksConfig: directory.appending(path: "databrickscfg"),
             gcloudConfig: directory.appending(path: "gcloud"),
-            azureConfig: directory.appending(path: "azure"))
+            azureConfig: directory.appending(path: "azure"),
+            ociConfig: directory.appending(path: "oci-config"))
         self.loginRunner = loginRunner
         self.checkRunner = checkRunner
         if !logins.isEmpty { try StateStore(directory: directory).save(AppState(logins: logins)) }
@@ -216,7 +219,7 @@ private final class Fixture {
             runner: ArgumentRunner { [bin] _ in pathOutput(bin.path) },
             shell: URL(fileURLWithPath: "/bin/zsh"), environment: [:])
         let queue = LoginQueue(
-            runner: loginRunner, pathResolver: resolver, terminal: terminal, clock: { clock.read() })
+            runner: loginRunner, pathResolver: resolver, terminal: terminal, oci: oci, clock: { clock.read() })
         let checker = DatabricksChecker(runner: checkRunner, pathResolver: resolver, clock: { clock.read() })
         let gcloudChecker = GcloudChecker(runner: checkRunner, pathResolver: resolver, clock: { clock.read() })
         let azureChecker = AzureChecker(
@@ -224,7 +227,7 @@ private final class Fixture {
         return Coordinator(
             store: store ?? StateStore(directory: directory), queue: queue, pathResolver: resolver,
             checker: checker, gcloudChecker: gcloudChecker, azureChecker: azureChecker, aws: aws, gcloud: gcloud,
-            azure: azure, notifier: notifier, approvals: approvals, configPaths: configPaths,
+            azure: azure, oci: oci, notifier: notifier, approvals: approvals, configPaths: configPaths,
             clock: { clock.read() })
     }
 }
@@ -2069,6 +2072,140 @@ private final class GatedLogins: Sendable {
         #expect(fixture.checkRunner.calls.isEmpty)
         coordinator.cancelBatch()
     }
+
+    // MARK: OCI
+
+    @Test func discoverCandidatesReadsTheOCIConfigAndSkipsTrackedProfiles() async throws {
+        let fixture = try Fixture(logins: [oci("analytics-dev")])
+        fixture.oci.set([ociProfile("analytics-dev"), ociProfile("analytics-prod")])
+        let coordinator = fixture.makeCoordinator()
+
+        let candidates = await coordinator.discoverCandidates()
+
+        #expect(candidates.oci == ["analytics-prod"])
+    }
+
+    @Test func anOCIProfileFirstSeenIsOnlyABaseline() async throws {
+        let dev = oci("analytics-dev")
+        let fixture = try Fixture(logins: [dev])
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: launch)])
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == nil && after.invalidatedAt == nil)
+        #expect(fixture.stored?.logins.first?.lastOCIKeyFile == .present(modified: launch))
+    }
+
+    @Test func aNewerOCIPublicKeyIsALoginAtItsDate() async throws {
+        let dev = oci("analytics-dev", lastOCIKeyFile: .present(modified: launch.addingTimeInterval(-hour)))
+        let fixture = try Fixture(logins: [dev])
+        fixture.oci.set(
+            [ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: launch.addingTimeInterval(-hour))])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.login(dev.id) == dev)
+
+        let loggedIn = launch.addingTimeInterval(60)
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: loggedIn)])
+        fixture.clock.advance(by: 120)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(expiry(of: after) == loggedIn.addingTimeInterval(24 * hour))
+        #expect(after.lastOCIKeyFile == .present(modified: loggedIn))
+    }
+
+    @Test func anOCIPublicKeyGoneIsLoggedOutAndItsReturnALogin() async throws {
+        let dev = oci(
+            "analytics-dev", loginTime: launch.addingTimeInterval(-hour),
+            lastOCIKeyFile: .present(modified: launch.addingTimeInterval(-hour)))
+        let fixture = try Fixture(logins: [dev])
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .missing])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(isLoggedOut(try #require(coordinator.login(dev.id))))
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: loggedIn)])
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(!isLoggedOut(after))
+    }
+
+    @Test func anOCIProfileGoneFromTheConfigIsLoggedOut() async throws {
+        let dev = oci(
+            "analytics-dev", loginTime: launch.addingTimeInterval(-hour),
+            lastOCIKeyFile: .present(modified: launch.addingTimeInterval(-hour)))
+        let fixture = try Fixture(logins: [dev])
+        fixture.oci.set([])
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(isLoggedOut(after))
+        #expect(after.lastOCIKeyFile == .missing)
+    }
+
+    @Test func anUnreadableOCIConfigOrKeyFileChangesNothing() async throws {
+        let dev = oci(
+            "analytics-dev", loginTime: launch.addingTimeInterval(-hour),
+            lastOCIKeyFile: .present(modified: launch.addingTimeInterval(-hour)))
+        let fixture = try Fixture(logins: [dev])
+        fixture.oci.fail()
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.login(dev.id) == dev)
+
+        fixture.oci.set([ociProfile("analytics-dev")])
+        await coordinator.tick(calendar: utc)
+
+        #expect(coordinator.login(dev.id) == dev)
+    }
+
+    @Test func anOCILoginInATerminalRightAfterAddingTheProfileIsALogin() async throws {
+        let fixture = try Fixture(logins: [])
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: launch)])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let dev = oci("analytics-dev")
+        coordinator.addLogin(dev)
+        #expect(coordinator.login(dev.id)?.lastOCIKeyFile == .present(modified: launch))
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.oci.set([ociProfile("analytics-dev")], publicKeys: ["analytics-dev": .present(modified: loggedIn)])
+        await coordinator.tick(calendar: utc)
+
+        #expect(coordinator.login(dev.id)?.loginTime == loggedIn)
+    }
+
+    @Test func anOCILoginIsNeverChecked() async throws {
+        let dev = oci("analytics-dev", loginTime: launch.addingTimeInterval(-24 * hour + 60))
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(!coordinator.canCheckNow)
+
+        await coordinator.checkNow()
+        await coordinator.tick(calendar: utc)
+
+        #expect(fixture.checkRunner.calls.isEmpty)
+        #expect(fixture.notifier.expiryNotifications.map { $0.map(\.id) } == [[dev.id]])
+        #expect(coordinator.login(dev.id)?.lastDatabricksCheck == nil)
+    }
+}
+
+private func oci(_ name: String, loginTime: Date? = nil, lastOCIKeyFile: OCIKeyFileState? = nil) -> Login {
+    Login(
+        displayName: name, kind: .ociSessionProfile(name: name), sessionLength: 24 * hour, loginTime: loginTime,
+        lastOCIKeyFile: lastOCIKeyFile)
 }
 
 private let contosoTenant = "00000000-0000-0000-0000-000000000001"

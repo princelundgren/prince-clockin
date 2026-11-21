@@ -112,7 +112,7 @@ struct PanelView: View {
         session.showEmptyPanel(
             emptyPanel(
                 aws: found.aws, databricks: found.databricks, gcloud: found.gcloud, azure: found.azure,
-                locale: .current),
+                oci: found.oci, locale: .current),
             forOpening: opening)
     }
 

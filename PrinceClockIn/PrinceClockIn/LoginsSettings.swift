@@ -101,8 +101,8 @@ struct LoginsSettings: View {
     }
 
     /// Reads the config files for the + menu when the pane appears and whenever a tracked AWS SSO
-    /// session, Databricks profile, gcloud account or Azure tenant is added or removed, a new read
-    /// cancelling the one before; a cancelled read's answer is dropped.
+    /// session, Databricks profile, gcloud account, Azure tenant or OCI session profile is added or
+    /// removed, a new read cancelling the one before; a cancelled read's answer is dropped.
     private func discover() async {
         candidates = nil
         let found = await coordinator.discoverCandidates()

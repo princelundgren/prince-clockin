@@ -93,6 +93,8 @@ public struct TilePresentation: Equatable, Identifiable, Sendable {
     public let id: UUID
     /// The full display name; the view truncates it in the middle.
     public let name: String
+    /// The name's help tag: the name in full and, for an OCI session profile, `ociSessionNote`.
+    public let helpTag: String
     public let symbol: TileSymbol
     /// The symbol's colour and the tile's tint; `nil` for a state no token means.
     public let colour: ColourToken?
@@ -130,6 +132,7 @@ public func tilePresentation(
     return TilePresentation(
         id: login.id,
         name: login.displayName,
+        helpTag: helpTag(for: login),
         symbol: pending?.symbol ?? .systemImage(timer.symbolName),
         colour: pending.map(\.colour) ?? timer.colour,
         subtitle: timer.subtitle(kind: kind, now: now, locale: locale, calendar: calendar),
@@ -208,8 +211,13 @@ func loginKindName(_ kind: LoginKind) -> String {
     case .databricksProfile(_, accountLevel: true): "Databricks account profile"
     case .gcloudAccount: "gcloud account"
     case .azureTenant: "Azure CLI tenant"
+    case .ociSessionProfile: "OCI session profile"
     case .custom: "Custom login"
     }
+}
+
+private func helpTag(for login: Login) -> String {
+    if case .ociSessionProfile = login.kind { "\(login.displayName)\n\n\(ociSessionNote)" } else { login.displayName }
 }
 
 private func detail(
@@ -235,7 +243,7 @@ private func detail(
         let cli = switch login.kind {
         case .gcloudAccount: "gcloud"
         case .azureTenant: "the Azure CLI"
-        case .databricksProfile, .awsSSOSession, .custom: "Databricks"
+        case .databricksProfile, .awsSSOSession, .ociSessionProfile, .custom: "Databricks"
         }
         return .stillValid(message: "Its \(sessionLengthAdjective(length)) timer ran out, but \(cli) says the "
             + "login still works. The session length may be too short.")

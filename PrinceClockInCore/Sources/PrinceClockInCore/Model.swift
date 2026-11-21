@@ -18,6 +18,8 @@ public enum LoginKind: Hashable, Sendable {
     /// One user's sign-in to one tenant in the Azure CLI: `user` is the `user.name` of
     /// `azureProfile.json`'s subscriptions, `tenant` their `tenantId`.
     case azureTenant(user: String, tenant: String)
+    /// A session profile of the OCI CLI's config, by its name.
+    case ociSessionProfile(name: String)
     /// `command` is plain text in the state file, so it must not hold a secret.
     case custom(command: String?)
 }
@@ -28,7 +30,7 @@ extension LoginKind: Codable {
     }
 
     private enum TypeTag: String, Codable {
-        case awsSSOSession, databricksProfile, gcloudAccount, azureTenant, custom
+        case awsSSOSession, databricksProfile, gcloudAccount, azureTenant, ociSessionProfile, custom
     }
 
     public init(from decoder: any Decoder) throws {
@@ -46,6 +48,8 @@ extension LoginKind: Codable {
             self = .azureTenant(
                 user: try container.decode(String.self, forKey: .user),
                 tenant: try container.decode(String.self, forKey: .tenant))
+        case .ociSessionProfile:
+            self = .ociSessionProfile(name: try container.decode(String.self, forKey: .name))
         case .custom:
             self = .custom(command: try container.decodeIfPresent(String.self, forKey: .command))
         }
@@ -68,6 +72,9 @@ extension LoginKind: Codable {
             try container.encode(TypeTag.azureTenant, forKey: .type)
             try container.encode(user, forKey: .user)
             try container.encode(tenant, forKey: .tenant)
+        case .ociSessionProfile(let name):
+            try container.encode(TypeTag.ociSessionProfile, forKey: .type)
+            try container.encode(name, forKey: .name)
         case .custom(let command):
             try container.encode(TypeTag.custom, forKey: .type)
             try container.encodeIfPresent(command, forKey: .command)
@@ -112,7 +119,8 @@ public struct DatabricksCheckRecord: Codable, Hashable, Sendable {
 /// Why a login was invalidated.
 public enum InvalidationReason: String, Codable, Hashable, Sendable {
     /// Its AWS cache file disappeared, as `aws sso logout` does, its gcloud credential did, as
-    /// `gcloud auth revoke` does, or its Azure subscriptions did, as `az logout` does.
+    /// `gcloud auth revoke` does, its Azure subscriptions did, as `az logout` does, or its OCI
+    /// session's public key or profile did, as `oci session terminate` does.
     case loggedOut
     /// A Databricks, gcloud or Azure check found it invalid.
     case foundInvalid
@@ -125,8 +133,9 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Whole seconds; `nil` until known (a Databricks login has no default).
     public var sessionLength: TimeInterval?
     public var loginTime: Date?
-    /// Set when the AWS cache file, the gcloud credential or the Azure subscriptions disappear, or
-    /// a check says invalid. The login counts as expired while `loginTime` is `nil` or not newer.
+    /// Set when the AWS cache file, the gcloud credential, the Azure subscriptions or the OCI
+    /// session's public key disappear, or a check says invalid. The login counts as expired while
+    /// `loginTime` is `nil` or not newer.
     public var invalidatedAt: Date?
     /// Why `invalidatedAt` was set. `nil` in a file written before the reason was stored, which
     /// `isLoggedOut` reads by the kind's only earlier cause.
@@ -141,6 +150,9 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
     /// Whether `azureProfile.json` listed the Azure user and tenant when last read. `nil` until
     /// first seen.
     public var lastAzurePresence: AzurePresence?
+    /// The OCI session's public key file when last seen, missing or with its modification date;
+    /// `oci session authenticate` writes a new one at each login. `nil` until first seen.
+    public var lastOCIKeyFile: OCIKeyFileState?
     /// The last live check, Databricks, gcloud or Azure, that wasn't skipped.
     public var lastDatabricksCheck: DatabricksCheckRecord?
     /// The last check that answered, valid or invalid; a couldn't-check result leaves it as it was.
@@ -160,6 +172,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         lastAWSCache: AWSCacheRecord? = nil,
         lastGcloudRow: GcloudRowState? = nil,
         lastAzurePresence: AzurePresence? = nil,
+        lastOCIKeyFile: OCIKeyFileState? = nil,
         lastDatabricksCheck: DatabricksCheckRecord? = nil,
         lastDatabricksAnswer: DatabricksCheckRecord? = nil
     ) {
@@ -174,14 +187,17 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
         self.lastAWSCache = lastAWSCache
         self.lastGcloudRow = lastGcloudRow
         self.lastAzurePresence = lastAzurePresence
+        self.lastOCIKeyFile = lastOCIKeyFile.map(\.wholeSeconds)
         self.lastDatabricksCheck = lastDatabricksCheck
         self.lastDatabricksAnswer = lastDatabricksAnswer
     }
 
-    /// 8 hours for AWS; `nil` for every other kind, where the user sets it.
+    /// 8 hours for AWS, 24 hours for OCI, how long `oci session refresh` can renew a session after
+    /// its login; `nil` for every other kind, where the user sets it.
     public static func defaultSessionLength(for kind: LoginKind) -> TimeInterval? {
         switch kind {
         case .awsSSOSession: 8 * 3600
+        case .ociSessionProfile: 24 * 3600
         case .databricksProfile, .gcloudAccount, .azureTenant, .custom: nil
         }
     }
@@ -195,6 +211,7 @@ public struct Login: Codable, Identifiable, Hashable, Sendable {
             lastAWSCache: lastAWSCache.map { AWSCacheRecord(modified: $0.modified, expiresAt: $0.expiresAt) },
             lastGcloudRow: lastGcloudRow,
             lastAzurePresence: lastAzurePresence,
+            lastOCIKeyFile: lastOCIKeyFile,
             lastDatabricksCheck: lastDatabricksCheck.map { DatabricksCheckRecord(at: $0.at, result: $0.result) },
             lastDatabricksAnswer: lastDatabricksAnswer.map { DatabricksCheckRecord(at: $0.at, result: $0.result) })
     }

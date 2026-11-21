@@ -175,8 +175,8 @@ public final class Coordinator {
             && model.state.logins.contains { $0.kind.isCheckable }
     }
 
-    /// Where discovery reads the AWS and Databricks config files, gcloud's credential store and the
-    /// Azure CLI's profile.
+    /// Where discovery reads the AWS, Databricks and OCI config files, gcloud's credential store and
+    /// the Azure CLI's profile.
     public let configPaths: ConfigPaths
 
     private let store: StateStore
@@ -188,6 +188,7 @@ public final class Coordinator {
     private let aws: AWSCacheReading
     private let gcloud: GcloudCredentialsReading
     private let azure: AzureProfileReading
+    private let oci: OCIConfigReading
     private let notifier: Notifying
     private let approvals: ApprovalStoring
     private let clock: () -> Date
@@ -214,7 +215,7 @@ public final class Coordinator {
     public init(
         store: StateStore, queue: LoginQueue, pathResolver: ShellPathResolver, checker: DatabricksChecker,
         gcloudChecker: GcloudChecker, azureChecker: AzureChecker, aws: AWSCacheReading,
-        gcloud: GcloudCredentialsReading, azure: AzureProfileReading, notifier: Notifying,
+        gcloud: GcloudCredentialsReading, azure: AzureProfileReading, oci: OCIConfigReading, notifier: Notifying,
         approvals: ApprovalStoring, configPaths: ConfigPaths, clock: @escaping () -> Date
     ) {
         var state = AppState()
@@ -235,6 +236,7 @@ public final class Coordinator {
         self.aws = aws
         self.gcloud = gcloud
         self.azure = azure
+        self.oci = oci
         self.notifier = notifier
         self.approvals = approvals
         self.configPaths = configPaths
@@ -247,7 +249,7 @@ public final class Coordinator {
     }
 
     /// Starts applying the queue's events and feeding it commands, takes every AWS session's,
-    /// gcloud account's and Azure tenant's baseline, begins resolving the login shell's `PATH`
+    /// gcloud account's, Azure tenant's and OCI session profile's baseline, begins resolving the login shell's `PATH`
     /// without waiting for it, and reads which Databricks logins are account profiles from the
     /// config file. Runs once.
     public func start() async {
@@ -273,6 +275,7 @@ public final class Coordinator {
         observeAWSCaches(now: launchTime)
         observeGcloudCredentials(now: launchTime)
         observeAzureProfile(now: launchTime)
+        observeOCISessions(now: launchTime)
         saveIfChanged()
         Task { [pathResolver] in _ = await pathResolver.resolvePath() }
         await rereadAccountLevels()
@@ -309,14 +312,15 @@ public final class Coordinator {
         } while isTickPending
     }
 
-    /// Moves `now` to the clock and reads the AWS cache files, gcloud's credential store and the
-    /// Azure CLI's profile, without notifying: for the panel or Settings about to show, whose times
+    /// Moves `now` to the clock and reads the AWS cache files, gcloud's credential store, the Azure
+    /// CLI's profile and the OCI sessions' public keys, without notifying: for the panel or Settings about to show, whose times
     /// would otherwise be those of the last tick.
     public func refresh() {
         now = clock()
         observeAWSCaches(now: now, isFirstCheckAfterWake: isFirstCheckAfterWake)
         observeGcloudCredentials(now: now)
         observeAzureProfile(now: now)
+        observeOCISessions(now: now)
         isFirstCheckAfterWake = false
         saveIfChanged()
     }
@@ -420,24 +424,26 @@ public final class Coordinator {
         saveIfChanged()
     }
 
-    /// The AWS sessions, Databricks profiles, gcloud accounts and Azure tenants in the config files
-    /// that aren't tracked yet. The files are read off the main actor; what is tracked is checked
+    /// The AWS sessions, Databricks profiles, gcloud accounts, Azure tenants and OCI session profiles
+    /// in the config files that aren't tracked yet. The files are read off the main actor; what is tracked is checked
     /// once they have been read.
     public func discoverCandidates() async -> DiscoveredLogins {
-        let found = await Self.discover(in: configPaths)
+        let found = await Self.discover(in: configPaths, oci: oci)
         let tracked = TrackedConfigNames(logins: model.state.logins)
         return (
             found.aws.filter { !tracked.aws.contains($0) },
             found.databricks.filter { !tracked.databricks.contains($0.name) },
             found.gcloud.filter { !tracked.gcloud.contains($0) },
-            found.azure.filter { !tracked.azure.contains($0.account) }
+            found.azure.filter { !tracked.azure.contains($0.account) },
+            found.oci.filter { !tracked.oci.contains($0) }
         )
     }
 
-    /// Every AWS session, Databricks profile, gcloud user account and Azure user tenant at `paths`. A
-    /// gcloud store or Azure profile that is missing or can't be read offers none.
+    /// Every AWS session, Databricks profile, gcloud user account, Azure user tenant and OCI session
+    /// profile at `paths` and in `oci`'s config. A gcloud store, Azure profile or OCI config that is
+    /// missing or can't be read offers none.
     @concurrent
-    private nonisolated static func discover(in paths: ConfigPaths) async -> DiscoveredLogins {
+    private nonisolated static func discover(in paths: ConfigPaths, oci: OCIConfigReading) async -> DiscoveredLogins {
         let awsText = try? String(contentsOf: paths.awsConfig, encoding: .utf8)
         let databricksText = try? String(contentsOf: paths.databricksConfig, encoding: .utf8)
         let credentials = (try? readGcloudCredentials(at: gcloudCredentialsFile(configDirectory: paths.gcloudConfig)))
@@ -445,7 +451,8 @@ public final class Coordinator {
         let azureProfile = (try? readAzureProfile(at: azureProfileFile(configDirectory: paths.azureConfig))) ?? .none
         return (
             discoverAWSSessions(configText: awsText), discoverDatabricksProfiles(configText: databricksText),
-            discoverGcloudAccounts(credentials), discoverAzureTenants(azureProfile)
+            discoverGcloudAccounts(credentials), discoverAzureTenants(azureProfile),
+            oci.read()?.profiles.map(\.name) ?? []
         )
     }
 
@@ -459,13 +466,15 @@ public final class Coordinator {
     }
 
     /// Tracks `login`. A custom command added here was typed by the user, so it is approved. A
-    /// gcloud login's row, or an Azure login's presence, is read now, as its baseline.
+    /// gcloud login's row, an Azure login's presence or an OCI login's public key is read now, as
+    /// its baseline.
     public func addLogin(_ login: Login) {
         guard self.login(login.id) == nil else { return }
         model.state.logins.append(login)
         if case .custom(let command?) = login.kind { approvals.approve(approvalKey(for: command)) }
         if case .gcloudAccount = login.kind { observeGcloudCredentials(now: clock()) }
         if case .azureTenant = login.kind { observeAzureProfile(now: clock()) }
+        if case .ociSessionProfile = login.kind { observeOCISessions(now: clock()) }
         saveIfChanged()
     }
 
@@ -581,7 +590,7 @@ public final class Coordinator {
             case .databricksProfile: runningDatabricksID = id
             case .gcloudAccount: runningGcloudID = id
             case .azureTenant: runningAzureID = id
-            case .awsSSOSession, .custom, nil: break
+            case .awsSSOSession, .ociSessionProfile, .custom, nil: break
             }
         case .succeeded(let id, _), .failed(let id, _):
             if let outcome = LoginOutcome(event), login(id) != nil {
@@ -674,6 +683,23 @@ public final class Coordinator {
         }
     }
 
+    /// Compares each OCI login's public key file with what was last seen of it, missing or with its
+    /// modification date, reading the profile's `security_token_file` from the config again, since
+    /// a login can rewrite it. A login never seen is only read, as a baseline. A config that can't be
+    /// read, or a key file that exists but can't be, changes nothing.
+    private func observeOCISessions(now: Date) {
+        guard model.state.logins.contains(where: { if case .ociSessionProfile = $0.kind { true } else { false } }),
+              let config = oci.read()
+        else { return }
+        for login in model.state.logins {
+            guard case .ociSessionProfile(let profile) = login.kind,
+                  let current = config.publicKeyState(profile: profile)
+            else { continue }
+            model.apply(observeOCIPublicKey(previous: login.lastOCIKeyFile, current: current), login: login.id, now: now)
+            update(login.id) { $0.lastOCIKeyFile = current }
+        }
+    }
+
     /// Checks `logins` one at a time and applies each answer, after reading which are account
     /// profiles from the config file. Skipped checks change nothing.
     private func check(_ logins: [Login], now: Date) async {
@@ -696,7 +722,7 @@ public final class Coordinator {
                 check = await azureChecker.check(
                     account: AzureAccount(user: user, tenant: tenant), loginRunning: runningAzureID != nil,
                     lastAnswerAt: lastAnswerAt)
-            case .awsSSOSession, .custom:
+            case .awsSSOSession, .ociSessionProfile, .custom:
                 continue
             }
             if let result = check.result { model.apply(result, login: login.id, now: now) }
@@ -707,7 +733,7 @@ public final class Coordinator {
     /// Sets each tracked Databricks login's account flag to what the config file says now, and
     /// saves. A profile the file no longer offers keeps its flag.
     private func rereadAccountLevels() async {
-        let profiles = await Self.discover(in: configPaths).databricks
+        let profiles = await Self.discover(in: configPaths, oci: oci).databricks
         for profile in profiles {
             for index in model.state.logins.indices {
                 guard case .databricksProfile(profile.name, let accountLevel) = model.state.logins[index].kind,
@@ -758,7 +784,7 @@ private extension LoginKind {
     var isCheckable: Bool {
         switch self {
         case .databricksProfile(_, accountLevel: false), .gcloudAccount, .azureTenant: true
-        case .databricksProfile, .awsSSOSession, .custom: false
+        case .databricksProfile, .awsSSOSession, .ociSessionProfile, .custom: false
         }
     }
 }

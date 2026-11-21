@@ -7,19 +7,20 @@ public func loginKindSymbolName(_ kind: LoginKind) -> String {
     case .databricksProfile: "square.stack.3d.up"
     case .gcloudAccount: "person.badge.key"
     case .azureTenant: "building.2"
+    case .ociSessionProfile: "server.rack"
     case .custom: "terminal"
     }
 }
 
 /// A login's row subtitle in Settings → Logins: its kind, its session length ("No timer" when
 /// unknown) and, for Databricks, gcloud and Azure, its last check ("Databricks profile · 3-day
-/// session · Checked 14:02 · valid"). An account profile ends with "Not checked"; a login never
-/// checked has no check in it.
+/// session · Checked 14:02 · valid"). An account profile and an OCI session profile end with "Not
+/// checked"; a login never checked has no check in it.
 public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calendar: Calendar) -> String {
     let session = login.sessionLength.map { "\(sessionLengthAdjective($0)) session" } ?? "No timer"
     var parts = [loginKindName(login.kind), session]
     switch login.kind {
-    case .databricksProfile(_, accountLevel: true):
+    case .databricksProfile(_, accountLevel: true), .ociSessionProfile:
         parts.append("Not checked")
     case .databricksProfile, .gcloudAccount, .azureTenant:
         if let check = login.lastDatabricksCheck {
@@ -31,8 +32,8 @@ public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calend
     return parts.joined(separator: " · ")
 }
 
-/// Where an AWS SSO session, Databricks profile, gcloud account or Azure tenant comes from, as the
-/// form shows it.
+/// Where an AWS SSO session, Databricks profile, gcloud account, Azure tenant or OCI session
+/// profile comes from, as the form shows it.
 public struct LoginSource: Equatable, Sendable {
     /// "SSO session", "Profile", "Account" or "Tenant".
     public let label: String
@@ -45,11 +46,13 @@ public struct LoginSource: Equatable, Sendable {
     }
 }
 
-/// A Databricks profile's, gcloud account's or Azure tenant's last check, as the form shows it.
+/// A Databricks profile's, gcloud account's, Azure tenant's or OCI session profile's last check, as
+/// the form shows it.
 public struct LastCheck: Equatable, Sendable {
-    /// "Checked 14:02 · valid", "Not checked yet", or "Not checked" for an account profile.
+    /// "Checked 14:02 · valid", "Not checked yet", or "Not checked" for an account profile or an
+    /// OCI session profile.
     public let text: String
-    /// Why an account profile is never checked.
+    /// Why an account profile or an OCI session profile is never checked.
     public let note: String?
 
     public init(text: String, note: String?) {
@@ -64,7 +67,7 @@ public struct LoginSettingsForm: Equatable, Sendable {
     public let nameNote: String
     /// `nil` for a custom login.
     public let source: LoginSource?
-    /// `nil` for anything but a Databricks profile, gcloud account or Azure tenant.
+    /// `nil` for an AWS SSO session and a custom login.
     public let lastCheck: LastCheck?
     /// Under a custom login's Command; `nil` for the other kinds.
     public let commandNote: String?
@@ -122,10 +125,22 @@ public func loginSettingsForm(
                     ?? "Not checked yet",
                 note: nil),
             commandNote: nil)
+    case .ociSessionProfile(let name):
+        return LoginSettingsForm(
+            nameNote: "\(shown); the profile's name in your config stays as it is.",
+            source: LoginSource(label: "Profile", value: "\(name) in \(displayPath(paths.ociConfig, home: home))"),
+            lastCheck: LastCheck(text: "Not checked", note: ociSessionNote),
+            commandNote: nil)
     case .custom:
         return LoginSettingsForm(nameNote: "\(shown).", source: nil, lastCheck: nil, commandNote: customCommandNote)
     }
 }
+
+/// Why an OCI session profile isn't checked, and what the app leaves to the user, in its Settings
+/// form and its tile's help tag.
+public let ociSessionNote = "This login runs on its timer alone. The app tracks the 24-hour login and never "
+    + "refreshes the session's hourly token: unless oci session refresh, or a tool such as oci-assume, refreshes "
+    + "it, OCI commands fail within an hour."
 
 /// `url`'s path, with `~` for `home` when the file is under it.
 private func displayPath(_ url: URL, home: URL) -> String {

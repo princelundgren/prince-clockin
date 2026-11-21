@@ -32,6 +32,8 @@ public enum LoginFailure: Equatable, Sendable {
     case terminalFailed(String)
     /// The user has denied the permission to control Terminal, which a custom login's command needs.
     case terminalNotPermitted
+    /// An OCI session profile's login can't run as its config stands.
+    case ociProfile(OCILoginRefusal)
 }
 
 extension LoginFailure {
@@ -46,6 +48,10 @@ extension LoginFailure {
         case .launchFailed(let reason), .terminalFailed(let reason): reason
         case .terminalNotPermitted:
             "Allow PrinceClockIn to control Terminal in System Settings → Privacy & Security → Automation"
+        case .ociProfile(.configUnreadable): "Could not read the OCI config file"
+        case .ociProfile(.notASessionProfile): "The OCI config file no longer has this session profile"
+        case .ociProfile(.noRegion):
+            "The profile has no region in the OCI config file; add one, or oci would ask for it"
         }
     }
 }
@@ -72,9 +78,10 @@ public enum QueueEvent: Equatable, Sendable {
     case finished
 }
 
-/// Runs logins one at a time, in the order they were enqueued. AWS and Databricks logins run their
-/// CLI through `runner`; a custom login opens its command in Terminal, if it has one, and waits for
-/// the user's Done. Every login is ended at its timeout, so a forgotten one can't block the queue.
+/// Runs logins one at a time, in the order they were enqueued. AWS, Databricks, gcloud, Azure and
+/// OCI logins run their CLI through `runner`; a custom login opens its command in Terminal, if it
+/// has one, and waits for the user's Done. Every login is ended at its timeout, so a forgotten one
+/// can't block the queue.
 public actor LoginQueue {
     private struct Pending {
         let login: Login
@@ -104,6 +111,7 @@ public actor LoginQueue {
     private let runner: ProcessRunning
     private let pathResolver: ShellPathResolver
     private let terminal: TerminalOpening
+    private let oci: OCIConfigReading
     private let clock: @Sendable () -> Date
 
     private var pending: [Pending] = []
@@ -114,15 +122,17 @@ public actor LoginQueue {
     private var outputs: [UUID: String] = [:]
 
     /// An empty, idle queue. `runner` runs the CLIs, found on the `PATH` from `pathResolver`;
-    /// `terminal` opens custom commands; `clock` gives the time a login succeeded.
+    /// `terminal` opens custom commands; `oci` reads the OCI config an OCI login's command comes
+    /// from, as it starts; `clock` gives the time a login succeeded.
     public init(
-        runner: ProcessRunning, pathResolver: ShellPathResolver, terminal: TerminalOpening,
+        runner: ProcessRunning, pathResolver: ShellPathResolver, terminal: TerminalOpening, oci: OCIConfigReading,
         clock: @escaping @Sendable () -> Date = Date.init
     ) {
         (events, continuation) = AsyncStream.makeStream(of: QueueEvent.self)
         self.runner = runner
         self.pathResolver = pathResolver
         self.terminal = terminal
+        self.oci = oci
         self.clock = clock
     }
 
@@ -208,6 +218,12 @@ public actor LoginQueue {
     }
 
     private func perform(_ login: Login, timeout: TimeInterval) async -> QueueEvent {
+        if case .ociSessionProfile(let profile) = login.kind {
+            switch ociLoginCommand(profile: profile, config: oci.read()) {
+            case .success(let command): return await performCLI(id: login.id, command: command, timeout: timeout)
+            case .failure(let refusal): return .failed(id: login.id, reason: .ociProfile(refusal))
+            }
+        }
         guard let command = loginCommand(for: login.kind) else {
             return await performCustom(
                 id: login.id, command: login.kind.terminalCommand, timeout: timeout)

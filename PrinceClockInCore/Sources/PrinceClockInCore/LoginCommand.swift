@@ -9,7 +9,8 @@ public struct LoginCommand: Equatable, Sendable {
     }
 }
 
-/// The CLI command that signs in to `kind`, or `nil` for a custom login, which the app doesn't run.
+/// The CLI command that signs in to `kind`, or `nil` for a custom login, which the app doesn't run,
+/// and for an OCI session profile, whose command depends on its config: `ociLoginCommand`.
 /// The name is joined to its flag in one argument, so a name that starts with `-` can't be read as
 /// a flag of its own; for gcloud that is the account's email. gcloud also gets `--force`, without
 /// which it doesn't sign in an account with valid stored credentials, and `--no-activate`, so the
@@ -27,7 +28,7 @@ public func loginCommand(for kind: LoginKind) -> LoginCommand? {
         LoginCommand(executable: "gcloud", arguments: ["auth", "login", "--force", "--no-activate", "--account=\(gcloudAccountEmail(account))"])
     case .azureTenant(_, let tenant):
         LoginCommand(executable: "az", arguments: ["login", "--tenant=\(tenant)", "--allow-no-subscriptions"])
-    case .custom:
+    case .ociSessionProfile, .custom:
         nil
     }
 }

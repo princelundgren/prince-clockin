@@ -1,13 +1,14 @@
 import Foundation
 
-/// An AWS SSO session, Databricks profile, gcloud account or Azure CLI tenant found in the config
-/// files and not yet tracked.
+/// An AWS SSO session, Databricks profile, gcloud account, Azure CLI tenant or OCI session profile
+/// found in the config files and not yet tracked.
 public enum AddLoginCandidate: Equatable, Sendable {
     case awsSSOSession(name: String)
     case databricksProfile(DatabricksProfile)
     /// A store `account_id`; see `LoginKind.gcloudAccount`.
     case gcloudAccount(account: String)
     case azureTenant(AzureTenant)
+    case ociSessionProfile(name: String)
 
     /// The login that tracks it: named as in the config file, a gcloud account by its email and an
     /// Azure tenant by its discovered name, with its kind's default length.
@@ -21,6 +22,7 @@ public enum AddLoginCandidate: Equatable, Sendable {
         case .databricksProfile(let profile): .databricksProfile(name: profile.name, accountLevel: profile.accountLevel)
         case .gcloudAccount(let account): .gcloudAccount(account: account)
         case .azureTenant(let tenant): .azureTenant(user: tenant.account.user, tenant: tenant.account.tenant)
+        case .ociSessionProfile(let name): .ociSessionProfile(name: name)
         }
     }
 
@@ -30,31 +32,35 @@ public enum AddLoginCandidate: Equatable, Sendable {
         case .databricksProfile(let profile): profile.name
         case .gcloudAccount(let account): gcloudAccountEmail(account)
         case .azureTenant(let tenant): tenant.displayName
+        case .ociSessionProfile(let name): name
         }
     }
 }
 
-/// The AWS SSO session, Databricks profile, gcloud account and Azure tenant names that tracked
-/// logins use: what discovery leaves out of the + menu, so its read of the config files need only
-/// be redone when these change.
+/// The AWS SSO session, Databricks profile, gcloud account, Azure tenant and OCI profile names that
+/// tracked logins use: what discovery leaves out of the + menu, so its read of the config files
+/// need only be redone when these change.
 public struct TrackedConfigNames: Hashable, Sendable {
     public let aws: Set<String>
     public let databricks: Set<String>
     /// Store `account_id`s.
     public let gcloud: Set<String>
     public let azure: Set<AzureAccount>
+    public let oci: Set<String>
 
     public init(logins: [Login]) {
         var aws: Set<String> = []
         var databricks: Set<String> = []
         var gcloud: Set<String> = []
         var azure: Set<AzureAccount> = []
+        var oci: Set<String> = []
         for login in logins {
             switch login.kind {
             case .awsSSOSession(let name): aws.insert(name)
             case .databricksProfile(let name, _): databricks.insert(name)
             case .gcloudAccount(let account): gcloud.insert(account)
             case .azureTenant(let user, let tenant): azure.insert(AzureAccount(user: user, tenant: tenant))
+            case .ociSessionProfile(let name): oci.insert(name)
             case .custom: break
             }
         }
@@ -62,6 +68,7 @@ public struct TrackedConfigNames: Hashable, Sendable {
         self.databricks = databricks
         self.gcloud = gcloud
         self.azure = azure
+        self.oci = oci
     }
 }
 
@@ -92,9 +99,9 @@ public enum AddMenuItem: Equatable, Sendable {
 
 /// The + menu for what discovery found that isn't tracked: under "Found in your config files", the
 /// AWS SSO sessions, then the Databricks profiles, then the account profiles, each in file order,
-/// then the gcloud accounts and the Azure CLI tenants, each in discovery's order; then Custom
-/// Login…. With nothing found it says so; while the files are still being read (`found` is `nil`)
-/// it offers Custom Login… alone.
+/// then the gcloud accounts, the Azure CLI tenants and the OCI session profiles, each in
+/// discovery's order; then Custom Login…. With nothing found it says so; while the files are still
+/// being read (`found` is `nil`) it offers Custom Login… alone.
 public func addMenu(found: DiscoveredLogins?) -> [AddMenuItem] {
     guard let found else { return [.customLogin] }
     let workspaces = found.databricks.filter { !$0.accountLevel }
@@ -103,9 +110,12 @@ public func addMenu(found: DiscoveredLogins?) -> [AddMenuItem] {
         + (workspaces + accounts).map(AddLoginCandidate.databricksProfile)
         + found.gcloud.map(AddLoginCandidate.gcloudAccount)
         + found.azure.map(AddLoginCandidate.azureTenant)
+        + found.oci.map(AddLoginCandidate.ociSessionProfile)
     guard !candidates.isEmpty else {
         return [
-            .note("No new AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI tenants"), .customLogin,
+            .note("No new AWS SSO sessions, Databricks profiles, gcloud accounts, Azure CLI tenants or OCI session "
+                + "profiles"),
+            .customLogin,
         ]
     }
     return [.header("Found in your config files")] + candidates.map(AddMenuItem.found) + [.customLogin]

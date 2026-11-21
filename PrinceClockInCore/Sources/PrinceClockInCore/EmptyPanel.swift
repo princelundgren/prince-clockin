@@ -14,10 +14,11 @@ public struct EmptyPanel: Equatable, Sendable {
 }
 
 /// The empty panel for what discovery found in the config files: the untracked `aws` sessions,
-/// `databricks` profiles, `gcloud` accounts and `azure` tenants, counted by kind and joined as
-/// `locale` joins a list.
+/// `databricks` profiles, `gcloud` accounts, `azure` tenants and `oci` session profiles, counted by
+/// kind and joined as `locale` joins a list.
 public func emptyPanel(
-    aws: [String], databricks: [DatabricksProfile], gcloud: [String], azure: [AzureTenant], locale: Locale
+    aws: [String], databricks: [DatabricksProfile], gcloud: [String], azure: [AzureTenant], oci: [String],
+    locale: Locale
 ) -> EmptyPanel {
     let workspaceCount = databricks.count { !$0.accountLevel }
     let counts = [
@@ -26,12 +27,14 @@ public func emptyPanel(
         (databricks.count - workspaceCount, "Databricks account profile"),
         (gcloud.count, "gcloud account"),
         (azure.count, "Azure CLI tenant"),
+        (oci.count, "OCI session profile"),
     ]
     let found = counts.filter { $0.0 > 0 }.map { count, kind in "\(count) \(kind)\(count == 1 ? "" : "s")" }
     guard !found.isEmpty else {
         return EmptyPanel(
-            message: "No AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI tenants in your config "
-                + "files. Log in once with the aws, databricks, gcloud or az CLI, or add your own command.")
+            message: "No AWS SSO sessions, Databricks profiles, gcloud accounts, Azure CLI tenants or OCI session "
+                + "profiles in your config files. Log in once with the aws, databricks, gcloud, az or oci CLI, or add "
+                + "your own command.")
     }
     return EmptyPanel(message: "Found \(found.formatted(.list(type: .and).locale(locale))) in your config files.")
 }

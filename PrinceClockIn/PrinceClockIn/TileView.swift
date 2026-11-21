@@ -61,7 +61,7 @@ struct TileView: View {
                 Text(tile.name)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .help(tile.name)
+                    .help(tile.helpTag)
                 subtitle(tile.subtitle)
                     .font(.subheadline)
                     .foregroundStyle(secondaryText(tile))

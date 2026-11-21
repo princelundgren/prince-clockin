@@ -26,8 +26,11 @@ private func sampleState() -> AppState {
         displayName: "dev@example.com", kind: .gcloudAccount(account: "dev@example.com#example.goog"),
         lastGcloudRow: .present(rowID: 4),
         lastDatabricksCheck: DatabricksCheckRecord(at: at("2026-11-17T09:30:00Z"), result: .invalid))
+    let oci = Login(
+        displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"), sessionLength: 24 * 3600,
+        lastOCIKeyFile: .present(modified: at("2026-11-17T09:00:07Z")))
     return AppState(
-        logins: [aws, databricks, checked, custom, gcloud],
+        logins: [aws, databricks, checked, custom, gcloud, oci],
         presets: [Preset(name: "Morning", loginIDs: [aws.id, databricks.id])],
         settings: Settings(
             notificationLeadTime: 15 * 60, loginTimeout: 120,
@@ -63,6 +66,33 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(String(decoding: try JSONEncoder().encode(AzurePresence.present), as: UTF8.self) == #""present""#)
 }
 
+@Test func ociSessionProfileKindAndKeyFileRoundTrip() throws {
+    #expect(try encodeFlat(.ociSessionProfile(name: "analytics-dev"))
+            == #"{"name":"analytics-dev","type":"ociSessionProfile"}"#)
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    #expect(String(decoding: try encoder.encode(OCIKeyFileState.missing), as: UTF8.self) == #"{"missing":{}}"#)
+    #expect(String(decoding: try encoder.encode(OCIKeyFileState.present(modified: at("2026-11-21T09:00:00Z"))), as: UTF8.self)
+            == #"{"present":{"modified":"2026-11-21T09:00:00Z"}}"#)
+    for state in [OCIKeyFileState.missing, .present(modified: at("2026-11-21T09:00:00Z"))] {
+        let login = Login(
+            displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"), sessionLength: 24 * 3600,
+            lastOCIKeyFile: state)
+
+        let decoded = try JSONDecoder().decode(Login.self, from: try JSONEncoder().encode(login))
+
+        #expect(decoded == login)
+    }
+}
+
+@Test func anOCIKeyFilesDateIsStoredInWholeSeconds() {
+    let login = Login(
+        displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"),
+        lastOCIKeyFile: .present(modified: at("2026-11-21T09:00:00Z").addingTimeInterval(0.7)))
+
+    #expect(login.lastOCIKeyFile == .present(modified: at("2026-11-21T09:00:00Z")))
+}
+
 @Test func gcloudAccountKindRoundTrips() throws {
     let kind = LoginKind.gcloudAccount(account: "dev@example.com")
 
@@ -82,6 +112,7 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(login.kind == .awsSSOSession(name: "dev"))
     #expect(login.lastGcloudRow == nil)
     #expect(login.lastAzurePresence == nil)
+    #expect(login.lastOCIKeyFile == nil)
 }
 
 @Test func awsDefaultsToEightHoursDatabricksToNil() {
@@ -91,6 +122,7 @@ private func encodeFlat(_ kind: LoginKind) throws -> String {
     #expect(Login.defaultSessionLength(for: .custom(command: nil)) == nil)
     #expect(Login.defaultSessionLength(for: .gcloudAccount(account: "dev@example.com")) == nil)
     #expect(Login.defaultSessionLength(for: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001")) == nil)
+    #expect(Login.defaultSessionLength(for: .ociSessionProfile(name: "analytics-dev")) == TimeInterval(24 * 3600))
 }
 
 @Test func loginKindDecodesItsFlatShape() throws {

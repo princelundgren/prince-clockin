@@ -136,3 +136,32 @@ final class GcloudStoreFixture {
         case sqlite(String)
     }
 }
+
+/// The OCI CLI's config as a test sets it: no file until `set`, and unreadable after `fail`.
+final class FakeOCIReader: OCIConfigReading, @unchecked Sendable {
+    static let configFile = URL(filePath: "/Users/someone/.oci/config")
+
+    private let lock = NSLock()
+    private var config: OCIConfig? = OCIConfig(file: FakeOCIReader.configFile, profiles: [], publicKeys: [:])
+
+    init() {}
+
+    init(_ profiles: [OCISessionProfile], publicKeys: [String: OCIKeyFileState] = [:]) {
+        set(profiles, publicKeys: publicKeys)
+    }
+
+    func set(_ profiles: [OCISessionProfile], publicKeys: [String: OCIKeyFileState] = [:]) {
+        lock.withLock { config = OCIConfig(file: Self.configFile, profiles: profiles, publicKeys: publicKeys) }
+    }
+
+    func fail() { lock.withLock { config = nil } }
+
+    func read() -> OCIConfig? { lock.withLock { config } }
+}
+
+/// A session profile as `oci session authenticate` writes it, its session in
+/// `~/.oci/sessions/<name>` of `/Users/someone`.
+func ociProfile(_ name: String, region: String? = "eu-frankfurt-1") -> OCISessionProfile {
+    OCISessionProfile(
+        name: name, region: region, securityTokenFile: URL(filePath: "/Users/someone/.oci/sessions/\(name)/token"))
+}

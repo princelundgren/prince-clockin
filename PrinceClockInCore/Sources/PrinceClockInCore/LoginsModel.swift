@@ -36,8 +36,8 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
-    /// Records what gcloud's credential store or the Azure CLI's profile showed for login `id`. A
-    /// logout counts from `now`.
+    /// Records what gcloud's credential store, the Azure CLI's profile or an OCI session's public
+    /// key showed for login `id`. A logout counts from `now`.
     public mutating func apply(_ observation: GcloudObservation, login id: UUID, now: Date) {
         switch observation {
         case .newLogin(let time):
@@ -199,7 +199,7 @@ private func ordered<Item: Identifiable>(_ items: [Item], by ids: [UUID]) -> [It
 private func isChecked(_ login: Login) -> Bool {
     switch login.kind {
     case .databricksProfile, .gcloudAccount, .azureTenant: true
-    case .awsSSOSession, .custom: false
+    case .awsSSOSession, .ociSessionProfile, .custom: false
     }
 }
 

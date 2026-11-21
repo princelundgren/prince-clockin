@@ -35,7 +35,8 @@ public final class UserDefaultsApprovals: ApprovalStoring, @unchecked Sendable {
 }
 
 /// Whether `login` is a custom login whose command hasn't been approved on this Mac. AWS,
-/// Databricks, gcloud and Azure logins, and custom logins without a command, never need approval.
+/// Databricks, gcloud, Azure and OCI logins, and custom logins without a command, never need
+/// approval.
 public func needsApproval(_ login: Login, approvals: ApprovalStoring) -> Bool {
     guard case .custom(let command?) = login.kind else { return false }
     return !approvals.isApproved(approvalKey(for: command))

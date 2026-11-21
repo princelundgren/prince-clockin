@@ -38,7 +38,7 @@ private let contosoDev = AzureTenant(
     }
 
     @Test func foundLoginsComeUnderTheirHeaderThenCustomLogin() {
-        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace], gcloud: [], azure: []))
+        let menu = addMenu(found: (aws: ["qa"], databricks: [workspace], gcloud: [], azure: [], oci: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -49,7 +49,7 @@ private let contosoDev = AzureTenant(
     }
 
     @Test func accountProfilesComeAfterWorkspaceProfiles() {
-        let menu = addMenu(found: (aws: [], databricks: [account, workspace], gcloud: [], azure: []))
+        let menu = addMenu(found: (aws: [], databricks: [account, workspace], gcloud: [], azure: [], oci: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -60,16 +60,17 @@ private let contosoDev = AzureTenant(
     }
 
     @Test func nothingNewSaysSoAboveCustomLogin() {
-        let menu = addMenu(found: (aws: [], databricks: [], gcloud: [], azure: []))
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: [], azure: [], oci: []))
 
         #expect(menu == [
-            .note("No new AWS SSO sessions, Databricks profiles, gcloud accounts or Azure CLI tenants"), .customLogin,
+            .note("No new AWS SSO sessions, Databricks profiles, gcloud accounts, Azure CLI tenants or OCI session profiles"),
+            .customLogin,
         ])
     }
 
     @Test func gcloudAccountsComeLastAndShowTheirEmail() {
         let menu = addMenu(
-            found: (aws: ["qa"], databricks: [account], gcloud: ["dev@example.com#example.goog"], azure: []))
+            found: (aws: ["qa"], databricks: [account], gcloud: ["dev@example.com#example.goog"], azure: [], oci: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -91,7 +92,7 @@ private let contosoDev = AzureTenant(
     }
 
     @Test func azureTenantsComeAfterGcloudAccountsAndShowTheirName() {
-        let menu = addMenu(found: (aws: [], databricks: [], gcloud: ["dev@example.com"], azure: [contosoDev]))
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: ["dev@example.com"], azure: [contosoDev], oci: []))
 
         #expect(menu == [
             .header("Found in your config files"),
@@ -107,6 +108,23 @@ private let contosoDev = AzureTenant(
         let names = TrackedConfigNames(logins: [AddLoginCandidate.azureTenant(contosoDev).login()])
 
         #expect(names.azure == [contosoDev.account])
+    }
+
+    @Test func ociSessionProfilesComeLastAndAreTrackedForADay() {
+        let menu = addMenu(found: (aws: [], databricks: [], gcloud: [], azure: [contosoDev], oci: ["analytics-dev"]))
+
+        #expect(menu == [
+            .header("Found in your config files"),
+            .found(.azureTenant(contosoDev)),
+            .found(.ociSessionProfile(name: "analytics-dev")),
+            .customLogin,
+        ])
+        #expect(menu[2].kind == "OCI session profile")
+        let login = AddLoginCandidate.ociSessionProfile(name: "analytics-dev").login()
+        #expect(login.displayName == "analytics-dev")
+        #expect(login.kind == .ociSessionProfile(name: "analytics-dev"))
+        #expect(login.sessionLength == 24 * hour)
+        #expect(TrackedConfigNames(logins: [login]).oci == ["analytics-dev"])
     }
 
     @Test func aFoundAzureTenantIsTrackedByUserAndTenantNamedAsFoundWithNoSessionLength() {

@@ -118,17 +118,17 @@ func isLoggedInWithNoLength(_ login: Login) -> Bool {
     login.loginTime != nil && login.sessionLength == nil && !isInvalidated(login)
 }
 
-/// Whether an AWS SSO session, gcloud account, Azure tenant or custom login is logged in with no
-/// session length, which shows as logged in. A Databricks login in that state asks for its session
-/// length instead.
+/// Whether an AWS SSO session, gcloud account, Azure tenant, OCI session profile or custom login is
+/// logged in with no session length, which shows as logged in. A Databricks login in that state
+/// asks for its session length instead.
 func isLoggedInWithNoExpiry(_ login: Login) -> Bool {
     if case .databricksProfile = login.kind { return false }
     return isLoggedInWithNoLength(login)
 }
 
-/// Whether the login is invalidated because its AWS session, gcloud account or Azure tenant was
-/// logged out, for "Logged out". With no stored reason, an AWS login counts as logged out, since a
-/// logout was its only cause before the reason was stored.
+/// Whether the login is invalidated because its AWS session, gcloud account, Azure tenant or OCI
+/// session profile was logged out, for "Logged out". With no stored reason, an AWS login counts as
+/// logged out, since a logout was its only cause before the reason was stored.
 public func isLoggedOut(_ login: Login) -> Bool {
     guard isInvalidated(login) else { return false }
     switch login.invalidationReason {
@@ -146,7 +146,7 @@ public func isLoggedOut(_ login: Login) -> Bool {
 public func isStillValid(_ login: Login, now: Date) -> Bool {
     switch login.kind {
     case .databricksProfile(_, accountLevel: false), .gcloudAccount, .azureTenant: break
-    case .databricksProfile, .awsSSOSession, .custom: return false
+    case .databricksProfile, .awsSSOSession, .ociSessionProfile, .custom: return false
     }
     guard !isInvalidated(login), let expiry = expiry(of: login), expiry <= now,
           let answer = login.lastDatabricksAnswer

@@ -14,8 +14,9 @@ one expires, and logs in to the ones you pick, one after another, when you click
 ## What it does
 
 - **Tracks your logins**: AWS IAM Identity Center sessions (`aws sso login`), Databricks CLI
-  profiles (`databricks auth login`), gcloud user accounts (`gcloud auth login`), Azure CLI
-  tenants (`az login --tenant`), and any other login as a custom login.
+  profiles (`databricks auth login`), gcloud user accounts (`gcloud auth login`), Azure CLI tenants
+  (`az login --tenant`), OCI CLI session profiles (`oci session authenticate`), and any other login
+  as a custom login.
 - **Shows at a glance** in the menu bar whether a login is about to expire or has expired, with a
   symbol and no countdown; the symbol pulses while logging in. The panel has a tile per login,
   in the order you drag them into in Settings → Logins, with its time left.
@@ -28,10 +29,12 @@ one expires, and logs in to the ones you pick, one after another, when you click
   as "AWS dev + Databricks dev". Logins run one at a time, since several browser sign-ins at once
   conflict, and a card shows which one runs, the progress ("1 of 2") and Cancel All. It never logs
   in on its own.
-- **Notices logins you do in a terminal**: an `aws sso login` shows up as soon as the AWS CLI
-  writes its cache file, and when the file can't tell a login from a renewal, the tile asks "Its
-  login changed at <time>. Was that you?". A `gcloud auth login` is read from gcloud's credential
-  store, and an `az login` or `az logout` from the Azure CLI's `azureProfile.json`. A Databricks
+- **Notices logins you do in a terminal**: an `aws sso login` shows up as soon as the AWS CLI writes
+  its cache file, and when the file can't tell a login from a renewal, the tile asks "Its login
+  changed at <time>. Was that you?". A `gcloud auth login` is read from gcloud's credential store,
+  an `az login` or `az logout` from the Azure CLI's `azureProfile.json`, an
+  `oci session authenticate` from the session's public key, and an `oci session terminate` from the
+  profile leaving the OCI config. A Databricks
   profile, gcloud account or Azure tenant is checked with its CLI when it enters its notification
   time, or when you click Check Now in Settings → Logins.
 - **Takes a timer by hand**: when a tile asks "Was that you?", Set Timer… takes when the login
@@ -53,10 +56,10 @@ one expires, and logs in to the ones you pick, one after another, when you click
    to send notifications. The first custom login that runs a command also asks for permission to
    control Terminal.
 4. Click the menu bar icon, then **Add Logins…**. Settings opens on Logins with its + menu: the AWS
-   SSO sessions, Databricks profiles, gcloud accounts and Azure CLI tenants found in your config
-   files, and Custom Login…. After you add a found one, it offers to set its timer if you're already
-   logged in. To keep the timers running after you log out or restart, turn on **Launch at login**
-   in Settings → General; it is off by default.
+   SSO sessions, Databricks profiles, gcloud accounts, Azure CLI tenants and OCI session profiles
+   found in your config files, and Custom Login…. After you add a found one, it offers to set its
+   timer if you're already logged in. To keep the timers running after you log out or restart, turn
+   on **Launch at login** in Settings → General; it is off by default.
 
 After that, PrinceClockIn updates itself with [Sparkle](https://sparkle-project.org). It checks
 once a day; when an update is waiting, a dot appears beside the menu bar icon, the panel says
@@ -70,17 +73,19 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
   - `aws` (AWS CLI v2), with sessions in the `[sso-session <name>]` form of `~/.aws/config`;
   - `databricks`, with profiles that use `auth_type = databricks-cli`;
   - `gcloud`, with user accounts logged in through `gcloud auth login`;
-  - `az` (Azure CLI), with users logged in through `az login`.
+  - `az` (Azure CLI), with users logged in through `az login`;
+  - `oci` (OCI CLI), with session profiles made by `oci session authenticate`, each with a `region`.
 - zsh or bash as your login shell, which PrinceClockIn reads the `PATH` from.
 
 ## Known limits
 
-- **The session length decides the timer.** AWS sessions default to 8 hours, the IAM Identity
-  Center default. A Databricks login has no default, since its limit is a token policy on your
-  account: until you set its session length, its timer is unknown, so it never notifies and is
-  checked only when you click Check Now. A gcloud account or Azure tenant has no default either;
-  until you set one, it shows Logged in after a login, never notifies and is checked only when you
-  click Check Now. An Azure tenant's real limit is set by its Conditional Access policies.
+- **The session length decides the timer.** AWS sessions default to 8 hours, the IAM Identity Center
+  default. A Databricks login has no default, since its limit is a token policy on your account:
+  until you set its session length, its timer is unknown, so it never notifies and is checked only
+  when you click Check Now. A gcloud account or Azure tenant has no default either; until you set
+  one, it shows Logged in after a login, never notifies and is checked only when you click Check
+  Now. An Azure tenant's real limit is set by its Conditional Access policies. An OCI session
+  profile defaults to 24 hours, how long `oci session refresh` can renew a session after its login.
 - **gcloud service accounts and application-default credentials** aren't offered; track them as
   custom logins.
 - **A gcloud account outside the default universe** (`email#universe` in gcloud's store) is logged
@@ -105,14 +110,23 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
   counts only when the tenant appears after being absent.
 - **Another user's `az login` to a subscription you share** replaces your entry for it, since the
   Azure CLI keeps one entry per subscription, and can read as a logout of yours.
+- **PrinceClockIn doesn't refresh an OCI session's hourly token.** It tracks the 24-hour login only:
+  unless you run `oci session refresh`, or a tool such as oci-assume refreshes it, OCI commands fail
+  within an hour of the login while the tile still shows time left, and a token that has lapsed
+  can't be refreshed, so log in again. An OCI login is never checked: `oci session validate` reads
+  the hourly token, not the 24-hour login the app tracks, so it runs on its timer alone.
+- **OCI API-key profiles** (no `security_token_file`) aren't offered; they don't expire.
+- **An OCI profile without a `region`**, its own or `[DEFAULT]`'s, can't log in from the app, since
+  `oci session authenticate` would ask for one in a terminal.
 - **A Databricks profile with another auth type** (personal access token, `azure-cli`,
   machine-to-machine) isn't offered; track it as a custom login. A profile with no `auth_type`
   shows up after `databricks auth login --profile <name>`, which switches it to OAuth and removes
   any token or secret it holds.
 - **Databricks account profiles** can be tracked but are never checked: they run on their timer
   alone.
-- **`AWS_CONFIG_FILE`, `DATABRICKS_CONFIG_FILE`, `CLOUDSDK_CONFIG` or `AZURE_CONFIG_DIR` set only
-  in a shell rc file** isn't seen: the app reads only `PATH` from your shell.
+- **`AWS_CONFIG_FILE`, `DATABRICKS_CONFIG_FILE`, `CLOUDSDK_CONFIG`, `AZURE_CONFIG_DIR` or
+  `OCI_CLI_CONFIG_FILE` set only in a shell rc file** isn't seen: the app reads only `PATH` from
+  your shell.
 - **With fish or another login shell**, the app uses a standard `PATH` (Homebrew, `/usr/local` and
   the system directories) and may not find the CLIs.
 - **⌘-dragging the icon out of the menu bar quits the app**, which stops its timers and notifications.
@@ -124,11 +138,13 @@ once a day; when an update is waiting, a dot appears beside the menu bar icon, t
 - The only network traffic the app itself makes is Sparkle's update check, with Sparkle's system
   profiling off. The CLIs it runs make their own traffic.
 - It never stores, logs, shows or sends a token, a client secret or a value from your shell
-  environment. To tell a new AWS login from a renewal, it reads the cache file's refresh token
-  only to fingerprint it, and keeps that fingerprint in memory only. From gcloud's credential
-  store it reads only the account names and their row numbers, never the credentials. From the
-  Azure CLI it reads only `azureProfile.json`, which lists users, tenants and subscriptions and
-  holds no credential, never its token cache.
+  environment. To tell a new AWS login from a renewal, it reads the cache file's refresh token only
+  to fingerprint it, and keeps that fingerprint in memory only. From gcloud's credential store it
+  reads only the account names and their row numbers, never the credentials. From the Azure CLI it
+  reads only `azureProfile.json`, which lists users, tenants and subscriptions and holds no
+  credential, never its token cache. From the OCI CLI's config it reads only each profile's name,
+  `region` and `security_token_file`, and of the session's files only the public key's date, never
+  the token or a key.
 - Your logins, presets, timers and settings are stored as readable JSON in
   `~/Library/Application Support/PrinceClockIn/`. A custom login's command is stored there as
   plain text, so it must not contain a secret. Which commands you've approved to run is kept as

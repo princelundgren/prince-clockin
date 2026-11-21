@@ -30,11 +30,11 @@ private func makeCLIDirectory() throws -> URL {
 /// A queue whose login shell reports `path` as its only `PATH` directory.
 private func makeQueue(
     runner: FakeRunner, terminal: any TerminalOpening = FakeTerminal(), path: URL,
-    clock: @escaping @Sendable () -> Date = { now }
+    oci: any OCIConfigReading = FakeOCIReader(), clock: @escaping @Sendable () -> Date = { now }
 ) -> LoginQueue {
     let resolver = ShellPathResolver(
         runner: FakeRunner { _ in pathOutput(path.path) }, shell: zsh, environment: [:])
-    return LoginQueue(runner: runner, pathResolver: resolver, terminal: terminal, clock: clock)
+    return LoginQueue(runner: runner, pathResolver: resolver, terminal: terminal, oci: oci, clock: clock)
 }
 
 private func succeedingRunner() -> FakeRunner {
@@ -204,7 +204,8 @@ private final class StepLog: @unchecked Sendable {
         let shell = FakeRunner { _ in .exited(code: 0, output: "no markers") }
         let resolver = ShellPathResolver(runner: shell, shell: zsh, environment: [:])
         let runner = succeedingRunner()
-        let queue = LoginQueue(runner: runner, pathResolver: resolver, terminal: FakeTerminal(), clock: { now })
+        let queue = LoginQueue(
+            runner: runner, pathResolver: resolver, terminal: FakeTerminal(), oci: FakeOCIReader(), clock: { now })
         var events = EventReader(queue)
 
         await queue.enqueue([awsLogin("dev"), awsLogin("prod")], timeout: timeout)
@@ -215,6 +216,56 @@ private final class StepLog: @unchecked Sendable {
         #expect(runner.calls.allSatisfy {
             $0.environment["PATH"] == "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         })
+    }
+
+    @Test func anOCILoginRunsOCISessionAuthenticateFromItsConfigAsItStarts() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try makeExecutable(named: "oci", in: directory)
+        let firstRuns = Gate()
+        let releaseFirst = Gate()
+        let runner = FakeRunner { index in
+            if index == 0 {
+                await firstRuns.open()
+                await releaseFirst.wait()
+            }
+            return .exited(code: 0, output: "")
+        }
+        let oci = FakeOCIReader([ociProfile("analytics-dev"), ociProfile("analytics-prod")])
+        let queue = makeQueue(runner: runner, path: directory, oci: oci)
+        var events = EventReader(queue)
+
+        await queue.enqueue(
+            ["analytics-dev", "analytics-prod"].map { Login(displayName: $0, kind: .ociSessionProfile(name: $0)) },
+            timeout: timeout)
+        await firstRuns.wait()
+        oci.set([ociProfile("analytics-dev"), ociProfile("analytics-prod", region: "eu-amsterdam-1")])
+        await releaseFirst.open()
+        _ = await events.throughFinished()
+
+        let calls = runner.calls
+        #expect(calls.map(\.executable) == [directory.appendingPathComponent("oci"), directory.appendingPathComponent("oci")])
+        #expect(calls.first?.arguments == [
+            "session", "authenticate", "--profile-name=analytics-dev", "--region=eu-frankfurt-1",
+            "--config-location=/Users/someone/.oci/config", "--token-location=/Users/someone/.oci/sessions",
+        ])
+        #expect(calls.last?.arguments.contains("--region=eu-amsterdam-1") == true)
+    }
+
+    @Test func anOCILoginWithNoRegionFailsWithoutRunningOCI() async throws {
+        let directory = try makeCLIDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try makeExecutable(named: "oci", in: directory)
+        let runner = succeedingRunner()
+        let queue = makeQueue(runner: runner, path: directory, oci: FakeOCIReader([ociProfile("analytics-dev", region: nil)]))
+        var events = EventReader(queue)
+        let login = Login(displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"))
+
+        await queue.enqueue([login], timeout: timeout)
+        let seen = await events.throughFinished()
+
+        #expect(seen.contains(.failed(id: login.id, reason: .ociProfile(.noRegion))))
+        #expect(runner.calls.isEmpty)
     }
 
     @Test func duplicateEnqueueIsIgnored() async throws {
@@ -555,7 +606,8 @@ private final class StepLog: @unchecked Sendable {
         }
         let resolver = ShellPathResolver(runner: shell, shell: zsh, environment: [:])
         let runner = succeedingRunner()
-        let queue = LoginQueue(runner: runner, pathResolver: resolver, terminal: FakeTerminal(), clock: { now })
+        let queue = LoginQueue(
+            runner: runner, pathResolver: resolver, terminal: FakeTerminal(), oci: FakeOCIReader(), clock: { now })
         var events = EventReader(queue)
         let dev = awsLogin("dev")
 

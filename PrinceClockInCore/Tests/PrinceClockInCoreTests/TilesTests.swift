@@ -403,6 +403,30 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
                 + "too short."))
     }
 
+    @Test func anOCITileSaysWhatItIsAndThatTheAppDoesntRefreshTheHourlyToken() {
+        let dev = Login(
+            displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"), sessionLength: 24 * hour,
+            loginTime: now.addingTimeInterval(-hour))
+
+        let presentation = tile(dev)
+
+        #expect(presentation.subtitle == .kind("OCI session profile"))
+        #expect(presentation.helpTag == "analytics-dev\n\n" + ociSessionNote)
+        #expect(ociSessionNote.contains("never refreshes the session's hourly token"))
+        #expect(ociSessionNote.contains("oci session refresh"))
+        #expect(ociSessionNote.contains("oci-assume"))
+        #expect(ociSessionNote.contains("fail within an hour"))
+        #expect(tile(Login(displayName: "dev", kind: .awsSSOSession(name: "dev"))).helpTag == "dev")
+    }
+
+    @Test func anOCILoginPastItsTimerIsNeverStillValid() {
+        var dev = stillValid(checkedAt: now)
+        dev.kind = .ociSessionProfile(name: "analytics-dev")
+
+        #expect(!isStillValid(dev, now: now))
+        #expect(tile(dev).detail == nil)
+    }
+
     @Test func anAzureLoginWithNoSessionLengthShowsLoggedInAndDoesntAsk() {
         let loggedIn = Login(
             displayName: "Contoso Dev", kind: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"),

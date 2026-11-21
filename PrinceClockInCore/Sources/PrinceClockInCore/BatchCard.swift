@@ -25,7 +25,7 @@ public func batchCard(
             id: waitingForDone.id, title: "\(waitingForDone.displayName) is waiting for you", instruction: instruction)
     }
     let runsInBrowser = switch running?.kind {
-    case .awsSSOSession, .databricksProfile, .gcloudAccount, .azureTenant: true
+    case .awsSSOSession, .databricksProfile, .gcloudAccount, .azureTenant, .ociSessionProfile: true
     case .custom, nil: false
     }
     let parts = [runsInBrowser ? "Finish in your browser." : nil, next.map { "Next: \($0.displayName)" }]

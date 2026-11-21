@@ -4,9 +4,9 @@ import PrinceClockInCore
 import UserNotifications
 
 /// Builds the coordinator with the real system services and drives it: a tick at each deadline the
-/// coordinator gives, on a change in the AWS cache directory, gcloud's config directory or the Azure
-/// CLI's `azureProfile.json`, on wake, clock and time-zone changes, and notification clicks. It
-/// makes no decisions of its own.
+/// coordinator gives, on a change in the AWS cache directory, gcloud's config directory, the Azure
+/// CLI's `azureProfile.json` or the OCI CLI's config, on wake, clock and time-zone changes, and
+/// notification clicks. It makes no decisions of its own.
 @MainActor
 @Observable
 final class AppModel: NSObject, UNUserNotificationCenterDelegate {
@@ -43,18 +43,19 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored private var awsCacheWatcher: AWSCacheWatcher?
     @ObservationIgnored private var gcloudConfigWatcher: AWSCacheWatcher?
     @ObservationIgnored private var azureConfigWatcher: AWSCacheWatcher?
+    @ObservationIgnored private var ociConfigWatcher: AWSCacheWatcher?
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
         let runner = FoundationProcessRunner()
         self.runner = runner
         let pathResolver = ShellPathResolver(runner: runner, shell: Self.loginShell(), environment: environment)
-        let queue = LoginQueue(runner: runner, pathResolver: pathResolver, terminal: TerminalOpener())
-        let home = URL(
-            filePath: environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory(),
-            directoryHint: .isDirectory)
+        let homePath = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+        let home = URL(filePath: homePath, directoryHint: .isDirectory)
         homeDirectory = home
         let configPaths = ConfigPaths.standard(environment: environment)
+        let ociConfig = OCIConfigFileReader(file: configPaths.ociConfig, home: homePath)
+        let queue = LoginQueue(runner: runner, pathResolver: pathResolver, terminal: TerminalOpener(), oci: ociConfig)
         let azureProfile = AzureProfileFileReader(configDirectory: configPaths.azureConfig)
         coordinator = Coordinator(
             store: StateStore(directory: Self.stateDirectory()),
@@ -66,6 +67,7 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             aws: AWSCacheFileReader(cacheDirectory: home.appending(path: ".aws/sso/cache")),
             gcloud: GcloudCredentialsFileReader(configDirectory: configPaths.gcloudConfig),
             azure: azureProfile,
+            oci: ociConfig,
             notifier: SystemNotifier(),
             approvals: UserDefaultsApprovals(),
             configPaths: configPaths,
@@ -94,6 +96,12 @@ final class AppModel: NSObject, UNUserNotificationCenterDelegate {
             }
             azureConfigWatcher = AWSCacheWatcher(
                 directory: configPaths.azureConfig, fileNames: azureProfileFileNames
+            ) { [weak self] in
+                Task { await self?.coordinator.tick(calendar: .current) }
+            }
+            ociConfigWatcher = AWSCacheWatcher(
+                directory: configPaths.ociConfig.deletingLastPathComponent(),
+                fileNames: ociConfigFileNames(configFile: configPaths.ociConfig)
             ) { [weak self] in
                 Task { await self?.coordinator.tick(calendar: .current) }
             }

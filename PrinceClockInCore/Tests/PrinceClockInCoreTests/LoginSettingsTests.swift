@@ -10,7 +10,8 @@ private let paths = ConfigPaths(
     awsConfig: URL(filePath: "/Users/someone/.aws/config"),
     databricksConfig: URL(filePath: "/Users/someone/.databrickscfg"),
     gcloudConfig: URL(filePath: "/Users/someone/.config/gcloud"),
-    azureConfig: URL(filePath: "/Users/someone/.azure"))
+    azureConfig: URL(filePath: "/Users/someone/.azure"),
+    ociConfig: URL(filePath: "/Users/someone/.oci/config"))
 
 private var stockholm: Calendar {
     var calendar = Calendar(identifier: .gregorian)
@@ -54,6 +55,16 @@ private func form(_ login: Login) -> LoginSettingsForm {
         #expect(loginKindSymbolName(.databricksProfile(name: "account", accountLevel: true)) == "square.stack.3d.up")
         #expect(loginKindSymbolName(.custom(command: nil)) == "terminal")
         #expect(loginKindSymbolName(.gcloudAccount(account: "dev@example.com")) == "person.badge.key")
+    }
+
+    @Test func anOCISessionProfileShowsItsKindAndProfileAndIsNotChecked() {
+        let dev = Login(
+            displayName: "analytics-dev", kind: .ociSessionProfile(name: "analytics-dev"), sessionLength: 24 * hour)
+
+        #expect(loginKindSymbolName(dev.kind) == "server.rack")
+        #expect(subtitle(dev) == "OCI session profile · 1-day session · Not checked")
+        #expect(form(dev).source == LoginSource(label: "Profile", value: "analytics-dev in ~/.oci/config"))
+        #expect(form(dev).lastCheck == LastCheck(text: "Not checked", note: ociSessionNote))
     }
 
     @Test func anAzureTenantShowsItsKindCheckAndProfile() {
@@ -148,7 +159,8 @@ private func form(_ login: Login) -> LoginSettingsForm {
             awsConfig: URL(filePath: "/etc/aws/config"),
             databricksConfig: URL(filePath: "/Users/someoneelse/.databrickscfg"),
             gcloudConfig: URL(filePath: "/Users/someoneelse/.config/gcloud"),
-            azureConfig: URL(filePath: "/Users/someoneelse/.azure"))
+            azureConfig: URL(filePath: "/Users/someoneelse/.azure"),
+            ociConfig: URL(filePath: "/Users/someoneelse/.oci/config"))
 
         let awsForm = loginSettingsForm(
             for: aws(), paths: elsewhere, home: home, now: now, locale: british, calendar: stockholm)

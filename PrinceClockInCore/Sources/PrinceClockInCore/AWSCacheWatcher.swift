@@ -2,12 +2,12 @@ import CoreServices
 import Foundation
 
 /// Calls `onChange` on the main actor when something in a directory changes, the AWS SSO cache
-/// directory or gcloud's or the Azure CLI's config directory, so a login in a terminal is seen when
-/// it happens rather than at the next tick. The AWS CLI rewrites a session's file in place, gcloud
-/// its `credentials.db` and the Azure CLI its `azureProfile.json`, which a File System Events
-/// stream reports. The directory may not exist yet,
-/// or be removed: the stream also watches its path and starts again when the directory appears or
-/// goes, since a stream sees nothing inside a directory created after it started.
+/// directory, gcloud's or the Azure CLI's config directory or the OCI config's folder, so a login
+/// in a terminal is seen when it happens rather than at the next tick. The AWS CLI rewrites a
+/// session's file in place, gcloud its `credentials.db`, the Azure CLI its `azureProfile.json` and
+/// the OCI CLI its config, which a File System Events stream reports. The directory may not exist
+/// yet, or be removed: the stream also watches its path and starts again when the directory appears
+/// or goes, since a stream sees nothing inside a directory created after it started.
 @MainActor
 public final class AWSCacheWatcher {
     /// How long File System Events gathers changes before reporting them, as one call.
