@@ -30,6 +30,7 @@ jobs:
           - language: actions
             build-mode: none
             runner: ubuntu-24.04
+          # CodeQL can't trace a build on macOS 27 or with Xcode 27, so this scan stays on Xcode 26.
           - language: swift
             build-mode: manual
             runner: macos-26
