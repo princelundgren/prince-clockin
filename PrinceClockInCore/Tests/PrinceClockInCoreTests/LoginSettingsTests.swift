@@ -64,7 +64,8 @@ private func form(_ login: Login) -> LoginSettingsForm {
 
         #expect(loginKindSymbolName(dev.kind) == "building.2")
         #expect(subtitle(dev) == "Azure CLI tenant · No timer · Checked 12:00 · invalid")
-        #expect(form(dev).source == LoginSource(label: "Tenant", value: "00000000-0000-0000-0000-000000000001 for dev@example.com in ~/.azure"))
+        #expect(form(dev).source == LoginSource(
+            label: "Tenant", value: "00000000-0000-0000-0000-000000000001 for dev@example.com", note: "In ~/.azure."))
         #expect(form(dev).lastCheck == LastCheck(text: "Checked 12:00 · invalid", note: nil))
         var unchecked = dev
         unchecked.lastDatabricksCheck = nil
@@ -78,7 +79,8 @@ private func form(_ login: Login) -> LoginSettingsForm {
             lastDatabricksCheck: checked)
 
         #expect(subtitle(dev) == "gcloud account · No timer · Checked 12:00 · valid")
-        #expect(form(dev).source == LoginSource(label: "Account", value: "dev@example.com#example.goog in ~/.config/gcloud"))
+        #expect(form(dev).source == LoginSource(
+            label: "Account", value: "dev@example.com#example.goog", note: "In ~/.config/gcloud."))
         #expect(form(dev).lastCheck == LastCheck(text: "Checked 12:00 · valid", note: nil))
         var unchecked = dev
         unchecked.lastDatabricksCheck = nil
@@ -129,18 +131,19 @@ private func form(_ login: Login) -> LoginSettingsForm {
     @Test func anAWSSessionsSourceIsItsSessionInTheConfigFile() {
         let source = form(aws()).source
 
-        #expect(source == LoginSource(label: "SSO session", value: "qa in ~/.aws/config"))
+        #expect(source == LoginSource(label: "SSO session", value: "qa", note: "In ~/.aws/config."))
     }
 
     @Test func aDatabricksProfilesSourceIsItsProfileInTheConfigFile() {
-        #expect(form(databricks()).source == LoginSource(label: "Profile", value: "analytics-dev in ~/.databrickscfg"))
+        #expect(form(databricks()).source
+            == LoginSource(label: "Profile", value: "analytics-dev", note: "In ~/.databrickscfg."))
     }
 
     @Test func theSourceNamesTheCLIsNameNotTheDisplayName() {
         var renamed = aws()
         renamed.displayName = "QA account"
 
-        #expect(form(renamed).source?.value == "qa in ~/.aws/config")
+        #expect(form(renamed).source?.value == "qa")
     }
 
     @Test func aConfigFileOutsideHomeIsShownInFull() {
@@ -155,8 +158,8 @@ private func form(_ login: Login) -> LoginSettingsForm {
         let databricksForm = loginSettingsForm(
             for: databricks(), paths: elsewhere, home: home, now: now, locale: british, calendar: stockholm)
 
-        #expect(awsForm.source?.value == "qa in /etc/aws/config")
-        #expect(databricksForm.source?.value == "analytics-dev in /Users/someoneelse/.databrickscfg")
+        #expect(awsForm.source?.note == "In /etc/aws/config.")
+        #expect(databricksForm.source?.note == "In /Users/someoneelse/.databrickscfg.")
     }
 
     @Test func aCustomLoginHasNoSourceAndTheCommandsNote() {
@@ -190,11 +193,17 @@ private func form(_ login: Login) -> LoginSettingsForm {
             note: "The Databricks CLI can't check an account profile, so this login runs on its timer alone."))
     }
 
-    @Test func theNameIsOnlyWhatTheAppShows() {
-        #expect(form(aws()).nameNote
-            == "The name is only what PrinceClockIn shows; the SSO session's name in your config stays as it is.")
-        #expect(form(databricks()).nameNote
-            == "The name is only what PrinceClockIn shows; the profile's name in your config stays as it is.")
-        #expect(form(custom()).nameNote == "The name is only what PrinceClockIn shows.")
+    @Test func renamingALoginLeavesItsCLIAsItIs() {
+        let gcloud = Login(displayName: "dev", kind: .gcloudAccount(account: "dev@example.com"))
+        let azure = Login(displayName: "dev", kind: .azureTenant(user: "dev@example.com", tenant: "contoso"))
+
+        #expect(form(aws()).nameNote == "Only changes the name in PrinceClockIn, not in your config.")
+        #expect(form(databricks()).nameNote == "Only changes the name in PrinceClockIn, not in your config.")
+        #expect(form(gcloud).nameNote == "Only changes the name in PrinceClockIn, not in gcloud.")
+        #expect(form(azure).nameNote == "Only changes the name in PrinceClockIn, not in the Azure CLI.")
+    }
+
+    @Test func aCustomLoginsNameHasNoNote() {
+        #expect(form(custom()).nameNote == nil)
     }
 }

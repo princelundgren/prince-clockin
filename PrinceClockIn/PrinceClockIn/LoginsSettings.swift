@@ -206,7 +206,8 @@ private struct LoginRow: View {
     }
 }
 
-/// The selected login's form: Name and Session length for every kind, then what its kind adds.
+/// The selected login's form, headed by its kind's symbol, name and kind: Name and Session length
+/// for every kind, then what its kind adds.
 private struct LoginForm: View {
     let login: Login
     let appModel: AppModel
@@ -252,17 +253,21 @@ private struct LoginForm: View {
         if isJustAdded {
             AddedLoginPrompt(login: login, coordinator: coordinator, onClose: closePrompt)
         }
-        Section(login.displayName) {
+        Section {
             VStack(alignment: .leading, spacing: 4) {
                 CommitField("Name", text: login.displayName) { name in
                     guard !name.isEmpty else { return false }
                     coordinator.rename(id: login.id, to: name)
                     return true
                 }
-                SettingsNote(form.nameNote)
+                .textFieldStyle(.roundedBorder)
+                if let nameNote = form.nameNote { SettingsNote(nameNote) }
             }
             if let source = form.source {
-                LabeledContent(source.label, value: source.value)
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent(source.label, value: source.value)
+                    SettingsNote(source.note)
+                }
             }
             SessionLengthPopUp(selection: sessionLengthChoice)
             if showsCustomLength {
@@ -286,6 +291,21 @@ private struct LoginForm: View {
                     SettingsNote(commandNote)
                 }
             }
+        } header: {
+            HStack(spacing: 10) {
+                Image(systemName: loginKindSymbolName(login.kind))
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(login.displayName)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(loginKindName(login.kind))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
         }
         // An emptied Custom… field makes the length unknown, which the pop-up shows as No timer,
         // also when it was unknown before; the field's draft goes once it is stored.
