@@ -256,7 +256,10 @@ private struct LoginForm: View {
                     SettingsNote(source.note)
                 }
             }
-            SessionLengthPopUp(selection: sessionLengthChoice)
+            VStack(alignment: .leading, spacing: 4) {
+                SessionLengthPopUp(selection: sessionLengthChoice)
+                SettingsNote(sessionLengthNote(for: login.kind, choice: sessionLengthChoice.wrappedValue))
+            }
             if showsCustomLength {
                 SessionLengthField(
                     login: login, coordinator: coordinator, focus: $focus, draft: $sessionLengthDraft,

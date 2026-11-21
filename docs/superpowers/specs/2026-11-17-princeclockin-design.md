@@ -609,7 +609,15 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   selected login's form, headed by its kind's symbol, its name and its kind ("AWS SSO session"):
   - every kind: Name, a bordered field, since it is the form's one editable text, and Session
     length, Set Timer's pop-up of the one list, on No timer while the length is unknown; Custom…
-    shows the hours field, which stores and refuses as Timers says (owner, 2026-11-19). Name is
+    shows the hours field, which stores and refuses as Timers says (owner, 2026-11-19). Session
+    length's note says what it is for ("How long a sign-in lasts before you must log in again. The
+    CLI doesn't report it, so PrinceClockIn counts down from it and notifies you before it ends.";
+    a custom login's leaves out the CLI), then, for a CLI kind, who sets the real length (IAM
+    Identity Center, 8 hours by default; the Databricks account's OAuth token policy; Google Cloud
+    session control, by the Workspace admin; Entra Conditional Access's sign-in frequency), and while
+    the pop-up shows No timer, not while Custom… waits for its hours, "With No timer, this login has
+    no countdown and no notification." (owner,
+    2026-11-21): the length is what the timers rest on, and nothing else in the form said so. Name is
     only what PrinceClockIn shows, and its note says so where the login has a name elsewhere:
     "Only changes the name in PrinceClockIn, not in your config." (gcloud: "not in gcloud.",
     Azure: "not in the Azure CLI."); a custom login's has none (owner, 2026-11-21);
