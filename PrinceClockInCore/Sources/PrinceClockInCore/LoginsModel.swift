@@ -36,6 +36,19 @@ public struct LoginsModel: Equatable, Sendable {
         }
     }
 
+    /// Records what gcloud's credential store or the Azure CLI's profile showed for login `id`. A
+    /// logout counts from `now`.
+    public mutating func apply(_ observation: GcloudObservation, login id: UUID, now: Date) {
+        switch observation {
+        case .newLogin(let time):
+            changeLoginTime(of: id) { $0.loginTime = time.wholeSeconds }
+        case .loggedOut:
+            invalidate(id, at: now, reason: .loggedOut)
+        case .noChange:
+            break
+        }
+    }
+
     /// The user's Mark as Logged In at <time>, answering "Its login changed at <time>. Was that you?":
     /// the login time becomes the rewrite's time.
     public mutating func confirmPossibleLogin(id: UUID) {
@@ -43,10 +56,10 @@ public struct LoginsModel: Equatable, Sendable {
         setLoginTime(id: id, at: possibleLogin.time)
     }
 
-    /// Records a Databricks check of login `id` made at `now`, whatever it found, and a valid or
-    /// invalid one as its last answer. Invalid invalidates the login. Valid after being found
-    /// invalid is a login at `now`, the best time the app knows. Couldn't check changes nothing
-    /// else.
+    /// Records a Databricks, gcloud or Azure check of login `id` made at `now`, whatever it found,
+    /// and a valid or invalid one as its last answer. Invalid invalidates the login. Valid after
+    /// being found invalid is a login at `now`, the best time the app knows. Couldn't check changes
+    /// nothing else.
     public mutating func apply(_ result: DatabricksCheckResult, login id: UUID, now: Date) {
         guard let index = index(of: id) else { return }
         let record = DatabricksCheckRecord(at: now, result: result)
@@ -75,14 +88,15 @@ public struct LoginsModel: Equatable, Sendable {
         return due
     }
 
-    /// The Databricks logins among `ids`, in the order of `ids`.
-    public func databricksLogins(among ids: [UUID]) -> [Login] {
-        trackedLogins(ids).filter(isDatabricks)
+    /// The Databricks, gcloud and Azure logins among `ids`, which a live check can ask about, in
+    /// the order of `ids`.
+    public func checkedLogins(among ids: [UUID]) -> [Login] {
+        trackedLogins(ids).filter(isChecked)
     }
 
-    /// Every tracked Databricks login, for Check Databricks Now.
+    /// Every tracked Databricks, gcloud and Azure login, for Check Now.
     public func checkNowTargets() -> [Login] {
-        state.logins.filter(isDatabricks)
+        state.logins.filter(isChecked)
     }
 
     /// The logins due at `now`, in stored order, for Log In to N Due: expiring or expired, never
@@ -182,9 +196,11 @@ private func ordered<Item: Identifiable>(_ items: [Item], by ids: [UUID]) -> [It
     return items.sorted { rank[$0.id, default: .max] < rank[$1.id, default: .max] }
 }
 
-private func isDatabricks(_ login: Login) -> Bool {
-    if case .databricksProfile = login.kind { return true }
-    return false
+private func isChecked(_ login: Login) -> Bool {
+    switch login.kind {
+    case .databricksProfile, .gcloudAccount, .azureTenant: true
+    case .awsSSOSession, .custom: false
+    }
 }
 
 /// An AWS cache rewrite that could be a login or a renewal.

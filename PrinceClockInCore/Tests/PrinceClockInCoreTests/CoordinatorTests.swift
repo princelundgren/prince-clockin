@@ -69,6 +69,12 @@ private final class ArgumentRunner: ProcessRunning, @unchecked Sendable {
         }
         return await respond(arguments)
     }
+
+    func runDiscardingStandardOutput(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration
+    ) async -> ProcessOutcome {
+        await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+    }
 }
 
 /// Suspends until the calling task is cancelled, as a CLI waiting on a browser sign-in does.
@@ -87,6 +93,39 @@ private final class FakeAWSReader: AWSCacheReading, @unchecked Sendable {
     func state(session: String, previous: AWSCacheState) -> AWSCacheState {
         lock.withLock { states[session] ?? .missing }
     }
+}
+
+/// gcloud's credential store as a test sets it: no file until `set`, and unreadable after `fail`.
+private final class FakeGcloudReader: GcloudCredentialsReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private var credentials: GcloudCredentials? = GcloudCredentials.none
+
+    func set(_ rowIDs: [String: Int64], modified: Date) {
+        lock.withLock { credentials = GcloudCredentials(rowIDs: rowIDs, modified: modified) }
+    }
+
+    func fail() { lock.withLock { credentials = nil } }
+
+    func read() -> GcloudCredentials? { lock.withLock { credentials } }
+}
+
+/// The Azure CLI's profile as a test sets it: no file until `set`, which makes the first account's
+/// subscription the default, and unreadable after `fail`.
+private final class FakeAzureReader: AzureProfileReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private var profile: AzureProfile? = AzureProfile.none
+
+    func set(_ accounts: [AzureAccount], modified: Date) {
+        lock.withLock {
+            profile = AzureProfile(
+                subscriptions: accounts.enumerated().map { AzureSubscription(account: $1, isDefault: $0 == 0) },
+                modified: modified)
+        }
+    }
+
+    func fail() { lock.withLock { profile = nil } }
+
+    func read() -> AzureProfile? { lock.withLock { profile } }
 }
 
 private final class FakeNotifier: Notifying, @unchecked Sendable {
@@ -135,6 +174,8 @@ private final class Fixture {
     let directory: URL
     let clock = TestClock(launch)
     let aws = FakeAWSReader()
+    let gcloud = FakeGcloudReader()
+    let azure = FakeAzureReader()
     let notifier = FakeNotifier()
     let approvals = FakeApprovals()
     let terminal = RecordingTerminal()
@@ -152,9 +193,13 @@ private final class Fixture {
         bin = try makeTemporaryDirectory()
         try makeExecutable(named: "aws", in: bin)
         try makeExecutable(named: "databricks", in: bin)
+        try makeExecutable(named: "gcloud", in: bin)
+        try makeExecutable(named: "az", in: bin)
         configPaths = ConfigPaths(
             awsConfig: directory.appending(path: "aws-config"),
-            databricksConfig: directory.appending(path: "databrickscfg"))
+            databricksConfig: directory.appending(path: "databrickscfg"),
+            gcloudConfig: directory.appending(path: "gcloud"),
+            azureConfig: directory.appending(path: "azure"))
         self.loginRunner = loginRunner
         self.checkRunner = checkRunner
         if !logins.isEmpty { try StateStore(directory: directory).save(AppState(logins: logins)) }
@@ -173,10 +218,14 @@ private final class Fixture {
         let queue = LoginQueue(
             runner: loginRunner, pathResolver: resolver, terminal: terminal, clock: { clock.read() })
         let checker = DatabricksChecker(runner: checkRunner, pathResolver: resolver, clock: { clock.read() })
+        let gcloudChecker = GcloudChecker(runner: checkRunner, pathResolver: resolver, clock: { clock.read() })
+        let azureChecker = AzureChecker(
+            runner: checkRunner, pathResolver: resolver, profile: azure, clock: { clock.read() })
         return Coordinator(
             store: store ?? StateStore(directory: directory), queue: queue, pathResolver: resolver,
-            checker: checker, aws: aws, notifier: notifier, approvals: approvals,
-            configPaths: configPaths, clock: { clock.read() })
+            checker: checker, gcloudChecker: gcloudChecker, azureChecker: azureChecker, aws: aws, gcloud: gcloud,
+            azure: azure, notifier: notifier, approvals: approvals, configPaths: configPaths,
+            clock: { clock.read() })
     }
 }
 
@@ -615,15 +664,15 @@ private final class GatedLogins: Sendable {
         })
         let coordinator = fixture.makeCoordinator()
         await coordinator.start()
-        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+        #expect(!coordinator.isChecking && coordinator.canCheckNow)
 
         let check = Task { await coordinator.checkNow() }
         #expect(await eventually { fixture.checkRunner.calls.count == 1 })
-        #expect(coordinator.isCheckingDatabricks && !coordinator.canCheckDatabricksNow)
+        #expect(coordinator.isChecking && !coordinator.canCheckNow)
 
         await gate.open()
         await check.value
-        #expect(!coordinator.isCheckingDatabricks && coordinator.canCheckDatabricksNow)
+        #expect(!coordinator.isChecking && coordinator.canCheckNow)
     }
 
     @Test func theNotificationTimeCheckIsPublishedWhileItRuns() async throws {
@@ -638,11 +687,11 @@ private final class GatedLogins: Sendable {
 
         let tick = Task { await coordinator.tick(calendar: utc) }
         #expect(await eventually { fixture.checkRunner.calls.count == 1 })
-        #expect(coordinator.isCheckingDatabricks)
+        #expect(coordinator.isChecking)
 
         await gate.open()
         await tick.value
-        #expect(!coordinator.isCheckingDatabricks)
+        #expect(!coordinator.isChecking)
     }
 
     @Test func checkNowNeedsAWorkspaceProfile() async throws {
@@ -650,11 +699,11 @@ private final class GatedLogins: Sendable {
             displayName: "analytics-account", kind: .databricksProfile(name: "analytics-account", accountLevel: true))
         let fixture = try Fixture(logins: [aws("dev"), account])
         let coordinator = fixture.makeCoordinator()
-        #expect(!coordinator.canCheckDatabricksNow)
+        #expect(!coordinator.canCheckNow)
 
         coordinator.addLogin(databricks("analytics-dev", remaining: 5 * hour))
 
-        #expect(coordinator.canCheckDatabricksNow)
+        #expect(coordinator.canCheckNow)
     }
 
     @Test func checkNowWaitsForADatabricksLogin() async throws {
@@ -664,10 +713,10 @@ private final class GatedLogins: Sendable {
         await coordinator.start()
 
         coordinator.logIn([dev.id])
-        #expect(await eventually { !coordinator.canCheckDatabricksNow })
+        #expect(await eventually { !coordinator.canCheckNow })
 
         coordinator.cancelBatch()
-        #expect(await eventually { coordinator.canCheckDatabricksNow })
+        #expect(await eventually { coordinator.canCheckNow })
     }
 
     @Test func checkNowStoresCouldntCheck() async throws {
@@ -1655,6 +1704,387 @@ private final class GatedLogins: Sendable {
         #expect(candidates.aws == ["prod"])
         #expect(candidates.databricks == [DatabricksProfile(name: "analytics-prod", accountLevel: false)])
     }
+
+    // MARK: gcloud
+
+    @Test func discoverCandidatesReadsGcloudsStoreAndSkipsTrackedAccounts() async throws {
+        let fixture = try Fixture(logins: [gcloud("dev@example.com")])
+        try FileManager.default.createDirectory(at: fixture.configPaths.gcloudConfig, withIntermediateDirectories: true)
+        let store = try GcloudStoreFixture(at: gcloudCredentialsFile(configDirectory: fixture.configPaths.gcloudConfig))
+        try store.replace("dev@example.com")
+        try store.replace("ops@example.com#example.goog")
+        try store.replace("deploy@analytics-dev.iam.gserviceaccount.com")
+        let coordinator = fixture.makeCoordinator()
+
+        let candidates = await coordinator.discoverCandidates()
+
+        #expect(candidates.gcloud == ["ops@example.com#example.goog"])
+    }
+
+    @Test func aGcloudAccountFirstSeenIsOnlyABaseline() async throws {
+        let dev = gcloud("dev@example.com")
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.set(["dev@example.com": 2], modified: launch.addingTimeInterval(-hour))
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == nil && after.invalidatedAt == nil)
+        #expect(after.lastGcloudRow == .present(rowID: 2))
+        #expect(fixture.stored?.logins.first?.lastGcloudRow == .present(rowID: 2))
+    }
+
+    @Test func aLargerGcloudRowIDIsALoginAtTheStoresTimeAndShowsLoggedIn() async throws {
+        let dev = gcloud("dev@example.com", lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.set(["dev@example.com": 2], modified: launch.addingTimeInterval(-hour))
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        let loggedIn = launch.addingTimeInterval(60)
+        fixture.gcloud.set(["dev@example.com": 3], modified: loggedIn)
+        fixture.clock.advance(by: 120)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(after.lastGcloudRow == .present(rowID: 3))
+        let tile = try #require(coordinator.tile(for: dev.id, locale: Locale(identifier: "en_GB"), calendar: .current))
+        #expect(tile.accessibilityLabel.contains("logged in"))
+    }
+
+    @Test func theSameGcloudRowIDChangesNothing() async throws {
+        let dev = gcloud("dev@example.com", lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.set(["dev@example.com": 2, "ops@example.com": 3], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        #expect(coordinator.login(dev.id) == dev)
+    }
+
+    @Test func aGcloudRowGoneIsLoggedOutAndItsReturnALogin() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour), lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.set([:], modified: launch)
+        await fixture.makeCoordinator().start()
+
+        let loggedOut = try #require(fixture.stored?.logins.first)
+        #expect(isLoggedOut(loggedOut))
+        #expect(loggedOut.lastGcloudRow == .missing)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.gcloud.set(["dev@example.com": 2], modified: loggedIn)
+        let relaunched = fixture.makeCoordinator()
+        await relaunched.start()
+
+        let after = try #require(relaunched.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(!isLoggedOut(after))
+    }
+
+    @Test func aGcloudRowBackAfterALogoutAndAnInvalidCheckIsALogin() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour), lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
+            .exited(code: 1, output: "ERROR: (gcloud.auth.print-access-token) Your current active account "
+                + "[dev@example.com] does not have any valid credentials\n")
+        })
+        fixture.gcloud.set([:], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        await coordinator.checkNow()
+        #expect(coordinator.login(dev.id)?.invalidationReason == .foundInvalid)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.gcloud.set(["dev@example.com": 2], modified: loggedIn)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(after.lastGcloudRow == .present(rowID: 2))
+    }
+
+    @Test func aGcloudLoginInATerminalRightAfterAddingTheAccountIsALogin() async throws {
+        let fixture = try Fixture(logins: [])
+        fixture.gcloud.set(["dev@example.com": 2], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let dev = gcloud("dev@example.com")
+        coordinator.addLogin(dev)
+        #expect(coordinator.login(dev.id)?.lastGcloudRow == .present(rowID: 2))
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.gcloud.set(["dev@example.com": 3], modified: loggedIn)
+        await coordinator.tick(calendar: utc)
+
+        #expect(coordinator.login(dev.id)?.loginTime == loggedIn)
+    }
+
+    @Test func aGcloudRowBackAfterALogoutAndSetTimerIsALogin() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour), lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.set([:], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        try coordinator.setTimer(id: dev.id, .loggedInAt(launch, sessionLength: 8 * hour))
+        #expect(coordinator.login(dev.id)?.invalidatedAt == nil)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.gcloud.set(["dev@example.com": 3], modified: loggedIn)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(after.lastGcloudRow == .present(rowID: 3))
+    }
+
+    @Test func anUnreadableGcloudStoreChangesNothing() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour), lastGcloudRow: .present(rowID: 2))
+        let fixture = try Fixture(logins: [dev])
+        fixture.gcloud.fail()
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        #expect(coordinator.login(dev.id) == dev)
+    }
+
+    @Test func checkNowChecksGcloudAccountsAndAnInvalidOneExpires() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [aws("qa"), dev], checkRunner: ArgumentRunner { _ in
+            .exited(code: 1, output: "ERROR: (gcloud.auth.print-access-token) Reauthentication failed.\n")
+        })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.canCheckNow)
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls == [["auth", "print-access-token", "--account=dev@example.com", "--format=none"]])
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.lastDatabricksCheck?.result == .invalid)
+        #expect(timerState(for: after, now: launch, leadTime: 0) == .expired)
+        #expect(!isLoggedOut(after))
+    }
+
+    @Test func noGcloudCheckWhileAGcloudLoginRuns() async throws {
+        let dev = gcloud("dev@example.com", loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { !coordinator.canCheckNow })
+        #expect(fixture.loginRunner.calls == [["auth", "login", "--force", "--account=dev@example.com"]])
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.isEmpty)
+        coordinator.cancelBatch()
+    }
+
+    // MARK: Azure
+
+    @Test func discoverCandidatesReadsTheAzureProfileAndSkipsTrackedTenants() async throws {
+        let fixture = try Fixture(logins: [azure()])
+        try FileManager.default.createDirectory(at: fixture.configPaths.azureConfig, withIntermediateDirectories: true)
+        let json = #"{"subscriptions": [{"id": "1", "name": "Dev", "user": {"name": "dev@example.com", "type": "user"}, "#
+            + #""tenantId": "\#(contosoTenant)", "tenantDisplayName": "Contoso Dev"}, {"id": "2", "name": "Ops", "#
+            + #""user": {"name": "dev@example.com", "type": "user"}, "tenantId": "\#(fabrikamTenant)"}]}"#
+        try (Data([0xEF, 0xBB, 0xBF]) + Data(json.utf8))
+            .write(to: azureProfileFile(configDirectory: fixture.configPaths.azureConfig))
+        let coordinator = fixture.makeCoordinator()
+
+        let candidates = await coordinator.discoverCandidates()
+
+        #expect(candidates.azure == [
+            AzureTenant(account: AzureAccount(user: "dev@example.com", tenant: fabrikamTenant), displayName: fabrikamTenant),
+        ])
+    }
+
+    @Test func anAzureTenantFirstSeenIsOnlyABaseline() async throws {
+        let dev = azure()
+        let fixture = try Fixture(logins: [dev])
+        fixture.azure.set([devAccount], modified: launch.addingTimeInterval(-hour))
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == nil && after.invalidatedAt == nil)
+        #expect(after.lastAzurePresence == .present)
+        #expect(fixture.stored?.logins.first?.lastAzurePresence == .present)
+    }
+
+    @Test func anAzureTenantAppearingIsALoginAtTheFilesTimeAndShowsLoggedIn() async throws {
+        let dev = azure(lastAzurePresence: .missing)
+        let fixture = try Fixture(logins: [dev])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        let loggedIn = launch.addingTimeInterval(60)
+        fixture.azure.set([devAccount], modified: loggedIn)
+        fixture.clock.advance(by: 120)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(after.lastAzurePresence == .present)
+        let tile = try #require(coordinator.tile(for: dev.id, locale: Locale(identifier: "en_GB"), calendar: .current))
+        #expect(tile.accessibilityLabel.contains("logged in"))
+    }
+
+    @Test func anAzureTenantStillPresentAfterARewriteChangesNothing() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour), lastAzurePresence: .present)
+        let fixture = try Fixture(logins: [dev])
+        fixture.azure.set([devAccount, AzureAccount(user: "ops@example.com", tenant: contosoTenant)], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        #expect(coordinator.login(dev.id) == dev)
+    }
+
+    @Test func anAzureTenantGoneIsLoggedOutAndItsReturnALogin() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour), lastAzurePresence: .present)
+        let fixture = try Fixture(logins: [dev])
+        fixture.azure.set([AzureAccount(user: "ops@example.com", tenant: contosoTenant)], modified: launch)
+        await fixture.makeCoordinator().start()
+
+        let loggedOut = try #require(fixture.stored?.logins.first)
+        #expect(isLoggedOut(loggedOut))
+        #expect(loggedOut.lastAzurePresence == .missing)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.azure.set([devAccount], modified: loggedIn)
+        let relaunched = fixture.makeCoordinator()
+        await relaunched.start()
+
+        let after = try #require(relaunched.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(!isLoggedOut(after))
+    }
+
+    @Test func anAzureTenantBackAfterALogoutAndAnInvalidCheckIsALogin() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour), lastAzurePresence: .present)
+        let fixture = try Fixture(logins: [dev], checkRunner: ArgumentRunner { _ in
+            .exited(code: 1, output: "ERROR: Can't find token from MSAL cache.\nTo re-authenticate, please run:\naz login\n")
+        })
+        fixture.azure.set([devAccount], modified: launch)
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        await coordinator.checkNow()
+        #expect(coordinator.login(dev.id)?.invalidationReason == .foundInvalid)
+        fixture.azure.set([], modified: launch.addingTimeInterval(60))
+        fixture.clock.advance(by: 120)
+        await coordinator.tick(calendar: utc)
+        #expect(coordinator.login(dev.id)?.lastAzurePresence == .missing)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.azure.set([devAccount], modified: loggedIn)
+        await coordinator.tick(calendar: utc)
+
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.loginTime == loggedIn)
+        #expect(after.lastAzurePresence == .present)
+    }
+
+    /// The tenant was offered while listed, then logged out before it was added.
+    @Test func anAzureTenantAddedWhileUnlistedThenLoggedInIsALogin() async throws {
+        let fixture = try Fixture(logins: [])
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        let dev = azure()
+        coordinator.addLogin(dev)
+        #expect(coordinator.login(dev.id)?.lastAzurePresence == .missing)
+
+        fixture.clock.advance(by: hour)
+        let loggedIn = fixture.clock.read().addingTimeInterval(-60)
+        fixture.azure.set([devAccount], modified: loggedIn)
+        await coordinator.tick(calendar: utc)
+
+        #expect(coordinator.login(dev.id)?.loginTime == loggedIn)
+    }
+
+    @Test func anUnreadableAzureProfileChangesNothing() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour), lastAzurePresence: .present)
+        let fixture = try Fixture(logins: [dev])
+        fixture.azure.fail()
+        let coordinator = fixture.makeCoordinator()
+
+        await coordinator.start()
+
+        #expect(coordinator.login(dev.id) == dev)
+    }
+
+    @Test func theFileReaderReadsAHalfWrittenProfileAsUnreadable() async throws {
+        let fixture = try Fixture()
+        try FileManager.default.createDirectory(at: fixture.configPaths.azureConfig, withIntermediateDirectories: true)
+        try Data([0xEF, 0xBB, 0xBF]).write(to: azureProfileFile(configDirectory: fixture.configPaths.azureConfig))
+        let reader = AzureProfileFileReader(configDirectory: fixture.configPaths.azureConfig)
+
+        #expect(reader.read() == nil)
+    }
+
+    @Test func checkNowChecksAzureTenantsAndAnInvalidOneExpires() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [aws("qa"), dev], checkRunner: ArgumentRunner { _ in
+            .exited(code: 1, output: "ERROR: AADSTS70043: The refresh token has expired due to sign-in frequency.\n")
+        })
+        fixture.azure.set([devAccount], modified: launch.addingTimeInterval(-hour))
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+        #expect(coordinator.canCheckNow)
+
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls == [
+            ["account", "get-access-token", "--tenant=\(contosoTenant)", "--output=none"],
+        ])
+        let after = try #require(coordinator.login(dev.id))
+        #expect(after.lastDatabricksCheck?.result == .invalid)
+        #expect(timerState(for: after, now: launch, leadTime: 0) == .expired)
+        #expect(!isLoggedOut(after))
+    }
+
+    @Test func noAzureCheckWhileAnAzureLoginRuns() async throws {
+        let dev = azure(loginTime: launch.addingTimeInterval(-hour))
+        let fixture = try Fixture(logins: [dev], loginRunner: ArgumentRunner { _ in await hangUntilCancelled() })
+        fixture.azure.set([devAccount], modified: launch.addingTimeInterval(-hour))
+        let coordinator = fixture.makeCoordinator()
+        await coordinator.start()
+
+        coordinator.logIn([dev.id])
+        #expect(await eventually { !coordinator.canCheckNow })
+        #expect(fixture.loginRunner.calls == [["login", "--tenant=\(contosoTenant)", "--allow-no-subscriptions"]])
+        await coordinator.checkNow()
+
+        #expect(fixture.checkRunner.calls.isEmpty)
+        coordinator.cancelBatch()
+    }
+}
+
+private let contosoTenant = "00000000-0000-0000-0000-000000000001"
+private let fabrikamTenant = "00000000-0000-0000-0000-000000000002"
+private let devAccount = AzureAccount(user: "dev@example.com", tenant: contosoTenant)
+
+private func azure(loginTime: Date? = nil, lastAzurePresence: AzurePresence? = nil) -> Login {
+    Login(
+        displayName: "Contoso Dev", kind: .azureTenant(user: devAccount.user, tenant: devAccount.tenant),
+        loginTime: loginTime, lastAzurePresence: lastAzurePresence)
+}
+
+private func gcloud(_ account: String, loginTime: Date? = nil, lastGcloudRow: GcloudRowState? = nil) -> Login {
+    Login(
+        displayName: gcloudAccountEmail(account), kind: .gcloudAccount(account: account), loginTime: loginTime,
+        lastGcloudRow: lastGcloudRow)
 }
 
 @Suite struct AWSCacheFileReaderTests {

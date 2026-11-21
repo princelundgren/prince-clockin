@@ -3,13 +3,13 @@ import PrinceClockInCore
 import SwiftUI
 
 /// Settings → Logins: the tracked logins, which a drag reorders for the panel, with + and − below
-/// them and Check Databricks Now in the header, then the selected login's form, or New custom login.
+/// them and Check Now in the header, then the selected login's form, or New custom login.
 struct LoginsSettings: View {
     let appModel: AppModel
     let request: LoginsPaneRequest
     @State private var selection: UUID?
     /// What discovery found that isn't tracked; `nil` while the config files are read.
-    @State private var candidates: (aws: [String], databricks: [DatabricksProfile])?
+    @State private var candidates: DiscoveredLogins?
     /// The login just added from the config files, which shows its Set Timer form.
     @State private var justAdded: UUID?
     @State private var isAddingCustomLogin = false
@@ -72,12 +72,12 @@ struct LoginsSettings: View {
         HStack {
             Text("Logins")
             Spacer()
-            Button("Check Databricks Now") {
+            Button("Check Now") {
                 Task { await coordinator.checkNow() }
             }
             .controlSize(.small)
-            .disabled(!coordinator.canCheckDatabricksNow)
-            .help("Ask the Databricks CLI whether each Databricks login is still valid.")
+            .disabled(!coordinator.canCheckNow)
+            .help("Ask the Databricks, gcloud and Azure CLIs whether each of their logins is still valid.")
         }
     }
 
@@ -101,8 +101,8 @@ struct LoginsSettings: View {
     }
 
     /// Reads the config files for the + menu when the pane appears and whenever a tracked AWS SSO
-    /// session or Databricks profile is added or removed, a new read cancelling the one before; a
-    /// cancelled read's answer is dropped.
+    /// session, Databricks profile, gcloud account or Azure tenant is added or removed, a new read
+    /// cancelling the one before; a cancelled read's answer is dropped.
     private func discover() async {
         candidates = nil
         let found = await coordinator.discoverCandidates()

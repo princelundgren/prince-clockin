@@ -386,6 +386,47 @@ private func noTimer(_ name: String = "analytics-prod") -> Login {
             message: "Its 1-day timer ran out, but Databricks says the login still works. The session length may be too short."))
     }
 
+    @Test func aStillValidGcloudTileNamesGcloud() {
+        var valid = stillValid(checkedAt: now)
+        valid.kind = .gcloudAccount(account: "dev@example.com")
+
+        #expect(tile(valid).detail == .stillValid(
+            message: "Its 1-day timer ran out, but gcloud says the login still works. The session length may be too short."))
+    }
+
+    @Test func aStillValidAzureTileNamesTheAzureCLI() {
+        var valid = stillValid(checkedAt: now)
+        valid.kind = .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001")
+
+        #expect(tile(valid).detail == .stillValid(
+            message: "Its 1-day timer ran out, but the Azure CLI says the login still works. The session length may be "
+                + "too short."))
+    }
+
+    @Test func anAzureLoginWithNoSessionLengthShowsLoggedInAndDoesntAsk() {
+        let loggedIn = Login(
+            displayName: "Contoso Dev", kind: .azureTenant(user: "dev@example.com", tenant: "00000000-0000-0000-0000-000000000001"),
+            loginTime: now.addingTimeInterval(-hour))
+
+        let presentation = tile(loggedIn)
+
+        #expect(presentation.detail == nil)
+        #expect(presentation.symbol == .systemImage("checkmark.circle"))
+        #expect(presentation.accessibilityLabel.hasPrefix("Contoso Dev, Azure CLI tenant, logged in"))
+    }
+
+    @Test func aGcloudLoginWithNoSessionLengthShowsLoggedInAndDoesntAsk() {
+        let loggedIn = Login(
+            displayName: "dev@example.com", kind: .gcloudAccount(account: "dev@example.com"),
+            loginTime: now.addingTimeInterval(-hour))
+
+        let presentation = tile(loggedIn)
+
+        #expect(presentation.detail == nil)
+        #expect(presentation.symbol == .systemImage("checkmark.circle"))
+        #expect(presentation.accessibilityLabel.hasPrefix("dev@example.com, gcloud account, logged in"))
+    }
+
     @Test func aDatabricksLoginWithNoSessionLengthAsksForIt() {
         var loggedIn = noTimer()
         loggedIn.loginTime = now.addingTimeInterval(-hour)

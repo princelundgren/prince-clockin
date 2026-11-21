@@ -65,4 +65,46 @@ import PrinceClockInCore
         #expect(await eventually(within: .seconds(10)) { calls.count > beforeRewrite })
         withExtendedLifetime(watcher) {}
     }
+
+    @Test func aFilteredWatchIgnoresOtherFilesAndReportsItsOwn() async throws {
+        let directory = try makeTemporaryDirectory().appending(path: "gcloud")
+        try FileManager.default.createDirectory(at: directory.appending(path: "logs"), withIntermediateDirectories: true)
+        let store = directory.appending(path: "credentials.db")
+        try Data("one".utf8).write(to: store)
+        let calls = Calls()
+        let watcher = AWSCacheWatcher(directory: directory, fileNames: gcloudCredentialsFileNames) { calls.count += 1 }
+        try await letSetupReportsPass()
+        let beforeOthers = calls.count
+
+        try Data("token".utf8).write(to: directory.appending(path: "access_tokens.db"))
+        try Data("log".utf8).write(to: directory.appending(path: "logs/credentials.db"))
+        try await letSetupReportsPass()
+        #expect(calls.count == beforeOthers)
+
+        try rewriteInPlace(store, "two")
+
+        #expect(await eventually(within: .seconds(10)) { calls.count > beforeOthers })
+        withExtendedLifetime(watcher) {}
+    }
+}
+
+extension AWSCacheWatcherTests {
+    @Test func aFilteredWatchThroughASymlinkReportsItsFile() async throws {
+        let root = try makeTemporaryDirectory()
+        let target = root.appending(path: "gcloud-target")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        let store = target.appending(path: "credentials.db")
+        try Data("one".utf8).write(to: store)
+        let link = root.appending(path: "gcloud")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        let calls = Calls()
+        let watcher = AWSCacheWatcher(directory: link, fileNames: gcloudCredentialsFileNames) { calls.count += 1 }
+        try await letSetupReportsPass()
+        let before = calls.count
+
+        try rewriteInPlace(store, "two")
+
+        #expect(await eventually(within: .seconds(10)) { calls.count > before })
+        withExtendedLifetime(watcher) {}
+    }
 }

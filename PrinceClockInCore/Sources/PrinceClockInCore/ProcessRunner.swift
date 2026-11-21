@@ -23,6 +23,12 @@ public protocol ProcessRunning: Sendable {
     func run(
         executable: URL, arguments: [String], environment: [String: String], timeout: Duration
     ) async -> ProcessOutcome
+
+    /// As `run`, but the child's stdout goes to `/dev/null`, so its `output` holds stderr alone:
+    /// for a command whose stdout could carry a credential.
+    func runDiscardingStandardOutput(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration
+    ) async -> ProcessOutcome
 }
 
 /// Runs a process with `Foundation.Process`: stdin is `/dev/null`, and stdout and stderr share one
@@ -43,13 +49,30 @@ public final class FoundationProcessRunner: ProcessRunning {
     public func run(
         executable: URL, arguments: [String], environment: [String: String], timeout: Duration
     ) async -> ProcessOutcome {
+        await run(
+            executable: executable, arguments: arguments, environment: environment, timeout: timeout,
+            keepsStandardOutput: true)
+    }
+
+    public func runDiscardingStandardOutput(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration
+    ) async -> ProcessOutcome {
+        await run(
+            executable: executable, arguments: arguments, environment: environment, timeout: timeout,
+            keepsStandardOutput: false)
+    }
+
+    private func run(
+        executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+        keepsStandardOutput: Bool
+    ) async -> ProcessOutcome {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
         let pipe = Pipe()
-        process.standardOutput = pipe
+        process.standardOutput = keepsStandardOutput ? pipe : FileHandle.nullDevice
         process.standardError = pipe
         let reader = pipe.fileHandleForReading
         let drain = OutputDrain()

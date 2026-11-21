@@ -118,16 +118,17 @@ func isLoggedInWithNoLength(_ login: Login) -> Bool {
     login.loginTime != nil && login.sessionLength == nil && !isInvalidated(login)
 }
 
-/// Whether an AWS SSO session or custom login is logged in with no session length, which shows as
-/// logged in. A Databricks login in that state asks for its session length instead.
+/// Whether an AWS SSO session, gcloud account, Azure tenant or custom login is logged in with no
+/// session length, which shows as logged in. A Databricks login in that state asks for its session
+/// length instead.
 func isLoggedInWithNoExpiry(_ login: Login) -> Bool {
     if case .databricksProfile = login.kind { return false }
     return isLoggedInWithNoLength(login)
 }
 
-/// Whether the login is invalidated because its AWS session was logged out, for "Logged out". With
-/// no stored reason, an AWS login counts as logged out, since a logout was its only cause before
-/// the reason was stored.
+/// Whether the login is invalidated because its AWS session, gcloud account or Azure tenant was
+/// logged out, for "Logged out". With no stored reason, an AWS login counts as logged out, since a
+/// logout was its only cause before the reason was stored.
 public func isLoggedOut(_ login: Login) -> Bool {
     guard isInvalidated(login) else { return false }
     switch login.invalidationReason {
@@ -139,12 +140,15 @@ public func isLoggedOut(_ login: Login) -> Bool {
     }
 }
 
-/// Whether a Databricks workspace login's timer has run out while its last check that answered,
-/// made at or after that expiry, found it valid. A new login time, a longer session or a later
-/// invalid answer ends it; a check that couldn't check doesn't.
+/// Whether a Databricks workspace login's, gcloud login's or Azure login's timer has run out while
+/// its last check that answered, made at or after that expiry, found it valid. A new login time, a
+/// longer session or a later invalid answer ends it; a check that couldn't check doesn't.
 public func isStillValid(_ login: Login, now: Date) -> Bool {
-    guard case .databricksProfile(_, accountLevel: false) = login.kind, !isInvalidated(login),
-          let expiry = expiry(of: login), expiry <= now,
+    switch login.kind {
+    case .databricksProfile(_, accountLevel: false), .gcloudAccount, .azureTenant: break
+    case .databricksProfile, .awsSSOSession, .custom: return false
+    }
+    guard !isInvalidated(login), let expiry = expiry(of: login), expiry <= now,
           let answer = login.lastDatabricksAnswer
     else { return false }
     return answer.result == .valid && answer.at >= expiry
