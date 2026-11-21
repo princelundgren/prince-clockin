@@ -331,7 +331,10 @@ private struct NewCustomLoginForm: View {
                     SettingsNote(noCommandNote)
                 }
             }
-            SessionLengthPopUp(selection: $draft.sessionLength)
+            VStack(alignment: .leading, spacing: 4) {
+                SessionLengthPopUp(selection: $draft.sessionLength)
+                SettingsNote(sessionLengthNote(for: .custom(command: nil), choice: draft.sessionLength))
+            }
             if draft.sessionLength == .custom {
                 VStack(alignment: .leading, spacing: 2) {
                     LabeledContent("Custom length") {

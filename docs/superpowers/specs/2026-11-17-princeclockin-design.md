@@ -634,7 +634,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
     text, so don't put a secret in it."
   - **New custom login** (Custom Login…): Name, Command (optional), Session length, Cancel and
     Add; it opens with Name focused, Return adds and Escape cancels. Without a command, the form
-    says Log In waits for the user to click Done.
+    says Log In waits for the user to click Done. Session length has a custom login's note, as in
+    the login's form (owner, 2026-11-21).
   - Adding a discovered login asks nothing more (owner, 2026-11-21): the owner found a Set Timer
     prompt there more confusing than useful. Its timer stays unknown until it logs in from the
     panel or answers a "Was that you?" question.
