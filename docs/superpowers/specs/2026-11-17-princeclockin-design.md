@@ -630,13 +630,18 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   - Adding a discovered login asks nothing more (owner, 2026-11-21): the owner found a Set Timer
     prompt there more confusing than useful. Its timer stays unknown until it logs in from the
     panel or answers a "Was that you?" question.
-- **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−;
-  the selected preset's Name and "Logs in to, in order", a list a drag reorders, with + (a menu of
-  the tracked logins not in it) and −. Drag is the only way to reorder, with no Move Up or Move Down
-  (owner, 2026-11-20): the owner found drag enough, accepting that reordering, which also sets the
-  order a preset logs in, takes a pointer unless VoiceOver offers a move. + adds an empty preset,
-  "New preset" ("New preset 2" and on while that name is taken), and selects it; − removes the
-  selected preset at once.
+- **Presets:** the presets, which a drag reorders, and the panel's preset tiles with them, with +/−.
+  A row is the preset symbol, its name and the panel tile's subtitle (its logins, or "No logins");
+  with no presets the list says "No Presets" and "A preset logs in to several logins with one
+  click. Click + to make one." The first preset is selected when the pane opens. + adds an empty
+  preset, "New preset" ("New preset 2" and on while that name is taken), selects it and focuses its
+  Name; − removes the selected preset at once and selects the one that took its place, else the one
+  above. The selected preset's form is headed, as a login's is, by the preset symbol, its name and
+  its login count ("No logins", "1 login", "3 logins"): a bordered Name, and "Logs in to, in
+  order", a list a drag reorders, with + (a menu of the tracked logins not in it) and −. Drag is the
+  only way to reorder, with no Move Up or Move Down (owner, 2026-11-20): the owner found drag
+  enough, accepting that reordering, which also sets the order a preset logs in, takes a pointer
+  unless VoiceOver offers a move.
 - **Notifications:** "Notify before a login expires", a pop-up of 5, 10, 15 and 30 minutes, 1 and 2
   hours (30 minutes by default); "Notification schedule", off by default, with "Notifications are
   sent only from From to To, starting on the days picked. Any due at other times are held and sent

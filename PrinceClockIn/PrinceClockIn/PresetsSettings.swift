@@ -2,10 +2,13 @@ import PrinceClockInCore
 import SwiftUI
 
 /// Settings → Presets: the presets, which a drag reorders, with + and − below them, then the
-/// selected preset's Name and the logins it logs in to, in order.
+/// selected preset's Name and the logins it logs in to, in order. The first preset is selected
+/// when the pane opens.
 struct PresetsSettings: View {
     let coordinator: Coordinator
     @State private var selection: UUID?
+    /// The preset + just added, whose Name takes focus until another preset is selected.
+    @State private var newPresetID: UUID?
 
     private var presets: [Preset] { coordinator.model.state.presets }
     private var selected: Preset? { presets.first { $0.id == selection } }
@@ -15,8 +18,7 @@ struct PresetsSettings: View {
             Section("Presets") {
                 List(selection: $selection) {
                     ForEach(presets) { preset in
-                        Text(preset.name)
-                            .lineLimit(1)
+                        PresetRow(preset: preset, logins: coordinator.model.logins(in: preset))
                             .tag(preset.id)
                     }
                     .onMove { offsets, destination in
@@ -25,16 +27,29 @@ struct PresetsSettings: View {
                         coordinator.setPresetOrder(order.ids)
                     }
                 }
-                .frame(minHeight: 120)
+                .frame(minHeight: 160)
+                .overlay {
+                    if presets.isEmpty {
+                        ContentUnavailableView(
+                            "No Presets", systemImage: "rectangle.stack",
+                            description: Text("A preset logs in to several logins with one click. Click + to make one."))
+                    }
+                }
                 .accessibilityLabel("Presets")
                 listButtons
             }
             if let selected {
-                PresetForm(preset: selected, coordinator: coordinator)
+                PresetForm(preset: selected, coordinator: coordinator, focusesName: selected.id == newPresetID)
                     .id(selected.id)
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            if selection == nil { selection = presets.first?.id }
+        }
+        .onChange(of: selection) { _, new in
+            if new != newPresetID { newPresetID = nil }
+        }
     }
 
     private var listButtons: some View {
@@ -51,37 +66,84 @@ struct PresetsSettings: View {
         .buttonStyle(.borderless)
     }
 
-    /// Adds an empty preset and selects it, for its Name and logins to be filled in.
+    /// Adds an empty preset and selects it, with its Name focused for it to be named.
     private func add() {
         let preset = Preset(name: newPresetName(existingNames: presets.map(\.name)), loginIDs: [])
         coordinator.savePreset(preset)
+        newPresetID = preset.id
         selection = preset.id
     }
 
+    /// Removes the selected preset at once and selects the one that takes its place.
     private func removeSelected() {
         guard let selected else { return }
+        let next = selectionAfterRemoving(selected.id, from: presets.map(\.id))
         coordinator.removePreset(id: selected.id)
-        selection = nil
+        selection = next
     }
 }
 
-/// The selected preset's Name, and "Logs in to, in order": its logins, which a drag reorders, with
-/// + (the tracked logins not in it) and − below them.
+/// A preset in the list: the preset symbol, its name and the logins it logs in to.
+private struct PresetRow: View {
+    let preset: Preset
+    let logins: [Login]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.stack")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(preset.name)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(presetTile(for: preset, logins: logins, locale: .current).subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The selected preset's form, headed by the preset symbol, its name and how many logins it has:
+/// Name, and "Logs in to, in order": its logins, which a drag reorders, with + (the tracked logins
+/// not in it) and − below them.
 private struct PresetForm: View {
     let preset: Preset
     let coordinator: Coordinator
+    let focusesName: Bool
     @State private var selection: UUID?
 
     private var logins: [Login] { coordinator.model.logins(in: preset) }
     private var members: ListOrder { ListOrder(logins.map(\.id)) }
 
     var body: some View {
-        Section(preset.name) {
-            CommitField("Name", text: preset.name) { name in
+        Section {
+            CommitField("Name", text: preset.name, focusesOnAppear: focusesName) { name in
                 guard !name.isEmpty else { return false }
                 coordinator.renamePreset(id: preset.id, to: name)
                 return true
             }
+            .textFieldStyle(.roundedBorder)
+        } header: {
+            HStack(spacing: 10) {
+                Image(systemName: "rectangle.stack")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.name)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(presetLoginCount(logins.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
         }
         Section("Logs in to, in order") {
             List(selection: $selection) {
