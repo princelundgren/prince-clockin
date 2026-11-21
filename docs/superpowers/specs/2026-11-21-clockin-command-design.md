@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 ---
 
 # PrinceClockIn: the `clockin` command
@@ -8,8 +8,8 @@ A command-line client for PrinceClockIn, so a login can start from a terminal wi
 way many people already wrap `aws sso login` in a shell function. It adds to
 `2026-11-17-princeclockin-design.md`, whose rules still hold with one widening, below; once built,
 this design moves into that spec and this file is retired. Until then the main spec is the
-authority: this draft governs no code, and nothing built may follow it before it is approved and
-its first implementation commit sets it to `building`.
+authority: this spec, approved, governs no code until its first implementation commit sets it to
+`building`.
 
 ## What it changes in the main spec
 
@@ -19,10 +19,13 @@ app logs in on its own) and Running logins' list of what starts a login. `clocki
 a click or a `clockin` the user runs, typed or from a schedule of their own; the app itself still
 never logs in unasked. The move into the main spec rewords those places and the README's opening
 line and "Logs in when you click" bullet, adds a README section on the command, adds the Command
-line tool row to Settings → General, adds `clockin.sock` and the folder's 0700 mode to Platform's
-list of what the Application Support folder holds, and adds a record of who asked for each login
-to the queue (see Core and tests). Privacy's "only network traffic is the update check" still
-holds: a Unix domain socket is local, not network traffic.
+line tool row to Settings → General, adds `clockin.sock`, `clockin.lock` and the folder's 0700
+mode to Platform's list of what the Application Support folder holds, adds a record of who asked
+for each login to the queue (see Core and tests), and covers the second executable in Platform
+(its hardened runtime), in Release (it is signed and notarized with the app, and a release fails if
+the bundle lacks it) and in the README's and AGENTS.md's build steps. Privacy's "The only network
+traffic the app itself makes is the Sparkle update check" still holds: a Unix domain socket is
+local, not network traffic.
 
 ## Goals
 
@@ -85,7 +88,8 @@ app and give no stream of output; distributed notifications give no reply.
   called Morning. Rename one in PrinceClockIn Settings." Each exits 2, and names that differ only
   by case count as the same.
   A name that matches nothing says "dev isn't a tracked login or preset." and exits 2
-  before anything starts.
+  before anything starts; with `--preset`, "Morning isn't a preset."
+- One name at a time, as the panel has no multi-select: `clockin dev prod` exits 2 with the usage.
 - `--` ends the options, so a login named like a flag is reached with `clockin -- -dev`.
 - An empty preset says "Morning has no logins." and exits 2, as the panel can't start it.
 - With no login tracked, bare `clockin` and `--due` say "No logins yet. Add them in PrinceClockIn
@@ -174,11 +178,17 @@ and otherwise says "Open PrinceClockIn, then try again." and exits 2.
   the two. The folder holds only the app's own files, so 0700 takes nothing from the user. A folder
   that is a symlink or another user's serves no socket, and the Settings row says why; the app's
   own handling of `state.json` there is unchanged.
-- At launch, a file already at that path is removed only if `lstat` shows a socket and connecting
-  to it fails with `ECONNREFUSED`; any other result leaves it. A socket that answers belongs to
-  another running copy of the app, so this one serves no socket, which keeps one queue, and
-  Settings' Command line tool row says so. A `bind` that fails with `EADDRINUSE`, as when two
-  copies launch together and both remove the old file, counts the same way.
+- At launch, once the folder has passed the checks above, the app opens `clockin.lock` there with
+  `O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW` and mode 0600, so no login it starts inherits the
+  lock; it creates the file on the first launch, never removes it, and takes an advisory
+  `flock` (`LOCK_EX | LOCK_NB`) it holds for as long as it runs. A lock another process holds
+  means another copy of the app runs, so this one serves no socket, which keeps one queue, and
+  Settings' Command line tool row says so. This, not a connect result, decides, since a live
+  socket can refuse a connection too. A lock file that isn't a regular file of the user's, or that
+  can't be opened or locked for any other reason, such as a read-only volume, makes the command
+  unavailable, and the row says why. With the lock taken, a socket file already at the path is
+  stale: it is removed if `lstat` shows a socket, and left with the command unavailable if it is
+  anything else.
 - A path a socket address can't hold (104 bytes or more, since the 104 include the closing NUL)
   makes the command unavailable, and the Settings row says why.
 - The app accepts a connection only from a peer whose effective user, from `getpeereid`, is its
@@ -251,13 +261,29 @@ an untracked name, each dropped character set, a bare carriage return and `\r\n`
 UTF-8, following a login already queued
 and one already running with its output so far replayed,
 the exit code for each outcome, cancelling only what this command alone asked for, a peer of
-another user refused, an over-long line or an unknown request refused, escape-heavy output split
-under the limit once encoded, two same-kind session or profile names, and a name with a joiner or
-a replaced character matched as `--list` prints it.
+another user refused, an over-long line or an unknown request refused on either side, escape-heavy
+output split under the limit once encoded, two same-kind session or profile names, a name with a
+joiner or a replaced character matched as `--list` prints it, `--preset` with no such preset,
+several names at once, another protocol version refused, `done` refused for a login this
+connection neither started nor follows, and `start` for a login removed since the list.
 
-The thin callers have no automated test: the socket server and client, the launch and its wait,
-the terminal's input and printing, and the install link. They are checked by hand on a Mac before
-the release that ships the command.
+The thin callers have no automated test: the lock, the socket server and client, the launch and
+its wait, the terminal's input and printing, and the install link. They are checked by hand on a
+Mac before the release that ships the command.
+
+## Build order
+
+One pull request each, stacked where one needs the last; the first sets this spec to `building`
+and adds `governs`.
+
+1. Core: parsing the command line, matching names, the picker's default and key, the characters
+   to drop and the exit code.
+2. Core: the requests and events and their version, the user and peer checks, the line limit, and
+   the queue's record of who asked for each login, so a cancel ends only its own.
+3. App: the lock, the socket server, and relaying events, with a followed login's output so far.
+4. The `clockin` executable in `Contents/MacOS`: the client, the picker and launching the app.
+5. Settings → General's Command line tool row and the link, and the README's section.
+6. This design moved into the main spec, with the rewording above, and this file retired.
 
 ## Left to the builder
 
