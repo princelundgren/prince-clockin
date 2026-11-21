@@ -434,7 +434,8 @@ other menu bar apps do (owner, 2026-11-20). From top to bottom:
       the failure symbol in the menu bar, since a popover must not be the only place a failure
       appears.
    3. **Notifications off**: "Notifications are off, so only the menu bar shows that a login is
-      about to expire." With Open System Settings…, which opens System Settings → Notifications. It
+      about to expire." With Open System Settings…, which opens System Settings → Notifications →
+      PrinceClockIn, through the Notifications extension's undocumented `id` query. It
       appears once each time notifications are turned off (owner, 2026-11-19): closing the panel
       after it has been shown dismisses it until notifications are on again, and meanwhile it
       lives in Settings → Notifications.
@@ -634,8 +635,8 @@ Minimum size 620 × 540, ideal 760 × 640, its frame saved and its last pane res
   time pickers (09:00 and 17:00 by default; "They end the next day." when To is at or before
   From) and Days, a button per weekday in the calendar's order, Monday to Friday by default, the
   last one picked disabled so the hours always name a day; and Notifications: their state, Open
-  System Settings…, and, while they're off, "With notifications off, only the menu bar shows that
-  a login is about to expire."
+  System Settings… (the same page as the banner's), and, while they're off, "With notifications
+  off, only the menu bar shows that a login is about to expire."
 - **General:** Launch at login, with its needs-approval state ("Needs your approval in System
   Settings → General → Login Items." with Open…) and its error state ("Couldn't turn on launch at
   login." or "Couldn't turn off launch at login." and the system's reason, until the status shows
