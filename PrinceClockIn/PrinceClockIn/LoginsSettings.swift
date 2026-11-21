@@ -84,7 +84,7 @@ struct LoginsSettings: View {
             }
             .controlSize(.small)
             .disabled(!coordinator.canCheckNow)
-            .help("Ask the Databricks, gcloud and Azure CLIs whether each of their logins is still valid.")
+            .help(coordinator.checkNowHelp)
         }
     }
 
