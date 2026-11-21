@@ -1,7 +1,7 @@
 ---
 status: live
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
-verified: 2026-11-20
+verified: 2026-11-21
 ---
 
 # PrinceClockIn: design
@@ -879,7 +879,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 - Settings is its own `NSWindow` hosting SwiftUI. A hidden main menu carries ⌘, and ⌘Q, File →
   Close (⌘W) and an Edit menu.
 - Colours come from the app's asset catalog, with light, dark and Increase Contrast variants.
-- Minimum macOS 26 (owner, 2026-11-17).
+- Minimum macOS 26 (owner, 2026-11-17). Built with Xcode 27.2 (owner, 2026-11-21): on macOS 27
+  the popover's material follows the SDK the app links against, and a build with Xcode 26 shows a
+  panel too transparent to read.
 - Not sandboxed (see Approaches). Hardened runtime, Developer ID signing, notarized.
 - No Dock icon (`LSUIElement`). Launch at login through `SMAppService`, off by default. The setting
   reads `SMAppService.mainApp.status`, since the user can change it in System Settings.
@@ -964,13 +966,14 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   new tag. The appcast lists only the latest release.
 - A workflow on every pull request and every push to `main` builds the app and runs the tests,
   on the maintainer's self-hosted pool `prince-clockin-macos`: a fresh macOS VM per job with Xcode
-  26.6, no secrets and no local network. A fork's pull request runs on GitHub's `macos-26`, since
+  27.2, no secrets and no local network. A fork's pull request runs on GitHub's `xcode-27`, since
   the pool refuses a fork's job.
 - CodeQL scans the app, the core package and the workflows on GitHub-hosted runners, on every push
   to `main`, weekly, and on each pull request that changes Swift, `project.yml` or a workflow. It
   builds the generated project itself, since CodeQL's autobuild looks for a committed Xcode project
   and finds only the core package. It stays off the pool, which runs one job at a time, so a scan
-  would hold up CI.
+  would hold up CI. The Swift scan builds with Xcode 26 on `macos-26`: CodeQL can't trace a build
+  on macOS 27 or with Xcode 27, nor analyze Swift 6.4.
 - The appcast and DMGs are served from `https://updates.princelundgren.com/princeclockin/`, the
   maintainer's update host, whose address belongs to no website, so it stays stable whatever the
   website becomes (owner, 2026-11-17). Feed URL:

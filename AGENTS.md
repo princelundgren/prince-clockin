@@ -17,8 +17,8 @@ Everything in this repository is public: code, docs, commit messages, issues and
   pull request a person opens from a branch of this repository, once it is out of draft; a fork's
   or a bot's gets none.
 - **CI runs on the maintainer's self-hosted pool `prince-clockin-macos`**, a fresh macOS VM per
-  job with Xcode 26.6, no secrets and no local network. A fork's pull request runs on GitHub's
-  `macos-26` instead. The release's build, signing and upload jobs and CodeQL run on GitHub-hosted
+  job with Xcode 27.2, no secrets and no local network. A fork's pull request runs on GitHub's
+  `xcode-27` instead. The release's build, signing and upload jobs and CodeQL run on GitHub-hosted
   runners; the release's test job reuses CI, in the pool. Every action is pinned by full commit
   SHA, except the Claude review: it calls the shared reusable workflow at its moving `v1` tag,
   since only that repository's maintainer can move its `v*` tags and each release then reaches
