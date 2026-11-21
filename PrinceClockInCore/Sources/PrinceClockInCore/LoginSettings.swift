@@ -36,12 +36,15 @@ public func loginRowSubtitle(for login: Login, now: Date, locale: Locale, calend
 public struct LoginSource: Equatable, Sendable {
     /// "SSO session", "Profile", "Account" or "Tenant".
     public let label: String
-    /// The CLI's name in the config file, "qa in ~/.aws/config".
+    /// The CLI's name for it, "qa".
     public let value: String
+    /// Under the row: the config file it is in, "In ~/.aws/config.".
+    public let note: String
 
-    public init(label: String, value: String) {
+    public init(label: String, value: String, note: String) {
         self.label = label
         self.value = value
+        self.note = note
     }
 }
 
@@ -60,8 +63,9 @@ public struct LastCheck: Equatable, Sendable {
 
 /// What the selected login's form in Settings → Logins shows beside its Name and Session length.
 public struct LoginSettingsForm: Equatable, Sendable {
-    /// Under Name: the name is only what PrinceClockIn shows.
-    public let nameNote: String
+    /// Under Name: renaming leaves the CLI's own name as it is; `nil` for a custom login, which
+    /// has no other name.
+    public let nameNote: String?
     /// `nil` for a custom login.
     public let source: LoginSource?
     /// `nil` for anything but a Databricks profile, gcloud account or Azure tenant.
@@ -77,12 +81,13 @@ public let customCommandNote = "The command runs in Terminal and is saved as pla
 public func loginSettingsForm(
     for login: Login, paths: ConfigPaths, home: URL, now: Date, locale: Locale, calendar: Calendar
 ) -> LoginSettingsForm {
-    let shown = "The name is only what PrinceClockIn shows"
+    let renamingOnlyHere = "Only changes the name in PrinceClockIn, not in"
+    func inFile(_ url: URL) -> String { "In \(displayPath(url, home: home))." }
     switch login.kind {
     case .awsSSOSession(let name):
         return LoginSettingsForm(
-            nameNote: "\(shown); the SSO session's name in your config stays as it is.",
-            source: LoginSource(label: "SSO session", value: "\(name) in \(displayPath(paths.awsConfig, home: home))"),
+            nameNote: "\(renamingOnlyHere) your config.",
+            source: LoginSource(label: "SSO session", value: name, note: inFile(paths.awsConfig)),
             lastCheck: nil, commandNote: nil)
     case .databricksProfile(let name, let accountLevel):
         let lastCheck = if accountLevel {
@@ -96,16 +101,13 @@ public func loginSettingsForm(
                 note: nil)
         }
         return LoginSettingsForm(
-            nameNote: "\(shown); the profile's name in your config stays as it is.",
-            source: LoginSource(
-                label: "Profile", value: "\(name) in \(displayPath(paths.databricksConfig, home: home))"),
+            nameNote: "\(renamingOnlyHere) your config.",
+            source: LoginSource(label: "Profile", value: name, note: inFile(paths.databricksConfig)),
             lastCheck: lastCheck, commandNote: nil)
     case .gcloudAccount(let account):
         return LoginSettingsForm(
-            nameNote: "\(shown); the account in gcloud stays as it is.",
-            source: LoginSource(
-                label: "Account",
-                value: "\(account) in \(displayPath(paths.gcloudConfig, home: home))"),
+            nameNote: "\(renamingOnlyHere) gcloud.",
+            source: LoginSource(label: "Account", value: account, note: inFile(paths.gcloudConfig)),
             lastCheck: LastCheck(
                 text: login.lastDatabricksCheck.map { databricksCheckText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",
@@ -113,17 +115,15 @@ public func loginSettingsForm(
             commandNote: nil)
     case .azureTenant(let user, let tenant):
         return LoginSettingsForm(
-            nameNote: "\(shown); the tenant in the Azure CLI stays as it is.",
-            source: LoginSource(
-                label: "Tenant",
-                value: "\(tenant) for \(user) in \(displayPath(paths.azureConfig, home: home))"),
+            nameNote: "\(renamingOnlyHere) the Azure CLI.",
+            source: LoginSource(label: "Tenant", value: "\(tenant) for \(user)", note: inFile(paths.azureConfig)),
             lastCheck: LastCheck(
                 text: login.lastDatabricksCheck.map { databricksCheckText($0, now: now, locale: locale, calendar: calendar) }
                     ?? "Not checked yet",
                 note: nil),
             commandNote: nil)
     case .custom:
-        return LoginSettingsForm(nameNote: "\(shown).", source: nil, lastCheck: nil, commandNote: customCommandNote)
+        return LoginSettingsForm(nameNote: nil, source: nil, lastCheck: nil, commandNote: customCommandNote)
     }
 }
 
