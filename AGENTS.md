@@ -20,7 +20,7 @@ Everything in this repository is public: code, docs, commit messages, issues and
   job with Xcode 27.2, no secrets and no local network. A fork's pull request runs on GitHub's
   `xcode-27` instead. The release's build, signing and upload jobs and CodeQL run on GitHub-hosted
   runners; the release's test job reuses CI, in the pool. Every action is pinned by full commit
-  SHA, except the Claude review: it calls the shared reusable workflow at its moving `v1` tag,
+  SHA, except the Claude review: it calls the shared reusable workflow at its moving `v2` tag,
   since only that repository's maintainer can move its `v*` tags and each release then reaches
   this repository without a pull request here.
 - **Build and test** from the repository root:
