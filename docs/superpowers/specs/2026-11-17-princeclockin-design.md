@@ -1,7 +1,7 @@
 ---
 status: live
 governs: [PrinceClockIn/**, PrinceClockInCore/**, scripts/**, .github/workflows/**]
-verified: 2026-11-21
+verified: 2026-11-25
 ---
 
 # PrinceClockIn: design
@@ -959,8 +959,9 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
 
 ### Release
 
-- Sparkle 2 with EdDSA-signed updates: `SUPublicEDKey` in `Info.plist`, the private key only in
-  the release environment. The signature protects users even if the update host is compromised.
+- Sparkle 2 with EdDSA-signed updates: `SUPublicEDKey` in `Info.plist`, the private key only where
+  the release job reads it (see below). The signature protects users even if the update host is
+  compromised.
 - The feed is signed too: the app sets `SURequireSignedFeed` and its prerequisite
   `SUVerifyUpdateBeforeExtraction`, so it accepts only an appcast signed with that key, and checks
   a downloaded DMG's signature before extracting it. `generate_appcast` signs the feed because the
@@ -986,8 +987,15 @@ they read "5h 13m", not "5 h 13 m" (owner, 2026-11-19); session lengths are Engl
   GitHub-hosted runners; its test job reuses the CI workflow, in the pool below. A public
   repository can call only public reusable workflows, and by the maintainer's policy a public
   repository's jobs run on self-hosted machines only in the CI pool below.
-- Signing, notarization and upload secrets live in a protected GitHub environment, used only by
-  the release job, and only on a version tag.
+- The signing, notarization and Sparkle keys are the maintainer's, shared with their other apps,
+  and kept outside GitHub: the release job reads them from AWS Systems Manager Parameter Store over
+  GitHub OIDC, through a role that this repository can assume only from this workflow, on a `v*`
+  tag, in a run the maintainer started. Each read puts its keys in the environment of every later
+  step, so the certificate is read after the tools are installed, and the notarization and Sparkle
+  keys after the archive, out of `xcodebuild`'s reach. The upload's role and bucket, and the AWS
+  account id the reads build their role's ARN from, live in a protected GitHub environment, used
+  only by the release job, and only on a version tag. The account id is a secret only so that the
+  public log shows it as `***`.
 - A release is a pushed `v*` tag on a commit on `main`. Only the repository admin can create,
   move or delete one (a tag ruleset), and only such a tag can use the environment. It has no
   required reviewer, since the one person who can push a tag would be approving their own.
