@@ -76,21 +76,13 @@ jobs:
 
       - name: Check the release secrets are set
         env:
-          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
-          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
-          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
-          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
-          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          CI_SECRETS_AWS_ACCOUNT: ${{ secrets.CI_SECRETS_AWS_ACCOUNT }}
           AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
           UPDATE_BUCKET: ${{ secrets.UPDATE_BUCKET }}
           AWS_REGION: ${{ vars.AWS_REGION }}
         run: |
           missing=()
-          for name in CODESIGN_CERT_BASE64 CODESIGN_CERT_PASSWORD APPLE_TEAM_ID ASC_API_KEY_BASE64 \
-              ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID SPARKLE_EDDSA_PRIVATE_KEY AWS_ROLE_ARN UPDATE_BUCKET \
-              AWS_REGION; do
+          for name in CI_SECRETS_AWS_ACCOUNT AWS_ROLE_ARN UPDATE_BUCKET AWS_REGION; do
             [[ -n "${!name}" ]] || missing+=("$name")
           done
           if (( ${#missing[@]} )); then
@@ -104,10 +96,18 @@ jobs:
         working-directory: PrinceClockIn
         run: xcodegen generate
 
+      # Each read puts its keys in the environment of every later step, so the certificate comes
+      # after the tools are installed, and the notarization and Sparkle keys after the archive. The
+      # account id is a secret so that the log shows the role's ARN as ***.
+      - name: Read the Developer ID certificate
+        uses: princelundgren/prince-ssm-secrets-action@60358d8e4c956f98a90d981e983014b75513ce56 # v1.0.0
+        with:
+          role-arn: arn:aws:iam::${{ secrets.CI_SECRETS_AWS_ACCOUNT }}:role/pl-prod-ci-secrets-apple-reader
+          path: /ci/apple
+          names: CODESIGN_CERT_BASE64 CODESIGN_CERT_PASSWORD APPLE_TEAM_ID
+          aws-region: eu-west-1
+
       - name: Import the Developer ID certificate into a temporary keychain
-        env:
-          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
-          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
         run: |
           keychain="$RUNNER_TEMP/signing.keychain-db"
           certificate="$RUNNER_TEMP/certificate.p12"
@@ -131,8 +131,6 @@ jobs:
 
       - name: Archive
         working-directory: PrinceClockIn
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: >-
           xcodebuild archive -scheme PrinceClockIn -configuration Release
           -destination 'generic/platform=macOS'
@@ -178,11 +176,15 @@ jobs:
             exit 1
           fi
 
+      - name: Read the notarization and Sparkle keys
+        uses: princelundgren/prince-ssm-secrets-action@60358d8e4c956f98a90d981e983014b75513ce56 # v1.0.0
+        with:
+          role-arn: arn:aws:iam::${{ secrets.CI_SECRETS_AWS_ACCOUNT }}:role/pl-prod-ci-secrets-apple-reader
+          path: /ci/apple
+          names: ASC_API_KEY_BASE64 ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID SPARKLE_EDDSA_PRIVATE_KEY
+          aws-region: eu-west-1
+
       - name: Build, sign and notarize the DMG
-        env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
-          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
-          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
         run: |
           dmg="$(scripts/make-dmg.sh "$APP" "$VERSION" "$RELEASE_DIR")"
           codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
@@ -214,8 +216,6 @@ jobs:
       # The feed lists only this release, which is all Sparkle needs to update anyone.
       # generate_appcast signs the feed because the app sets SURequireSignedFeed.
       - name: Generate the appcast
-        env:
-          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: |
           sparkle_bin=build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin
           printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
