@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: prince-clockin
+  description: macOS menu bar app that warns before command-line cloud logins expire
+spec:
+  type: app
+  lifecycle: production
+  owner: prince
+  system: apps
